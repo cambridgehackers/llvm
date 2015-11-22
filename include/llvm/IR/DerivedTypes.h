@@ -297,6 +297,7 @@ public:
   static inline bool classof(const Type *T) {
     return T->getTypeID() == StructTyID;
   }
+  std::string structFieldMap;
 };
 
 /// SequentialType - This is the superclass of the array, pointer and vector
