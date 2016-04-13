@@ -205,6 +205,8 @@ bool ArgPromotion::canPaddingBeAccessed(Argument *arg) {
 CallGraphNode *ArgPromotion::PromoteArguments(CallGraphNode *CGN) {
   Function *F = CGN->getFunction();
 
+//jca
+return nullptr;
   // Make sure that it is local to this module.
   if (!F || !F->hasLocalLinkage()) return nullptr;
 
