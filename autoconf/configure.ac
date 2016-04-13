@@ -434,6 +434,7 @@ AC_CACHE_CHECK([target architecture],[llvm_cv_target_arch],
   mipsel-* | mips64el-*)  llvm_cv_target_arch="Mips" ;;
   xcore-*)                llvm_cv_target_arch="XCore" ;;
   msp430-*)               llvm_cv_target_arch="MSP430" ;;
+  atomicc-*)              llvm_cv_target_arch="Atomicc" ;;
   hexagon-*)              llvm_cv_target_arch="Hexagon" ;;
   nvptx-*)                llvm_cv_target_arch="NVPTX" ;;
   s390x-*)                llvm_cv_target_arch="SystemZ" ;;
@@ -1099,7 +1100,7 @@ dnl Allow specific targets to be specified for building (or not)
 TARGETS_TO_BUILD=""
 AC_ARG_ENABLE([targets],AS_HELP_STRING([--enable-targets],
     [Build specific host targets: all or target1,target2,... Valid targets are:
-     host, x86, x86_64, sparc, powerpc, arm64, arm, aarch64, mips, hexagon,
+     host, x86, x86_64, sparc, powerpc, arm64, arm, atomicc, aarch64, mips, hexagon,
      xcore, msp430, nvptx, systemz, r600, bpf, wasm, and cpp (default=all)]),,
     enableval=all)
 if test "$enableval" = host-only ; then
@@ -1123,6 +1124,7 @@ case "$enableval" in
         mips64el) TARGETS_TO_BUILD="Mips $TARGETS_TO_BUILD" ;;
         xcore)    TARGETS_TO_BUILD="XCore $TARGETS_TO_BUILD" ;;
         msp430)   TARGETS_TO_BUILD="MSP430 $TARGETS_TO_BUILD" ;;
+        atomicc)   TARGETS_TO_BUILD="Atomicc $TARGETS_TO_BUILD" ;;
         cpp)      TARGETS_TO_BUILD="CppBackend $TARGETS_TO_BUILD" ;;
         hexagon)  TARGETS_TO_BUILD="Hexagon $TARGETS_TO_BUILD" ;;
         nvptx)    TARGETS_TO_BUILD="NVPTX $TARGETS_TO_BUILD" ;;

@@ -33,6 +33,7 @@ const char *Triple::getArchTypeName(ArchType Kind) {
   case mips64:      return "mips64";
   case mips64el:    return "mips64el";
   case msp430:      return "msp430";
+  case atomicc:     return "atomicc";
   case ppc64:       return "powerpc64";
   case ppc64le:     return "powerpc64le";
   case ppc:         return "powerpc";
@@ -230,6 +231,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
     .Case("mips64", mips64)
     .Case("mips64el", mips64el)
     .Case("msp430", msp430)
+    .Case("atomicc", atomicc)
     .Case("ppc64", ppc64)
     .Case("ppc32", ppc)
     .Case("ppc", ppc)
@@ -340,6 +342,7 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .StartsWith("thumb", ARMArch)
     .StartsWith("aarch64", ARMArch)
     .Case("msp430", Triple::msp430)
+    .Case("atomicc", Triple::atomicc)
     .Cases("mips", "mipseb", "mipsallegrex", Triple::mips)
     .Cases("mipsel", "mipsallegrexel", Triple::mipsel)
     .Cases("mips64", "mips64eb", Triple::mips64)
@@ -1023,6 +1026,7 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::aarch64:
   case llvm::Triple::aarch64_be:
   case llvm::Triple::amdgcn:
+  case llvm::Triple::atomicc:
   case llvm::Triple::bpfel:
   case llvm::Triple::bpfeb:
   case llvm::Triple::le64:
@@ -1065,6 +1069,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::bpfel:
   case Triple::bpfeb:
   case Triple::msp430:
+  case Triple::atomicc:
   case Triple::systemz:
   case Triple::ppc64le:
     T.setArch(UnknownArch);
@@ -1119,6 +1124,7 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::hexagon:
   case Triple::kalimba:
   case Triple::msp430:
+  case Triple::atomicc:
   case Triple::r600:
   case Triple::tce:
   case Triple::thumb:
@@ -1179,6 +1185,7 @@ Triple Triple::getBigEndianArchVariant() const {
   case Triple::le32:
   case Triple::le64:
   case Triple::msp430:
+  case Triple::atomicc:
   case Triple::nvptx64:
   case Triple::nvptx:
   case Triple::r600:
@@ -1254,6 +1261,7 @@ Triple Triple::getLittleEndianArchVariant() const {
   case Triple::mips64el:
   case Triple::mipsel:
   case Triple::msp430:
+  case Triple::atomicc:
   case Triple::nvptx64:
   case Triple::nvptx:
   case Triple::ppc64le:

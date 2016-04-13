@@ -287,6 +287,7 @@ case $basic_machine in
 	| moxie \
 	| mt \
 	| msp430 \
+	| atomicc \
 	| nds32 | nds32le | nds32be \
 	| nios | nios2 \
 	| ns16k | ns32k \
@@ -400,6 +401,7 @@ case $basic_machine in
 	| mmix-* \
 	| mt-* \
 	| msp430-* \
+	| atomicc-* \
 	| nds32-* | nds32le-* | nds32be-* \
 	| nios-* | nios2-* \
 	| none-* | np1-* | ns16k-* | ns32k-* \
