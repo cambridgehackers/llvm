@@ -185,6 +185,8 @@ uint64_t Attribute::getDereferenceableOrNullBytes() const {
 
 std::string Attribute::getAsString(bool InAttrGrp) const {
   if (!pImpl) return "";
+  if (hasAttribute(Attribute::AtomiccMethod))
+    return "\"atomicc_method\"=\"true\"";
 
   if (hasAttribute(Attribute::SanitizeAddress))
     return "sanitize_address";
@@ -320,9 +322,6 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     Result += ("=\"" + Val + Twine('"')).str();
     return Result;
   }
-
-  if (hasAttribute(Attribute::AtomiccMethod))
-    return "atomicc_method";
 
   llvm_unreachable("Unknown attribute");
 }
