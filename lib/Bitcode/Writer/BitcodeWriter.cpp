@@ -248,6 +248,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_UW_TABLE;
   case Attribute::ZExt:
     return bitc::ATTR_KIND_Z_EXT;
+  case Attribute::AtomiccMethod:
+    return bitc::ATTR_KIND_ATOMICC_METHOD;
   case Attribute::EndAttrKinds:
     llvm_unreachable("Can not encode end-attribute kinds marker.");
   case Attribute::None:

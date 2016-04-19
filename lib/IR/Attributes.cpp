@@ -321,6 +321,9 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return Result;
   }
 
+  if (hasAttribute(Attribute::AtomiccMethod))
+    return "atomicc_method";
+
   llvm_unreachable("Unknown attribute");
 }
 
@@ -442,6 +445,7 @@ uint64_t AttributeImpl::getAttrMask(Attribute::AttrKind Val) {
   case Attribute::JumpTable:       return 1ULL << 45;
   case Attribute::Convergent:      return 1ULL << 46;
   case Attribute::SafeStack:       return 1ULL << 47;
+  case Attribute::AtomiccMethod:   return 1ULL << 48;
   case Attribute::Dereferenceable:
     llvm_unreachable("dereferenceable attribute not supported in raw format");
     break;

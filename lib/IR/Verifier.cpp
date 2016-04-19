@@ -1274,6 +1274,7 @@ void Verifier::VerifyAttributeTypes(AttributeSet Attrs, unsigned Idx,
         I->getKindAsEnum() == Attribute::OptimizeNone ||
         I->getKindAsEnum() == Attribute::JumpTable ||
         I->getKindAsEnum() == Attribute::Convergent ||
+        I->getKindAsEnum() == Attribute::AtomiccMethod ||
         I->getKindAsEnum() == Attribute::ArgMemOnly) {
       if (!isFunction) {
         CheckFailed("Attribute '" + I->getAsString() +
