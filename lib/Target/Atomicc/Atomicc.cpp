@@ -29,12 +29,9 @@ extern "C" void LLVMInitializeAtomiccTarget() {
 ExecutionEngine *EE;
 namespace {
   class AtomiccWriter : public ModulePass {
-    std::unique_ptr<formatted_raw_ostream> OutOwner;
-    formatted_raw_ostream &Out;
   public:
     static char ID;
-    explicit AtomiccWriter(std::unique_ptr<formatted_raw_ostream> o)
-        : ModulePass(ID), OutOwner(std::move(o)), Out(*OutOwner) {}
+    explicit AtomiccWriter(void): ModulePass(ID) {}
     const char *getPassName() const override { return "Atomicc backend"; }
     bool runOnModule(Module &M) override;
   };
@@ -94,7 +91,6 @@ bool AtomiccTargetMachine::addPassesToEmitFile(
 printf("[%s:%d]  AtomiccTargetMachine::addPassesToEmitFile ZZZZZZZ %d\n", __FUNCTION__, __LINE__, (FileType != TargetMachine::CGFT_AssemblyFile));
   if (FileType != TargetMachine::CGFT_AssemblyFile)
     return true;
-  auto FOut = llvm::make_unique<formatted_raw_ostream>(o);
-  PM.add(new AtomiccWriter(std::move(FOut)));
+  PM.add(new AtomiccWriter());
   return false;
 }
