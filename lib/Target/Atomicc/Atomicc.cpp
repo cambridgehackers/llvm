@@ -27,11 +27,27 @@ extern "C" void LLVMInitializeAtomiccTarget() {
 //                       External Interface declaration
 //===----------------------------------------------------------------------===//
 ExecutionEngine *EE;
-static void AtomiccMain(Module *Mod)
+namespace {
+  class AtomiccWriter : public ModulePass {
+    std::unique_ptr<formatted_raw_ostream> OutOwner;
+    formatted_raw_ostream &Out;
+  public:
+    static char ID;
+    explicit AtomiccWriter(std::unique_ptr<formatted_raw_ostream> o)
+        : ModulePass(ID), OutOwner(std::move(o)), Out(*OutOwner) {}
+    const char *getPassName() const override { return "Atomicc backend"; }
+    bool runOnModule(Module &M) override;
+  };
+} // end anonymous namespace.
+char AtomiccWriter::ID = 0;
+
+bool AtomiccWriter::runOnModule(Module &M)
 {
+printf("[%s:%d] ATOMICCCCCCCCCC\n", __FUNCTION__, __LINE__);
+    std::string OutputDir = "tmp/";
     std::string ErrorMsg;
     // Create the execution environment and allocate memory for static items
-    EngineBuilder builder((std::unique_ptr<Module>(Mod)));
+    EngineBuilder builder((std::unique_ptr<Module>(&M)));
     builder.setMCPU("");
     builder.setErrorStr(&ErrorMsg);
     builder.setEngineKind(EngineKind::Interpreter);
@@ -45,14 +61,12 @@ static void AtomiccMain(Module *Mod)
         exit(-1);
     }
 #endif
-
-std::string OutputDir = "tmp/";
     /*
      * Top level processing done after all module object files are loaded
      */
-    globalMod = Mod;
+    globalMod = &M;
     // Before running constructors, clean up and rewrite IR
-    preprocessModule(Mod);
+    preprocessModule(&M);
 
     // run Constructors from user program
     EE->runStaticConstructorsDestructors(false);
@@ -61,36 +75,17 @@ std::string OutputDir = "tmp/";
     // Pointer datatypes allocated by a class are hoisted and instantiated statically
     // in the generated class.  (in cpp, only pointers can be overridden with derived
     // class instances)
-    constructAddressMap(Mod);
+    constructAddressMap(&M);
 
     // Walk the list of all classes referenced in the IR image,
     // recursively generating cpp class and verilog module definitions
     for (auto current : classCreate)
         generateContainedStructs(current.first, OutputDir);
-printf("[%s:%d] end processing\n", __FUNCTION__, __LINE__);
+    printf("[%s:%d] end processing\n", __FUNCTION__, __LINE__);
     fflush(stderr);
     fflush(stdout);
+    return false;
 }
-namespace {
-  class AtomiccWriter : public ModulePass {
-    std::unique_ptr<formatted_raw_ostream> OutOwner;
-    formatted_raw_ostream &Out;
-    //const Module *TheModule;
-  public:
-    static char ID;
-    explicit AtomiccWriter(std::unique_ptr<formatted_raw_ostream> o)
-        : ModulePass(ID), OutOwner(std::move(o)), Out(*OutOwner) {}
-
-    const char *getPassName() const override { return "Atomicc backend"; }
-
-    bool runOnModule(Module &M) override {
-printf("[%s:%d] ATOMICCCCCCCCCC\n", __FUNCTION__, __LINE__);
-AtomiccMain(&M);
-return false;
-    }
-  };
-} // end anonymous namespace.
-char AtomiccWriter::ID = 0;
 
 bool AtomiccTargetMachine::addPassesToEmitFile(
     PassManagerBase &PM, raw_pwrite_stream &o, CodeGenFileType FileType,
