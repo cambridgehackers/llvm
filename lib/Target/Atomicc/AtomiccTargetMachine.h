@@ -26,7 +26,7 @@ struct AtomiccTargetMachine : public TargetMachine {
   AtomiccTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                    StringRef FS, const TargetOptions &Options, Reloc::Model RM,
                    CodeModel::Model CM, CodeGenOpt::Level OL)
-      : TargetMachine(T, "", TT, CPU, FS, Options) {}
+      : TargetMachine(T, "e-m:e-i64:64-f80:128-n8:16:32:64-S128", TT, CPU, FS, Options) {}
 
 public:
   bool addPassesToEmitFile(PassManagerBase &PM, raw_pwrite_stream &Out,

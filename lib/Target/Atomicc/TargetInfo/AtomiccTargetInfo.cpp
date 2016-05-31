@@ -14,16 +14,9 @@ using namespace llvm;
 
 Target llvm::TheAtomiccTarget;
 
-static bool Atomicc_TripleMatchQuality(Triple::ArchType Arch) {
-  // This backend doesn't correspond to any architecture. It must be explicitly
-  // selected with -march.
-  return false;
-}
-
 extern "C" void LLVMInitializeAtomiccTargetInfo() {
-  TargetRegistry::RegisterTarget(TheAtomiccTarget, "atomicc",
-                                  "Atomicc",
-                                  &Atomicc_TripleMatchQuality);
+  RegisterTarget<Triple::atomicc, /*HasJIT=*/false>  X(TheAtomiccTarget, "atomicc", "Atomicc");
+
 }
 
 extern "C" void LLVMInitializeAtomiccTargetMC() {}
