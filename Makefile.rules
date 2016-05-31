@@ -1087,6 +1087,8 @@ endif
 endif
 endif
 endif
+#Atomicc
+LLVMLibsOptions += -lLLVMInterpreter -lLLVMExecutionEngine -lLLVMSupport
 
 # Set up the library exports file.
 ifdef EXPORTED_SYMBOL_FILE

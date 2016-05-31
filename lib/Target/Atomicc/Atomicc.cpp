@@ -19,6 +19,7 @@
 #include "llvm/IR/LegacyPassManager.h"
 using namespace llvm;
 
+void AtomiccMain(Module *M);
 extern "C" void LLVMInitializeAtomiccTarget() {
   RegisterTargetMachine<AtomiccTargetMachine> X(TheAtomiccTarget);
 }
@@ -39,6 +40,7 @@ namespace {
 
     bool runOnModule(Module &M) override {
 printf("[%s:%d] ATOMICCCCCCCCCC\n", __FUNCTION__, __LINE__);
+AtomiccMain(&M);
 return false;
     }
   };
