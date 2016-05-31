@@ -294,7 +294,7 @@ static std::string combineCondList(std::list<ReferenceType> &functionList)
 /*
  * Generate *.v and *.vh for a Verilog module
  */
-void generateModuleDef(const StructType *STy, std::string oDir)
+void generateModuleDef(const StructType *STy, std::string oDir, FILE *OStr, FILE *OHdr)
 {
     std::list<std::string> metaList;
     std::string name = getStructName(STy);
@@ -306,8 +306,6 @@ void generateModuleDef(const StructType *STy, std::string oDir)
     muxValueList.clear();
     assignList.clear();
     // first generate the verilog module file '.v'
-    FILE *OStr = fopen((oDir + "/" + name + ".v").c_str(), "w");
-    fprintf(OStr, "\n`include \"%s.vh\"\n\n", name.c_str());
     PrefixType interfacePrefix;
     buildPrefix(table, interfacePrefix);
     generateModuleSignature(OStr, STy, "");
@@ -476,17 +474,10 @@ void generateModuleDef(const StructType *STy, std::string oDir)
         fprintf(OStr, "    end // always @ (posedge CLK)\n");
     }
     fprintf(OStr, "endmodule \n\n");
-    fclose(OStr);
 
     // now generate the verilog header file '.vh'
-    OStr = fopen((oDir + "/" + name + ".vh").c_str(), "w");
-    fprintf(OStr, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", name.c_str(), name.c_str());
-    for (auto item: includeLines)
-        fprintf(OStr, "`include \"%s.vh\"\n", item.first.c_str());
-    fprintf(OStr, "`define %s_RULE_COUNT (%s)\n\n", name.c_str(), extraRules.c_str());
-    metaGenerate(OStr, table, interfacePrefix);
+    fprintf(OHdr, "`define %s_RULE_COUNT (%s)\n\n", name.c_str(), extraRules.c_str());
+    metaGenerate(OHdr, table, interfacePrefix);
     for (auto item : metaList)
-        fprintf(OStr, "%s\n", item.c_str());
-    fprintf(OStr, "`endif\n");
-    fclose(OStr);
+        fprintf(OHdr, "%s\n", item.c_str());
 }

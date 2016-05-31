@@ -121,7 +121,7 @@ static void addIncludeName(StringMapType &includeList, const StructType *iSTy)
        && sname != "l_class_OC_Module")
          includeList[sname] = 1;
 }
-void generateClassDef(const StructType *STy, std::string oDir)
+void generateClassDef(const StructType *STy, std::string oDir, FILE *OStr, FILE *OHdr)
 {
     std::list<std::string> runLines;
     StringMapType includeList;
@@ -131,8 +131,6 @@ void generateClassDef(const StructType *STy, std::string oDir)
     bool inInterface = inheritsModule(STy, "class.InterfaceClass");
 
     // first generate '.h' file
-    FILE *OStr = fopen((oDir + "/" + name + ".h").c_str(), "w");
-    fprintf(OStr, "#ifndef __%s_H__\n#define __%s_H__\n", name.c_str(), name.c_str());
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         Type *element = *I;
@@ -177,57 +175,55 @@ void generateClassDef(const StructType *STy, std::string oDir)
                 addIncludeName(includeList, iSTy);
         }
     }
-    for (auto item: includeList)
-        fprintf(OStr, "#include \"%s.h\"\n", item.first.c_str());
     if (name.substr(0,12) == "l_struct_OC_")
-        fprintf(OStr, "typedef struct {\n");
+        fprintf(OHdr, "typedef struct {\n");
     else {
         if (!inInterface) {
-        fprintf(OStr, "class %s;\n", name.c_str());
+        fprintf(OHdr, "class %s;\n", name.c_str());
         for (auto FI : table->method) {
             Function *func = FI.second;
             std::string mname = FI.first;
-            fprintf(OStr, "extern %s;\n", printFunctionSignature(func, name + "__" + mname, true).c_str());
+            fprintf(OHdr, "extern %s;\n", printFunctionSignature(func, name + "__" + mname, true).c_str());
         }
         }
-        fprintf(OStr, "class %s {\n", name.c_str());
+        fprintf(OHdr, "class %s {\n", name.c_str());
     }
-    fprintf(OStr, "public:\n");
-    generateClassElements(STy, STy, OStr);
+    fprintf(OHdr, "public:\n");
+    generateClassElements(STy, STy, OHdr);
     if (inInterface) {
-        fprintf(OStr, "public:\n");
+        fprintf(OHdr, "public:\n");
         for (auto FI : table->method) {
             Function *func = FI.second;
             std::string mname = FI.first;
-            fprintf(OStr, "  %s { %s; }\n", printFunctionSignature(func, mname, false).c_str(),
+            fprintf(OHdr, "  %s { %s; }\n", printFunctionSignature(func, mname, false).c_str(),
                 printFunctionInstance(func, mname + "p", "p").c_str());
         }
         std::string delim;
-        fprintf(OStr, "  %s(", name.c_str());
+        fprintf(OHdr, "  %s(", name.c_str());
         int Idx = 0;
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
             std::string fname = fieldName(STy, Idx);
             if (fname != "") {
-               fprintf(OStr, "%sdecltype(%s) a%s", delim.c_str(), fname.c_str(), fname.c_str());
+               fprintf(OHdr, "%sdecltype(%s) a%s", delim.c_str(), fname.c_str(), fname.c_str());
                delim = ", ";
             }
         }
-        fprintf(OStr, ") {\n");
+        fprintf(OHdr, ") {\n");
         Idx = 0;
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
             std::string fname = fieldName(STy, Idx);
             if (fname != "")
-               fprintf(OStr, "    %s = a%s;\n", fname.c_str(), fname.c_str());
+               fprintf(OHdr, "    %s = a%s;\n", fname.c_str(), fname.c_str());
         }
-        fprintf(OStr, "  }\n");
+        fprintf(OHdr, "  }\n");
     }
     else if (name.substr(0,12) != "l_struct_OC_") {
-        fprintf(OStr, "public:\n  void run();\n  void commit();\n");
+        fprintf(OHdr, "public:\n  void run();\n  void commit();\n");
     if (table->interfaceList.size() > 0 || table->interfaceConnect.size() > 0) {
         std::string prefix = ":";
-        fprintf(OStr, "  %s()", name.c_str());
+        fprintf(OHdr, "  %s()", name.c_str());
         for (auto item: table->interfaceList) {
-            fprintf(OStr, "%s\n      %s(this", prefix.c_str(), item.name.c_str());
+            fprintf(OHdr, "%s\n      %s(this", prefix.c_str(), item.name.c_str());
             ClassMethodTable *itable = classCreate[item.STy];
             for (auto iitem: itable->method) {
                 Function *func = iitem.second;
@@ -237,35 +233,32 @@ void generateClassDef(const StructType *STy, std::string oDir)
                 if (Function *rdyFunc = ruleRDYFunction[func]) {
                     std::string fname = name + "__" + iitem.first;
                     std::string rname = name + "__" + pushSeen[rdyFunc];
-                    fprintf(OStr, ", %s, %s", rname.c_str(), fname.c_str());
+                    fprintf(OHdr, ", %s, %s", rname.c_str(), fname.c_str());
                     prefix = ",";
                 }
             }
-            fprintf(OStr, ")");
+            fprintf(OHdr, ")");
         }
-        fprintf(OStr, " {\n");
+        fprintf(OHdr, " {\n");
         for (auto item: table->interfaceConnect)
-            fprintf(OStr, "    %s = &%s;\n", item.target.c_str(), item.source.c_str());
-        fprintf(OStr, "  }\n");
+            fprintf(OHdr, "    %s = &%s;\n", item.target.c_str(), item.source.c_str());
+        fprintf(OHdr, "  }\n");
     }
     for (auto FI : table->method) {
         Function *func = FI.second;
         std::string mname = FI.first;
         if (!cancelList[mname])
-        fprintf(OStr, "  %s { %s; }\n", printFunctionSignature(func, mname, false).c_str(),
+        fprintf(OHdr, "  %s { %s; }\n", printFunctionSignature(func, mname, false).c_str(),
             printFunctionInstance(func, name + "__" + mname, "this").c_str());
     }
     for (auto item: table->interfaces)
-        fprintf(OStr, "  void set%s(%s) { %s = v; }\n", item.first.c_str(),
+        fprintf(OHdr, "  void set%s(%s) { %s = v; }\n", item.first.c_str(),
             printType(item.second, false, "v", "", "", false).c_str(), item.first.c_str());
     }
-    fprintf(OStr, "}%s;\n#endif  // __%s_H__\n", (name.substr(0,12) == "l_struct_OC_" ? name.c_str():""), name.c_str());
-    fclose(OStr);
+    fprintf(OHdr, "}%s;\n", (name.substr(0,12) == "l_struct_OC_" ? name.c_str():""));
 
     // now generate '.cpp' file
     if (name.substr(0,12) != "l_struct_OC_" && !inInterface) {
-    OStr = fopen((oDir + "/" + name + ".cpp").c_str(), "w");
-    fprintf(OStr, "#include \"%s.h\"\n", name.c_str());
     for (auto FI : table->method) {
         Function *func = FI.second;
         std::string mname = FI.first;
@@ -326,6 +319,5 @@ void generateClassDef(const StructType *STy, std::string oDir)
     for (auto item : runLines)
         fprintf(OStr, "    %s.commit();\n", item.c_str());
     fprintf(OStr, "}\n");
-    fclose(OStr);
     }
 }

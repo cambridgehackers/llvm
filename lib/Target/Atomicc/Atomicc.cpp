@@ -76,8 +76,19 @@ printf("[%s:%d] ATOMICCCCCCCCCC\n", __FUNCTION__, __LINE__);
 
     // Walk the list of all classes referenced in the IR image,
     // recursively generating cpp class and verilog module definitions
+    std::string myName = "foo";
+    FILE *OStrV = fopen((OutputDir + "/" + myName + ".v").c_str(), "w");
+    FILE *OStrVH = fopen((OutputDir + "/" + myName + ".vh").c_str(), "w");
+    FILE *OStrC = fopen((OutputDir + "/" + myName + ".cpp").c_str(), "w");
+    FILE *OStrCH = fopen((OutputDir + "/" + myName + ".h").c_str(), "w");
+    fprintf(OStrC, "#include \"%s.h\"\n", myName.c_str());
+    fprintf(OStrCH, "#ifndef __%s_H__\n#define __%s_H__\n", myName.c_str(), myName.c_str());
+    fprintf(OStrV, "\n`include \"%s.vh\"\n\n", myName.c_str());
+    fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
+    fprintf(OStrVH, "`endif\n");
     for (auto current : classCreate)
-        generateContainedStructs(current.first, OutputDir);
+        generateContainedStructs(current.first, OutputDir, OStrV, OStrVH, OStrC, OStrCH);
+    fprintf(OStrCH, "#endif  // __%s_H__\n", myName.c_str());
     printf("[%s:%d] end processing\n", __FUNCTION__, __LINE__);
     fflush(stderr);
     fflush(stdout);
