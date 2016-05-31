@@ -11,21 +11,66 @@
 // LLVM IR interface. The input module is assumed to be verified.
 //
 //===----------------------------------------------------------------------===//
-
 #include "AtomiccTargetMachine.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/IR/LegacyPassManager.h"
-using namespace llvm;
 
-void AtomiccMain(Module *M);
+using namespace llvm;
+#include "AtomiccDecl.h"
+
 extern "C" void LLVMInitializeAtomiccTarget() {
   RegisterTargetMachine<AtomiccTargetMachine> X(TheAtomiccTarget);
 }
 //===----------------------------------------------------------------------===//
 //                       External Interface declaration
 //===----------------------------------------------------------------------===//
+ExecutionEngine *EE;
+static void AtomiccMain(Module *Mod)
+{
+    std::string ErrorMsg;
+    // Create the execution environment and allocate memory for static items
+    EngineBuilder builder((std::unique_ptr<Module>(Mod)));
+    builder.setMCPU("");
+    builder.setErrorStr(&ErrorMsg);
+    builder.setEngineKind(EngineKind::Interpreter);
+    builder.setOptLevel(CodeGenOpt::None);
+    EE = builder.create();
+    assert(EE);
+#if 0 //def __APPLE__
+    std::string extraLibFilename = "libstdc++.dylib";
+    if (sys::DynamicLibrary::LoadLibraryPermanently(extraLibFilename.c_str(), &ErrorMsg)) {
+        printf("[%s:%d] error opening %s\n", __FUNCTION__, __LINE__, extraLibFilename.c_str());
+        exit(-1);
+    }
+#endif
+
+std::string OutputDir = "tmp/";
+    /*
+     * Top level processing done after all module object files are loaded
+     */
+    globalMod = Mod;
+    // Before running constructors, clean up and rewrite IR
+    preprocessModule(Mod);
+
+    // run Constructors from user program
+    EE->runStaticConstructorsDestructors(false);
+
+    // Construct the address -> symbolic name map using actual data allocated/initialized.
+    // Pointer datatypes allocated by a class are hoisted and instantiated statically
+    // in the generated class.  (in cpp, only pointers can be overridden with derived
+    // class instances)
+    constructAddressMap(Mod);
+
+    // Walk the list of all classes referenced in the IR image,
+    // recursively generating cpp class and verilog module definitions
+    for (auto current : classCreate)
+        generateContainedStructs(current.first, OutputDir);
+printf("[%s:%d] end processing\n", __FUNCTION__, __LINE__);
+    fflush(stderr);
+    fflush(stdout);
+}
 namespace {
   class AtomiccWriter : public ModulePass {
     std::unique_ptr<formatted_raw_ostream> OutOwner;
