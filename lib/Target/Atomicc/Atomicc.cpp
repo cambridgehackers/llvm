@@ -29,9 +29,10 @@ extern "C" void LLVMInitializeAtomiccTarget() {
 ExecutionEngine *EE;
 namespace {
   class AtomiccWriter : public ModulePass {
+    std::string Filename;
   public:
     static char ID;
-    explicit AtomiccWriter(void): ModulePass(ID) {}
+    explicit AtomiccWriter(std::string _Filename): ModulePass(ID), Filename(_Filename) {}
     const char *getPassName() const override { return "Atomicc backend"; }
     bool runOnModule(Module &M) override;
   };
@@ -41,7 +42,13 @@ char AtomiccWriter::ID = 0;
 bool AtomiccWriter::runOnModule(Module &M)
 {
 printf("[%s:%d] ATOMICCCCCCCCCC\n", __FUNCTION__, __LINE__);
-    std::string OutputDir = "tmp/";
+    std::string OutputDir = "tmp/foo";
+    if (Filename != "") {
+        OutputDir = Filename;
+        int ind = OutputDir.rfind('.');
+        if (ind > 0)
+            OutputDir = OutputDir.substr(0, ind);
+    }
     std::string ErrorMsg;
     // Create the execution environment and allocate memory for static items
     EngineBuilder builder((std::unique_ptr<Module>(&M)));
@@ -76,18 +83,22 @@ printf("[%s:%d] ATOMICCCCCCCCCC\n", __FUNCTION__, __LINE__);
 
     // Walk the list of all classes referenced in the IR image,
     // recursively generating cpp class and verilog module definitions
-    std::string myName = "foo";
-    FILE *OStrV = fopen((OutputDir + "/" + myName + ".v").c_str(), "w");
-    FILE *OStrVH = fopen((OutputDir + "/" + myName + ".vh").c_str(), "w");
-    FILE *OStrC = fopen((OutputDir + "/" + myName + ".cpp").c_str(), "w");
-    FILE *OStrCH = fopen((OutputDir + "/" + myName + ".h").c_str(), "w");
-    fprintf(OStrC, "#include \"%s.h\"\n", myName.c_str());
+    std::string myName = OutputDir;
+    int ind = myName.rfind('/');
+    if (ind > 0)
+        myName = myName.substr(0, ind);
+    myName += "_GENERATED_";
+    FILE *OStrV = fopen((OutputDir + ".generated.v").c_str(), "w");
+    FILE *OStrVH = fopen((OutputDir + ".generated.vh").c_str(), "w");
+    FILE *OStrC = fopen((OutputDir + ".generated.cpp").c_str(), "w");
+    FILE *OStrCH = fopen((OutputDir + ".generated.h").c_str(), "w");
+    fprintf(OStrC, "#include \"%s.generated.h\"\n", OutputDir.c_str());
     fprintf(OStrCH, "#ifndef __%s_H__\n#define __%s_H__\n", myName.c_str(), myName.c_str());
-    fprintf(OStrV, "\n`include \"%s.vh\"\n\n", myName.c_str());
+    fprintf(OStrV, "\n`include \"%s.generated.vh\"\n\n", OutputDir.c_str());
     fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
     fprintf(OStrVH, "`endif\n");
     for (auto current : classCreate)
-        generateContainedStructs(current.first, OutputDir, OStrV, OStrVH, OStrC, OStrCH);
+        generateContainedStructs(current.first, OStrV, OStrVH, OStrC, OStrCH);
     fprintf(OStrCH, "#endif  // __%s_H__\n", myName.c_str());
     printf("[%s:%d] end processing\n", __FUNCTION__, __LINE__);
     fflush(stderr);
@@ -99,9 +110,9 @@ bool AtomiccTargetMachine::addPassesToEmitFile(
     PassManagerBase &PM, raw_pwrite_stream &o, CodeGenFileType FileType,
     bool DisableVerify, AnalysisID StartBefore, AnalysisID StartAfter,
     AnalysisID StopAfter, MachineFunctionInitializer *MFInitializer) {
-printf("[%s:%d]  AtomiccTargetMachine::addPassesToEmitFile ZZZZZZZ %d\n", __FUNCTION__, __LINE__, (FileType != TargetMachine::CGFT_AssemblyFile));
+printf("[%s:%d]  AtomiccTargetMachine::addPassesToEmitFile ZZZZZZZ %d filename %s\n", __FUNCTION__, __LINE__, (FileType != TargetMachine::CGFT_AssemblyFile), o.getFilename().c_str());
   if (FileType != TargetMachine::CGFT_AssemblyFile)
     return true;
-  PM.add(new AtomiccWriter());
+  PM.add(new AtomiccWriter(o.getFilename()));
   return false;
 }

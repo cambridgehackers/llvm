@@ -121,7 +121,7 @@ static void addIncludeName(StringMapType &includeList, const StructType *iSTy)
        && sname != "l_class_OC_Module")
          includeList[sname] = 1;
 }
-void generateClassDef(const StructType *STy, std::string oDir, FILE *OStr, FILE *OHdr)
+void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
 {
     std::list<std::string> runLines;
     StringMapType includeList;

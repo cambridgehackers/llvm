@@ -294,7 +294,7 @@ static std::string combineCondList(std::list<ReferenceType> &functionList)
 /*
  * Generate *.v and *.vh for a Verilog module
  */
-void generateModuleDef(const StructType *STy, std::string oDir, FILE *OStr, FILE *OHdr)
+void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
 {
     std::list<std::string> metaList;
     std::string name = getStructName(STy);

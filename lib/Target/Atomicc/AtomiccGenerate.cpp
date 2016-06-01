@@ -980,12 +980,12 @@ printf("[%s:%d] vname %s\n", __FUNCTION__, __LINE__, vname.c_str());
 /*
  * Recursively generate output *.h/*.cpp/*.v/*.vh files.
  */
-void generateContainedStructs(const Type *Ty, std::string ODir, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
+void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
 {
     if (!Ty)
         return;
     if (const PointerType *PTy = dyn_cast<PointerType>(Ty))
-        generateContainedStructs(dyn_cast<StructType>(PTy->getElementType()), ODir, OStrV, OStrVH, OStrC, OStrCH);
+        generateContainedStructs(dyn_cast<StructType>(PTy->getElementType()), OStrV, OStrVH, OStrC, OStrCH);
     else if (!structMap[Ty]) {
         structMap[Ty] = 1;
         if (const StructType *STy = dyn_cast<StructType>(Ty))
@@ -1000,11 +1000,11 @@ void generateContainedStructs(const Type *Ty, std::string ODir, FILE *OStrV, FIL
             for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
                 Type *element = *I;
                 std::string fname = fieldName(STy, Idx);
-                generateContainedStructs(element, ODir, OStrV, OStrVH, OStrC, OStrCH);
+                generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH);
                 if (table)
                 if (Type *newType = table->replaceType[Idx]) {
                     element = newType;
-                    generateContainedStructs(element, ODir, OStrV, OStrVH, OStrC, OStrCH);
+                    generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH);
                 }
             }
             /*
@@ -1015,12 +1015,12 @@ void generateContainedStructs(const Type *Ty, std::string ODir, FILE *OStrV, FIL
                 generateRegion = ProcessVerilog;
                 if (inheritsModule(STy, "class.Module")
                  && !inheritsModule(STy, "class.InterfaceClass"))
-                    generateModuleDef(STy, ODir, OStrV, OStrVH);
+                    generateModuleDef(STy, OStrV, OStrVH);
                 // Generate cpp for all modules except class.ModuleExternal
                 generateRegion = ProcessCPP;
                 if (!inheritsModule(STy, "class.ModuleExternal")
                  && STy->getName() != "class.InterfaceClass")
-                    generateClassDef(STy, ODir, OStrC, OStrCH);
+                    generateClassDef(STy, OStrC, OStrCH);
             }
         }
     }
