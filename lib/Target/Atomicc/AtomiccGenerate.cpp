@@ -152,7 +152,8 @@ int inheritsModule(const StructType *STy, const char *name)
         int Idx = 0;
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
             std::string fname = fieldName(STy, Idx);
-            if (fname == "" && inheritsModule(dyn_cast<StructType>(*I), name))
+            if (const StructType *inheritSTy = dyn_cast<StructType>(*I))
+            if (fname == "" && inheritSTy->hasName() && inheritSTy->getName() == name)
                 return 1;
         }
     }
@@ -982,13 +983,13 @@ printf("[%s:%d] vname %s\n", __FUNCTION__, __LINE__, vname.c_str());
  */
 void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
 {
-    if (!Ty)
+    const StructType *STy = dyn_cast_or_null<StructType>(Ty);
+    if (!STy)// || inheritsModule(STy, "class.ModuleExternal"))
         return;
     if (const PointerType *PTy = dyn_cast<PointerType>(Ty))
         generateContainedStructs(dyn_cast<StructType>(PTy->getElementType()), OStrV, OStrVH, OStrC, OStrCH);
     else if (!structMap[Ty]) {
         structMap[Ty] = 1;
-        if (const StructType *STy = dyn_cast<StructType>(Ty))
         if (STy->hasName()
          && !inheritsModule(STy, "class.BitsClass")
          && strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
@@ -1000,13 +1001,12 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
             for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
                 Type *element = *I;
                 std::string fname = fieldName(STy, Idx);
-                generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH);
                 if (table)
-                if (Type *newType = table->replaceType[Idx]) {
+                if (Type *newType = table->replaceType[Idx])
                     element = newType;
-                    generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH);
-                }
+                generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH);
             }
+printf("[%s:%d]                       NNNEE %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str());
             /*
              * Actual generation of output files takes place here
              */
