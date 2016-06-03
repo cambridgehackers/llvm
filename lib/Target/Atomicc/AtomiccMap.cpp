@@ -536,9 +536,7 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                         printf("%s: info.p %p info.p+info.size %lx\n", __FUNCTION__, info.p, ((size_t)info.p + info.size));
                     if (p >= info.p && (size_t)p < ((size_t)info.p + info.size)) {
                     if (checkDerived(info.type, PTy)) {
-                        if (!classCreate[STy])
-                            classCreate[STy] = new ClassMethodTable;
-                        classCreate[STy]->STy = STy;
+                        getClass(STy);
                         classCreate[STy]->replaceType[Idx] = info.type;
                         classCreate[STy]->replaceCount[Idx] = info.vecCount;
                         //if (trace_map)
@@ -580,8 +578,7 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                         printf("[%s:%d] make new FixedPoint isize %lx bitc %p\n", __FUNCTION__, __LINE__, size, bitc);
                         Type *EltTys[] = {bitc, Type::getInt64Ty(Mod->getContext())};
                         StructType *nSTy = StructType::create(EltTys, "newStructName");
-                        classCreate[nSTy] = new ClassMethodTable;
-                        classCreate[nSTy]->STy = nSTy;
+                        getClass(nSTy);
                         classCreate[nSTy]->instance = utostr(size);
                         if (!classCreate[STy]) {
                             classCreate[STy] = new ClassMethodTable;

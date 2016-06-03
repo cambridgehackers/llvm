@@ -98,8 +98,15 @@ printf("[%s:%d] ATOMICCCCCCCCCC\n", __FUNCTION__, __LINE__);
     fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
     fprintf(OStrVH, "`endif\n");
     for (auto current : classCreate)
-        if (!inheritsModule(current.first, "class.InterfaceClass"))
+        if (current.first)
+        checkClass(current.first, current.first);
+    for (auto current : classCreate)
+        if (!inheritsModule(current.first, "class.ModuleExternal"))
+        //if (!inheritsModule(current.first, "class.InterfaceClass"))
+{
+printf("[%s:%d] start [%p] = %p\n", __FUNCTION__, __LINE__, current.first, current.second);
             generateContainedStructs(current.first, OStrV, OStrVH, OStrC, OStrCH);
+}
     fprintf(OStrCH, "#endif  // __%s_H__\n", myName.c_str());
     printf("[%s:%d] end processing\n", __FUNCTION__, __LINE__);
     fflush(stderr);

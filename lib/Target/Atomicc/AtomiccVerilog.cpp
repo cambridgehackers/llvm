@@ -116,6 +116,7 @@ void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix)
 {
     for (auto item: table->interfaceList) {
         ClassMethodTable *itable = classCreate[item.STy];
+printf("[%s:%d] prefix %s count %d\n", __FUNCTION__, __LINE__, item.name.c_str(), (int)itable->method.size());
         for (auto iitem: itable->method) {
             Function *func = iitem.second;
             std::string mname = iitem.first;
@@ -136,6 +137,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     std::string inp = "input ", outp = "output ", instPrefix, inpClk = "input ";
     std::list<std::string> paramList;
     PrefixType interfacePrefix;
+printf("[%s:%d] name %s instance %s iflist %d\n", __FUNCTION__, __LINE__, name.c_str(), instance.c_str(), (int)table->interfaceList.size());
     buildPrefix(table, interfacePrefix);
     if (instance != "") {
         instPrefix = instance + MODULE_SEPARATOR;

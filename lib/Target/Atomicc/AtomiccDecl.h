@@ -156,3 +156,5 @@ void appendList(int listIndex, BasicBlock *cond, std::string item);
 void metaGenerate(FILE *OStr, ClassMethodTable *table, PrefixType &interfacePrefix);
 std::string baseMethod(std::string mname);
 bool isActionMethod(const Function *func);
+void getClass(const StructType *STy);
+void checkClass(const StructType *STy, const StructType *ActSTy);

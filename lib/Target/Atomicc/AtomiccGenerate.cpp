@@ -166,16 +166,56 @@ bool isActionMethod(const Function *func)
     return (retType == Type::getVoidTy(func->getContext()));
 }
 
+void checkClass(const StructType *STy, const StructType *ActSTy)
+{
+    ClassMethodTable *table = classCreate[STy];
+    ClassMethodTable *atable = classCreate[ActSTy];
+    int Idx = 0;
+    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+        std::string fname = fieldName(STy, Idx);
+        Type *element = *I;
+        int64_t vecCount = -1;
+        if (table)
+            if (Type *newType = table->replaceType[Idx]) {
+                element = newType;
+                vecCount = table->replaceCount[Idx];
+            }
+        if (fname != "") {
+            if (const StructType *iSTy = dyn_cast<StructType>(element))
+                if (inheritsModule(iSTy, "class.InterfaceClass")) {
+                    ClassMethodTable *itable = classCreate[iSTy];
+                    bool foundSomething = false;
+                    for (auto item: itable->method) {
+                        std::string vname = getMethodName(item.second->getName());
+printf("[%s:%d] vname %s\n", __FUNCTION__, __LINE__, vname.c_str());
+                        if (atable->method.find(vname) != atable->method.end()
+                         || atable->method.find(fname + "_" + vname) != atable->method.end())
+                            foundSomething = true;
+                    }
+                    if (foundSomething)
+                        atable->interfaceList.push_back(InterfaceListType{fname, iSTy});
+                }
+        }
+        else if (const StructType *inherit = dyn_cast<StructType>(element))
+            checkClass(inherit, ActSTy);
+    }
+}
+
+void getClass(const StructType *STy)
+{
+    if (!classCreate[STy]) {
+        classCreate[STy] = new ClassMethodTable;
+        classCreate[STy]->STy = STy;
+    }
+}
+
 /*
  * Name functions
  */
 std::string getStructName(const StructType *STy)
 {
     assert(STy);
-    if (!classCreate[STy]) {
-        classCreate[STy] = new ClassMethodTable;
-        classCreate[STy]->STy = STy;
-    }
+    getClass(STy);
     if (!STy->isLiteral() && !STy->getName().empty())
         return CBEMangle("l_"+STy->getName().str());
     if (!UnnamedStructIDs[STy])
@@ -939,46 +979,6 @@ func->dump();
 }
 
 /*
- * recursively walk a datatype and all subtypes it references, calling
- * a specified callback function to write the type definitions into
- * cpp and verilog output files
- */
-static void checkClass(const StructType *STy, const StructType *ActSTy)
-{
-    ClassMethodTable *table = classCreate[STy];
-    ClassMethodTable *atable = classCreate[ActSTy];
-    int Idx = 0;
-    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        std::string fname = fieldName(STy, Idx);
-        Type *element = *I;
-        int64_t vecCount = -1;
-        if (table)
-            if (Type *newType = table->replaceType[Idx]) {
-                element = newType;
-                vecCount = table->replaceCount[Idx];
-            }
-        if (fname != "") {
-            if (const StructType *iSTy = dyn_cast<StructType>(element))
-                if (inheritsModule(iSTy, "class.InterfaceClass")) {
-                    ClassMethodTable *itable = classCreate[iSTy];
-                    bool foundSomething = false;
-                    for (auto item: itable->method) {
-                        std::string vname = getMethodName(item.second->getName());
-printf("[%s:%d] vname %s\n", __FUNCTION__, __LINE__, vname.c_str());
-                        if (atable->method.find(vname) != atable->method.end()
-                         || atable->method.find(fname + "_" + vname) != atable->method.end())
-                            foundSomething = true;
-                    }
-                    if (foundSomething)
-                        atable->interfaceList.push_back(InterfaceListType{fname, iSTy});
-                }
-        }
-        else if (const StructType *inherit = dyn_cast<StructType>(element))
-            checkClass(inherit, ActSTy);
-    }
-}
-
-/*
  * Recursively generate output *.h/*.cpp/*.v/*.vh files.
  */
 void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
@@ -995,15 +995,17 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
          && strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
          && strncmp(STy->getName().str().c_str(), "struct.std::", 12)) {
             ClassMethodTable *table = classCreate[STy];
-            checkClass(STy, STy);
             int Idx = 0;
             // Recursively generate for all classes we use in our class
+printf("[%s:%d]                   NNNSS %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str());
             for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
                 Type *element = *I;
-                std::string fname = fieldName(STy, Idx);
                 if (table)
                 if (Type *newType = table->replaceType[Idx])
                     element = newType;
+                std::string fname = fieldName(STy, Idx);
+printf("[%s:%d] fiedname %s\n", __FUNCTION__, __LINE__, fname.c_str());
+element->dump();
                 generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH);
             }
 printf("[%s:%d]                       NNNEE %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str());
