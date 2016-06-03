@@ -990,7 +990,6 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
     const StructType *STy = dyn_cast_or_null<StructType>(Ty);
     if (!STy || !STy->hasName() || structMap[Ty] || (!force && inheritsModule(STy, "class.ModuleExternal")))
         return;
-printf("[%s:%d] START %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str());
     structMap[Ty] = 1;
     if (!inheritsModule(STy, "class.BitsClass")
      && strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
@@ -998,18 +997,14 @@ printf("[%s:%d] START %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(
         ClassMethodTable *table = classCreate[STy];
         int Idx = 0;
         // Recursively generate for all classes we use in our class
-printf("[%s:%d]               NNNSS %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str());
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
             Type *element = *I;
             if (table)
             if (Type *newType = table->replaceType[Idx])
                 element = newType;
             std::string fname = fieldName(STy, Idx);
-printf("[%s:%d] fiedname %s\n", __FUNCTION__, __LINE__, fname.c_str());
-element->dump();
             generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH, fname == "");
         }
-printf("[%s:%d]                   NNNEE %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str());
         /*
          * Actual generation of output files takes place here
          */
