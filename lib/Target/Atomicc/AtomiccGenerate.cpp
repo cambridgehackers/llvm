@@ -172,32 +172,17 @@ void checkClass(const StructType *STy, const StructType *ActSTy)
     ClassMethodTable *atable = classCreate[ActSTy];
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        std::string fname = fieldName(STy, Idx);
         Type *element = *I;
-        int64_t vecCount = -1;
         if (table)
-            if (Type *newType = table->replaceType[Idx]) {
+            if (Type *newType = table->replaceType[Idx])
                 element = newType;
-                vecCount = table->replaceCount[Idx];
-            }
-        if (fname != "") {
-            if (const StructType *iSTy = dyn_cast<StructType>(element))
-                if (inheritsModule(iSTy, "class.InterfaceClass")) {
-                    ClassMethodTable *itable = classCreate[iSTy];
-                    bool foundSomething = false;
-                    for (auto item: itable->method) {
-                        std::string vname = getMethodName(item.second->getName());
-printf("[%s:%d] vname %s\n", __FUNCTION__, __LINE__, vname.c_str());
-                        if (atable->method.find(vname) != atable->method.end()
-                         || atable->method.find(fname + "_" + vname) != atable->method.end())
-                            foundSomething = true;
-                    }
-                    if (foundSomething)
-                        atable->interfaceList.push_back(InterfaceListType{fname, iSTy});
-                }
+        std::string fname = fieldName(STy, Idx);
+        if (const StructType *iSTy = dyn_cast<StructType>(element)) {
+            if (fname == "")
+                checkClass(iSTy, ActSTy);
+            else if (inheritsModule(iSTy, "class.InterfaceClass"))
+                atable->interfaceList.push_back(InterfaceListType{fname, iSTy});
         }
-        else if (const StructType *inherit = dyn_cast<StructType>(element))
-            checkClass(inherit, ActSTy);
     }
 }
 
