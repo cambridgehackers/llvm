@@ -981,14 +981,14 @@ func->dump();
 /*
  * Recursively generate output *.h/*.cpp/*.v/*.vh files.
  */
-void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
+void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH, bool force)
 {
     if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty)) {
-        generateContainedStructs(dyn_cast<StructType>(PTy->getElementType()), OStrV, OStrVH, OStrC, OStrCH);
+        generateContainedStructs(dyn_cast<StructType>(PTy->getElementType()), OStrV, OStrVH, OStrC, OStrCH, false);
         return;
     }
     const StructType *STy = dyn_cast_or_null<StructType>(Ty);
-    if (!STy || !STy->hasName() || structMap[Ty])// || inheritsModule(STy, "class.ModuleExternal"))
+    if (!STy || !STy->hasName() || structMap[Ty] || (!force && inheritsModule(STy, "class.ModuleExternal")))
         return;
 printf("[%s:%d] START %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str());
     structMap[Ty] = 1;
@@ -1007,7 +1007,7 @@ printf("[%s:%d]               NNNSS %s\n", __FUNCTION__, __LINE__, STy->getName(
             std::string fname = fieldName(STy, Idx);
 printf("[%s:%d] fiedname %s\n", __FUNCTION__, __LINE__, fname.c_str());
 element->dump();
-            generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH);
+            generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH, fname == "");
         }
 printf("[%s:%d]                   NNNEE %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str());
         /*

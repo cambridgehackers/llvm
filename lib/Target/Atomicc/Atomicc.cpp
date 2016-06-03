@@ -100,11 +100,10 @@ bool AtomiccWriter::runOnModule(Module &M)
         if (current.first)
         checkClass(current.first, current.first);
     for (auto current : classCreate)
-        if (!inheritsModule(current.first, "class.ModuleExternal"))
         if (!inheritsModule(current.first, "class.InterfaceClass"))
 {
 printf("[%s:%d] start [%p] = %p\n", __FUNCTION__, __LINE__, current.first, current.second);
-            generateContainedStructs(current.first, OStrV, OStrVH, OStrC, OStrCH);
+            generateContainedStructs(current.first, OStrV, OStrVH, OStrC, OStrCH, false);
 }
     fprintf(OStrCH, "#endif  // __%s_H__\n", myName.c_str());
     fflush(stderr);

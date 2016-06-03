@@ -150,7 +150,7 @@ void recursiveDelete(Value *V);
 void setSeen(Function *func, std::string mName);
 void dumpMemoryRegions(int arg);
 void pushPair(Function *enaFunc, std::string enaName, std::string enaSuffix, Function *rdyFunc, std::string rdyName);
-void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH);
+void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH, bool force);
 void startMeta(const Function *func);
 void appendList(int listIndex, BasicBlock *cond, std::string item);
 void metaGenerate(FILE *OStr, ClassMethodTable *table, PrefixType &interfacePrefix);
