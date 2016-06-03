@@ -41,7 +41,6 @@ char AtomiccWriter::ID = 0;
 
 bool AtomiccWriter::runOnModule(Module &M)
 {
-printf("[%s:%d] ATOMICCCCCCCCCC\n", __FUNCTION__, __LINE__);
     std::string OutputDir = "tmp/foo";
     if (Filename != "") {
         OutputDir = Filename;
@@ -102,13 +101,12 @@ printf("[%s:%d] ATOMICCCCCCCCCC\n", __FUNCTION__, __LINE__);
         checkClass(current.first, current.first);
     for (auto current : classCreate)
         if (!inheritsModule(current.first, "class.ModuleExternal"))
-        //if (!inheritsModule(current.first, "class.InterfaceClass"))
+        if (!inheritsModule(current.first, "class.InterfaceClass"))
 {
 printf("[%s:%d] start [%p] = %p\n", __FUNCTION__, __LINE__, current.first, current.second);
             generateContainedStructs(current.first, OStrV, OStrVH, OStrC, OStrCH);
 }
     fprintf(OStrCH, "#endif  // __%s_H__\n", myName.c_str());
-    printf("[%s:%d] end processing\n", __FUNCTION__, __LINE__);
     fflush(stderr);
     fflush(stdout);
     return false;
