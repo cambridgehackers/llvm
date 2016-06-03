@@ -91,18 +91,15 @@ bool AtomiccWriter::runOnModule(Module &M)
     FILE *OStrVH = fopen((OutputDir + ".generated.vh").c_str(), "w");
     FILE *OStrC = fopen((OutputDir + ".generated.cpp").c_str(), "w");
     FILE *OStrCH = fopen((OutputDir + ".generated.h").c_str(), "w");
+    fprintf(OStrV, "`include \"%s.generated.vh\"\n\n", OutputDir.c_str());
+    fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
     fprintf(OStrC, "#include \"%s.generated.h\"\n", OutputDir.c_str());
     fprintf(OStrCH, "#ifndef __%s_H__\n#define __%s_H__\n", myName.c_str(), myName.c_str());
-    fprintf(OStrV, "\n`include \"%s.generated.vh\"\n\n", OutputDir.c_str());
-    fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
-    fprintf(OStrVH, "`endif\n");
-    for (auto current : classCreate)
-        if (current.first)
-        checkClass(current.first, current.first);
     for (auto current : classCreate)
         if (!inheritsModule(current.first, "class.InterfaceClass"))
             generateContainedStructs(current.first, OStrV, OStrVH, OStrC, OStrCH, false);
     fprintf(OStrCH, "#endif  // __%s_H__\n", myName.c_str());
+    fprintf(OStrVH, "`endif\n");
     return false;
 }
 

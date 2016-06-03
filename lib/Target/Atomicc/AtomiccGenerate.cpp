@@ -166,7 +166,7 @@ bool isActionMethod(const Function *func)
     return (retType == Type::getVoidTy(func->getContext()));
 }
 
-void checkClass(const StructType *STy, const StructType *ActSTy)
+static void checkClass(const StructType *STy, const StructType *ActSTy)
 {
     ClassMethodTable *table = classCreate[STy];
     ClassMethodTable *atable = classCreate[ActSTy];
@@ -191,6 +191,7 @@ void getClass(const StructType *STy)
     if (!classCreate[STy]) {
         classCreate[STy] = new ClassMethodTable;
         classCreate[STy]->STy = STy;
+        checkClass(STy, STy);
     }
 }
 
