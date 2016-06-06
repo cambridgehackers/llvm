@@ -3,7 +3,6 @@ add_llvm_target(AtomiccCodeGen
   AtomiccClone.cpp
   AtomiccCpp.cpp
   AtomiccGenerate.cpp
-  AtomiccMain.cpp
   AtomiccMap.cpp
   AtomiccMetaGen.cpp
   AtomiccPreprocess.cpp
