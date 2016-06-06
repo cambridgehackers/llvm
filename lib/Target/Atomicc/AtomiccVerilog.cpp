@@ -298,12 +298,33 @@ static std::string combineCondList(std::list<ReferenceType> &functionList)
  */
 void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
 {
+    ClassMethodTable *table = classCreate[STy];
+    int Idx = 0;
+#if 0
+static std::map<const StructType *, int> alreadySeen;
+    if (alreadySeen[STy])
+        return;
+    alreadySeen[STy] = 1;
+{
+    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+        const Type *element = *I;
+        if (Type *newType = table->replaceType[Idx])
+            element = newType;
+        std::string fname = fieldName(STy, Idx);
+        if (fname != "")
+        if (const StructType *STy = dyn_cast<StructType>(element)) {
+            std::string sname = getStructName(STy);
+            if (sname.substr(0,12) != "l_struct_OC_"
+             && (!inheritsModule(STy, "class.InterfaceClass") && !inheritsModule(STy, "class.BitsClass")))
+                generateModuleDef(STy, OStr, OHdr);
+        }
+    }
+}
+#endif
     std::list<std::string> metaList;
     std::string name = getStructName(STy);
-    ClassMethodTable *table = classCreate[STy];
     std::list<std::string> alwaysLines;
     std::string extraRules = utostr(table->ruleFunctions.size());
-    std::map<std::string, int> includeLines;
 
     muxValueList.clear();
     assignList.clear();
@@ -322,7 +343,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             ind++;
         }
     // generate local state element declarations
-    int Idx = 0;
+    Idx = 0;
     std::list<std::string> resetList;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         const Type *element = *I;
@@ -345,7 +366,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             else if (const StructType *STy = dyn_cast<StructType>(element)) {
                 std::string sname = getStructName(STy);
                 if (sname.substr(0,12) == "l_struct_OC_") {
-                    includeLines[sname] = 1;
+                    //////////////////////////////////includeLines[sname] = 1;
                     resetList.push_back(fname);
                 }
                 else if (!inheritsModule(STy, "class.InterfaceClass") && !inheritsModule(STy, "class.BitsClass")) {
@@ -353,7 +374,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
                     assignList[fname + "$rule_enable"] = "rule_enable[" + extraRules + ":`" + sname + "_RULE_COUNT]";
                     assignList["rule_ready[" + extraRules + ":`" + sname + "_RULE_COUNT]"] = fname + "$rule_ready";
                     extraRules += " + `" + sname + "_RULE_COUNT";
-                    includeLines[sname] = 1;
+                    //////////////////////////////////includeLines[sname] = 1;
                 }
             }
             else
