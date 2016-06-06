@@ -1,12 +1,9 @@
+#/bin/bash
 #
-#
-#LDFLAGS="-g -lBlocksRuntime" CFLAGS="-fblocks -g" CXXFLAGS="-fblocks -g" ../configure \
-#    --enable-debug-runtime --enable-debug-symbols 
-#    --disable-jit --disable-docs --disable-bindings \
-#    --disable-clang-arcmt --disable-clang-plugin-support --disable-clang-static-analyzer \
-#    --with-clang-srcdir=../../clang
+set -e
+set -x
 
-LDFLAGS="-g -lBlocksRuntime" CFLAGS="-fblocks -g" CXXFLAGS="-fblocks -g" cmake \
+CC=/usr/bin/clang CXX=/usr/bin/clang++ LDFLAGS="-g -lBlocksRuntime" CFLAGS="-fblocks -g" CXXFLAGS="-fblocks -g" cmake \
     -DLLVM_EXTERNAL_CLANG_SOURCE_DIR:PATH=../../clang \
     -DLLVM_TARGETS_TO_BUILD=Atomicc \
     -DBUILD_SHARED_LIBS:BOOL=OFF \

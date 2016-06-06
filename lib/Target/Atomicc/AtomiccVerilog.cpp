@@ -137,7 +137,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     std::string inp = "input ", outp = "output ", instPrefix, inpClk = "input ";
     std::list<std::string> paramList;
     PrefixType interfacePrefix;
-printf("[%s:%d] name %s instance %s iflist %d\n", __FUNCTION__, __LINE__, name.c_str(), instance.c_str(), (int)table->interfaceList.size());
+printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, name.c_str(), instance.c_str());
     buildPrefix(table, interfacePrefix);
     if (instance != "") {
         instPrefix = instance + MODULE_SEPARATOR;
