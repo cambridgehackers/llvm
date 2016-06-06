@@ -115,23 +115,27 @@ static std::string printFunctionInstance(const Function *F, std::string altname,
  * Generate class definition into output file.  Class methods are
  * only generated as prototypes.
  */
-static void addIncludeName(StringMapType &includeList, const StructType *iSTy)
+static std::map<const StructType *, int> alreadySeen;
+static void recurseClassDef(const StructType *iSTy, FILE *OStr, FILE *OHdr)
 {
      std::string sname = getStructName(iSTy);
      if (!inheritsModule(iSTy, "class.BitsClass")
-       && sname != "l_class_OC_InterfaceClass"
-       && sname != "l_class_OC_Module")
-         includeList[sname] = 1;
+      && !inheritsModule(iSTy, "class.ModuleExternal")
+      && sname != "l_class_OC_InterfaceClass"
+      && sname != "l_class_OC_Module")
+         generateClassDef(iSTy, OStr, OHdr);
 }
 void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
 {
     std::list<std::string> runLines;
-    StringMapType includeList;
     ClassMethodTable *table = classCreate[STy];
     std::string name = getStructName(STy);
     std::map<std::string, int> cancelList;
     bool inInterface = inheritsModule(STy, "class.InterfaceClass");
 
+    if (alreadySeen[STy])
+        return;
+    alreadySeen[STy] = 1;
     // first generate '.h' file
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
@@ -146,7 +150,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             if (const StructType *iSTy = dyn_cast<StructType>(element))
                 if (!inheritsModule(iSTy, "class.BitsClass")) {
                     std::string sname = getStructName(iSTy);
-                    addIncludeName(includeList, iSTy);
+                    recurseClassDef(iSTy, OStr, OHdr);
                     if (!inheritsModule(iSTy, "class.InterfaceClass")) {
                     int dimIndex = 0;
                     std::string vecDim;
@@ -160,21 +164,21 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
                 }
             if (const PointerType *PTy = dyn_cast<PointerType>(element))
             if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
-                addIncludeName(includeList, iSTy);
+                recurseClassDef(iSTy, OStr, OHdr);
     }
     for (auto FI : table->method) {
         Function *func = FI.second;
         Type *retType = func->getReturnType();
         auto AI = func->arg_begin(), AE = func->arg_end();
         if (const StructType *iSTy = dyn_cast<StructType>(retType))
-            addIncludeName(includeList, iSTy);
+            recurseClassDef(iSTy, OStr, OHdr);
         AI++;
         for (; AI != AE; ++AI) {
             Type *element = AI->getType();
             if (auto PTy = dyn_cast<PointerType>(element))
                 element = PTy->getElementType();
             if (const StructType *iSTy = dyn_cast<StructType>(element))
-                addIncludeName(includeList, iSTy);
+                recurseClassDef(iSTy, OStr, OHdr);
         }
     }
     if (name.substr(0,12) == "l_struct_OC_")
@@ -188,9 +192,8 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             fprintf(OHdr, "extern %s;\n", printFunctionSignature(func, name + "__" + mname, true).c_str());
         }
         }
-        fprintf(OHdr, "class %s {\n", name.c_str());
+        fprintf(OHdr, "class %s {\npublic:\n", name.c_str());
     }
-    fprintf(OHdr, "public:\n");
     generateClassElements(STy, STy, OHdr);
     if (inInterface) {
         fprintf(OHdr, "public:\n");

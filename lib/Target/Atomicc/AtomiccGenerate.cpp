@@ -912,7 +912,7 @@ std::string printOperand(Value *Operand, bool Indirect)
                 if (Ty == Type::getInt1Ty(CPV->getContext()))
                     cbuffer += CI->getZExtValue() ? "1" : "0";
                 else if (Ty == Type::getInt32Ty(CPV->getContext()) || Ty->getPrimitiveSizeInBits() > 32)
-                    sprintf(temp, "%ld", (long)CI->getZExtValue());
+                    sprintf(temp, "%ld", (long)CI->getSExtValue());
                 else if (CI->isMinValue(true))
                     sprintf(temp, "%ld", (long)CI->getZExtValue());//  'u';
                 else
@@ -965,7 +965,7 @@ func->dump();
 }
 
 /*
- * Recursively generate output *.h/*.cpp/*.v/*.vh files.
+ * Recursively generate output *.h,*.cpp,*.v,*.vh files.
  */
 void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH, bool force)
 {
