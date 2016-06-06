@@ -29,6 +29,7 @@ std::string baseMethod(std::string mname)
  */
 static void generateClassElements(const StructType *STy, const StructType *ActSTy, FILE *OStr)
 {
+    std::string sname = getStructName(STy);
     ClassMethodTable *table = classCreate[STy];
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
@@ -51,6 +52,7 @@ static void generateClassElements(const StructType *STy, const StructType *ActST
                 std::string tname = fname + vecDim;
                 std::string iname = tname;
                 std::string delimStr = ";\n";
+                if (sname.substr(0,12) != "l_struct_OC_")
                 if (!dyn_cast<StructType>(element) && !dyn_cast<PointerType>(element)) {
                     if (table)
                         table->shadow[tname] = 1;
