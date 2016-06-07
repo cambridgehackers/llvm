@@ -161,12 +161,6 @@ printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, name.c_str(), in
                     fprintf(OStr, "    wire %s%s;\n", verilogArrRange(AI->getType()).c_str(), wparam.c_str());
             }
         }
-        std::string mmm = instPrefix + "rule_enable";
-        if (inlineValue(mmm, false) == "")
-            fprintf(OStr, "    wire [`%s_RULE_COUNT:0] %s;\n", name.c_str(), mmm.c_str());
-        mmm = instPrefix + "rule_ready";
-        if (inlineValue(mmm, false) == "")
-            fprintf(OStr, "    wire [`%s_RULE_COUNT:0] %s;\n", name.c_str(), mmm.c_str());
     }
     paramList.push_back(inpClk + "CLK");
     paramList.push_back(inpClk + "nRST");
@@ -227,17 +221,6 @@ printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, name.c_str(), in
                 paramList.push_back(outp + printType(element, false, fname, "  ", "", false));
         }
     }
-    std::string ruleRange;
-    if (instance == "")
-        ruleRange = "[`" + name + "_RULE_COUNT:0]";
-    std::string mmm = inp + ruleRange + "rule_enable";
-    if (instance != "")
-        mmm = inlineValue(mmm, true);
-    paramList.push_back(mmm);
-    mmm = outp + ruleRange + "rule_ready";
-    if (instance != "")
-        mmm = inlineValue(mmm, true);
-    paramList.push_back(mmm);
     if (instance != "")
         fprintf(OStr, "    %s %s (\n", name.c_str(), instance.c_str());
     else
@@ -371,9 +354,6 @@ static std::map<const StructType *, int> alreadySeen;
                 }
                 else if (!inheritsModule(STy, "class.InterfaceClass") && !inheritsModule(STy, "class.BitsClass")) {
                     metaList.push_back("//METAINTERNAL; " + fname + "; " + sname + ";");
-                    assignList[fname + "$rule_enable"] = "rule_enable[" + extraRules + ":`" + sname + "_RULE_COUNT]";
-                    assignList["rule_ready[" + extraRules + ":`" + sname + "_RULE_COUNT]"] = fname + "$rule_ready";
-                    extraRules += " + `" + sname + "_RULE_COUNT";
                     //////////////////////////////////includeLines[sname] = 1;
                 }
             }
@@ -499,7 +479,6 @@ static std::map<const StructType *, int> alreadySeen;
     fprintf(OStr, "endmodule \n\n");
 
     // now generate the verilog header file '.vh'
-    fprintf(OHdr, "`define %s_RULE_COUNT (%s)\n\n", name.c_str(), extraRules.c_str());
     metaGenerate(OHdr, table, interfacePrefix);
     for (auto item : metaList)
         fprintf(OHdr, "%s\n", item.c_str());

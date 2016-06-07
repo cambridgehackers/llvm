@@ -55,9 +55,11 @@ void startMeta(const Function *func)
 void metaGenerate(FILE *OStr, ClassMethodTable *table, PrefixType &interfacePrefix)
 {
     std::list<std::string> metaList;
+    std::string name = getStructName(table->STy);
     std::map<std::string, int> exclusiveSeen;
     // write out metadata comments at end of the file
     inhibitAppend = 1;
+    metaList.push_back("//METASTART; " + name);
     for (auto FI : table->method) {
         std::string mname = interfacePrefix[FI.first] + FI.first;
         Function *func = FI.second;
