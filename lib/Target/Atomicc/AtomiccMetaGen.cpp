@@ -53,6 +53,16 @@ void metaGenerate(const StructType *STy, FILE *OStr)
     buildPrefix(table, interfacePrefix);
     std::string name = getStructName(table->STy);
     std::map<std::string, int> exclusiveSeen;
+
+    for (auto FI : table->method) {
+        std::string mname = interfacePrefix[FI.first] + FI.first;
+        Function *func = FI.second;
+        baseMeta = &funcMetaMap[func];
+        processFunction(func);
+        if (!isActionMethod(func))
+            table->guard[func] = combineCondList(functionList);
+    }
+    baseMeta = NULL;
     // write out metadata comments at end of the file
     table->metaList.push_front("//METASTART; " + name);
     int Idx = 0;
@@ -82,16 +92,6 @@ void metaGenerate(const StructType *STy, FILE *OStr)
             }
         }
         } while(vecCount-- > 0);
-    }
-    for (auto FI : table->method) {
-        std::string mname = interfacePrefix[FI.first] + FI.first;
-        Function *func = FI.second;
-        baseMeta = &funcMetaMap[func];
-        processFunction(func);
-        baseMeta = NULL;
-        if (!isActionMethod(func)) {
-            table->guard[func] = combineCondList(functionList);
-        }
     }
     for (auto FI : table->method) {
         std::string mname = interfacePrefix[FI.first] + FI.first;

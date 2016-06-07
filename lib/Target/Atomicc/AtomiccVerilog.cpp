@@ -118,7 +118,7 @@ void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix)
         ClassMethodTable *itable = classCreate[item.STy];
 //printf("[%s:%d] prefix %s count %d\n", __FUNCTION__, __LINE__, item.name.c_str(), (int)itable->method.size());
         for (auto iitem: itable->method) {
-            Function *func = iitem.second;
+            //Function *func = iitem.second;
             std::string mname = iitem.first;
             interfacePrefix[mname] = item.name + "$";
             interfacePrefix[mname + "__ENA"] = item.name + "$";
@@ -304,9 +304,6 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
         globalCondition = mname + "_internal";
         if (!isActionMethod(func)) {
-            storeList.clear();
-            functionList.clear();
-            declareList.clear();
             if (ruleENAFunction[func]) {
                 assignList[globalCondition] = table->guard[func];  // collect the text of the return value into a single 'assign'
             }
@@ -333,15 +330,15 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                 }
                 exit(-1);
             }
-        }
-        if (storeList.size() > 0) {
-            alwaysLines.push_back("if (" + globalCondition + ") begin");
-            for (auto info: storeList) {
-                if (Value *cond = getCondition(info.cond, 0))
-                    alwaysLines.push_back("    if (" + printOperand(cond, false) + ")");
-                alwaysLines.push_back("    " + info.target + " <= " + info.item + ";");
+            if (storeList.size() > 0) {
+                alwaysLines.push_back("if (" + globalCondition + ") begin");
+                for (auto info: storeList) {
+                    if (Value *cond = getCondition(info.cond, 0))
+                        alwaysLines.push_back("    if (" + printOperand(cond, false) + ")");
+                    alwaysLines.push_back("    " + info.target + " <= " + info.item + ";");
+                }
+                alwaysLines.push_back("end; // End of " + mname);
             }
-            alwaysLines.push_back("end; // End of " + mname);
         }
     }
     // combine mux'ed assignments into a single 'assign' statement
