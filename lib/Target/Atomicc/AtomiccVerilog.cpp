@@ -116,14 +116,14 @@ void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix)
 {
     for (auto item: table->interfaceList) {
         ClassMethodTable *itable = classCreate[item.STy];
-printf("[%s:%d] prefix %s count %d\n", __FUNCTION__, __LINE__, item.name.c_str(), (int)itable->method.size());
+//printf("[%s:%d] prefix %s count %d\n", __FUNCTION__, __LINE__, item.name.c_str(), (int)itable->method.size());
         for (auto iitem: itable->method) {
             Function *func = iitem.second;
             std::string mname = iitem.first;
             interfacePrefix[mname] = item.name + "$";
             interfacePrefix[mname + "__ENA"] = item.name + "$";
             interfacePrefix[mname + "__VALID"] = item.name + "$";
-printf("[%s:%d] class %s name %s prefix %s\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), getMethodName(func->getName()).c_str(), item.name.c_str());
+//printf("[%s:%d] class %s name %s prefix %s\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), getMethodName(func->getName()).c_str(), item.name.c_str());
         }
     }
 }
@@ -137,7 +137,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     std::string inp = "input ", outp = "output ", instPrefix, inpClk = "input ";
     std::list<std::string> paramList;
     PrefixType interfacePrefix;
-printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, name.c_str(), instance.c_str());
+//printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, name.c_str(), instance.c_str());
     buildPrefix(table, interfacePrefix);
     if (instance != "") {
         instPrefix = instance + MODULE_SEPARATOR;
@@ -256,7 +256,7 @@ void muxValue(BasicBlock *bb, std::string signal, std::string value)
      muxValueList[signal].push_back(MUX_VALUE{tempCond, value});
 }
 
-static std::string combineCondList(std::list<ReferenceType> &functionList)
+std::string combineCondList(std::list<ReferenceType> &functionList)
 {
     std::string temp, valsep;
     Value *prevCond = NULL;
@@ -303,15 +303,14 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         if (endswith(mname, "__VALID"))
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
         globalCondition = mname + "_internal";
-        startMeta(func);
         if (!isActionMethod(func)) {
-            processFunction(func);
-            std::string temp = combineCondList(functionList);
-            table->guard[func] = temp;
+            storeList.clear();
+            functionList.clear();
+            declareList.clear();
             if (ruleENAFunction[func]) {
                 assignList[globalCondition] = table->guard[func];  // collect the text of the return value into a single 'assign'
             }
-            else if (temp != "")
+            else if (table->guard[func] != "")
                 setAssign(mname, table->guard[func]);  // collect the text of the return value into a single 'assign'
         }
         else {

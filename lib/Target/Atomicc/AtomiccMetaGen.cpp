@@ -23,10 +23,9 @@ typedef struct {
 static std::map<const Function *, MetaData> funcMetaMap;
 static MetaData *baseMeta;
 
-static int inhibitAppend;
 void appendList(int listIndex, BasicBlock *cond, std::string item)
 {
-    if (baseMeta && !inhibitAppend && generateRegion == ProcessVerilog) {
+    if (baseMeta && generateRegion == ProcessVerilog) {
         Value *val = getCondition(cond, 0);
         if (!val)
             baseMeta->list[listIndex][item].clear();
@@ -47,11 +46,6 @@ static std::string gatherList(MetaData *bm, int listIndex)
     return temp;
 }
 
-void startMeta(const Function *func)
-{
-    baseMeta = &funcMetaMap[func];
-}
-
 void metaGenerate(const StructType *STy, FILE *OStr)
 {
     ClassMethodTable *table = classCreate[STy];
@@ -60,7 +54,6 @@ void metaGenerate(const StructType *STy, FILE *OStr)
     std::string name = getStructName(table->STy);
     std::map<std::string, int> exclusiveSeen;
     // write out metadata comments at end of the file
-    inhibitAppend = 1;
     table->metaList.push_front("//METASTART; " + name);
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
@@ -89,6 +82,16 @@ void metaGenerate(const StructType *STy, FILE *OStr)
             }
         }
         } while(vecCount-- > 0);
+    }
+    for (auto FI : table->method) {
+        std::string mname = interfacePrefix[FI.first] + FI.first;
+        Function *func = FI.second;
+        baseMeta = &funcMetaMap[func];
+        processFunction(func);
+        baseMeta = NULL;
+        if (!isActionMethod(func)) {
+            table->guard[func] = combineCondList(functionList);
+        }
     }
     for (auto FI : table->method) {
         std::string mname = interfacePrefix[FI.first] + FI.first;
@@ -176,5 +179,4 @@ void metaGenerate(const StructType *STy, FILE *OStr)
         table->metaList.push_back("//METAPRIORITY; " + item.first + "; " + item.second);
     for (auto item : table->metaList)
         fprintf(OStr, "%s\n", item.c_str());
-    inhibitAppend = 0;
 }

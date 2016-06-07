@@ -996,14 +996,14 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
          */
         if (STy->getName() != "class.Module") {
             generateRegion = ProcessVerilog;
-            // Only generate verilog for modules derived from Module
-            if (inheritsModule(STy, "class.Module")
-             && !inheritsModule(STy, "class.InterfaceClass"))
-                generateModuleDef(STy, OStrV);
             // now generate the verilog header file '.vh'
             if (inheritsModule(STy, "class.Module")
              && !inheritsModule(STy, "class.InterfaceClass"))
                 metaGenerate(STy, OStrVH);
+            // Only generate verilog for modules derived from Module
+            if (inheritsModule(STy, "class.Module")
+             && !inheritsModule(STy, "class.InterfaceClass"))
+                generateModuleDef(STy, OStrV);
             // Generate cpp for all modules except class.ModuleExternal
             generateRegion = ProcessCPP;
             if (!inheritsModule(STy, "class.ModuleExternal")
