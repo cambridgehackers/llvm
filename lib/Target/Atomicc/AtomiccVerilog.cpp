@@ -294,31 +294,6 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     buildPrefix(table, interfacePrefix);
     generateModuleSignature(OStr, STy, "");
     // generate local state element declarations
-    int Idx = 0;
-    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        const Type *element = *I;
-        int64_t vecCount = -1;
-        int dimIndex = 0;
-        std::string vecDim;
-        if (Type *newType = table->replaceType[Idx]) {
-            element = newType;
-            vecCount = table->replaceCount[Idx];
-        }
-        do {
-        std::string fname = fieldName(STy, Idx);
-        if (fname != "") {
-            if (vecCount != -1)
-                fname += utostr(dimIndex++);
-            if (const StructType *STy = dyn_cast<StructType>(element)) {
-                std::string sname = getStructName(STy);
-                if (sname.substr(0,12) == "l_struct_OC_")
-                    resetList.push_back(fname);
-            }
-            else if (!dyn_cast<PointerType>(element))
-                resetList.push_back(fname);
-        }
-        } while(vecCount-- > 0);
-    }
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : table->method) {
@@ -329,17 +304,18 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
         globalCondition = mname + "_internal";
         startMeta(func);
-        processFunction(func);
         if (!isActionMethod(func)) {
+            processFunction(func);
             std::string temp = combineCondList(functionList);
+            table->guard[func] = temp;
             if (ruleENAFunction[func]) {
-                assignList[globalCondition] = temp;  // collect the text of the return value into a single 'assign'
-                table->guard[func] = temp;
+                assignList[globalCondition] = table->guard[func];  // collect the text of the return value into a single 'assign'
             }
             else if (temp != "")
-                setAssign(mname, temp);  // collect the text of the return value into a single 'assign'
+                setAssign(mname, table->guard[func]);  // collect the text of the return value into a single 'assign'
         }
         else {
+            processFunction(func);
             // generate RDY_internal wire so that we can reference RDY expression inside module
             // generate ENA_internal wire that is and'ed with RDY_internal, so that we can
             // never be enabled unless we were actually ready.
@@ -384,7 +360,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         setAssign(item.first, temp);
     }
     // generate local state element declarations
-    Idx = 0;
+    int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         Type *element = *I;
         int64_t vecCount = -1;
@@ -415,11 +391,36 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         }
         } while(vecCount-- > 0);
     }
+    // generate clocked updates to state elements
+    Idx = 0;
+    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+        const Type *element = *I;
+        int64_t vecCount = -1;
+        int dimIndex = 0;
+        std::string vecDim;
+        if (Type *newType = table->replaceType[Idx]) {
+            element = newType;
+            vecCount = table->replaceCount[Idx];
+        }
+        do {
+        std::string fname = fieldName(STy, Idx);
+        if (fname != "") {
+            if (vecCount != -1)
+                fname += utostr(dimIndex++);
+            if (const StructType *STy = dyn_cast<StructType>(element)) {
+                std::string sname = getStructName(STy);
+                if (sname.substr(0,12) == "l_struct_OC_")
+                    resetList.push_back(fname);
+            }
+            else if (!dyn_cast<PointerType>(element))
+                resetList.push_back(fname);
+        }
+        } while(vecCount-- > 0);
+    }
     // generate 'assign' items
     for (auto item: assignList)
         if (item.second != "")
             fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.c_str());
-    // generate clocked updates to state elements
     if (resetList.size() > 0 || alwaysLines.size() > 0) {
         fprintf(OStr, "\n    always @( posedge CLK) begin\n      if (!nRST) begin\n");
         for (auto item: resetList)
