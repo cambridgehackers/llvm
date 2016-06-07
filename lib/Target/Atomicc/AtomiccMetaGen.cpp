@@ -52,14 +52,44 @@ void startMeta(const Function *func)
     baseMeta = &funcMetaMap[func];
 }
 
-void metaGenerate(const StructType *STy, FILE *OStr, PrefixType &interfacePrefix)
+void metaGenerate(const StructType *STy, FILE *OStr)
 {
     ClassMethodTable *table = classCreate[STy];
+    PrefixType interfacePrefix;
+    buildPrefix(table, interfacePrefix);
     std::string name = getStructName(table->STy);
     std::map<std::string, int> exclusiveSeen;
     // write out metadata comments at end of the file
     inhibitAppend = 1;
     table->metaList.push_front("//METASTART; " + name);
+    int Idx = 0;
+    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+        const Type *element = *I;
+        int64_t vecCount = -1;
+        int dimIndex = 0;
+        std::string vecDim;
+        if (Type *newType = table->replaceType[Idx]) {
+            element = newType;
+            vecCount = table->replaceCount[Idx];
+        }
+        do {
+        std::string fname = fieldName(STy, Idx);
+        if (fname != "") {
+            if (vecCount != -1)
+                fname += utostr(dimIndex++);
+            if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
+                if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
+                    table->metaList.push_back("//METAEXTERNAL; " + fname + "; " + getStructName(STy) + ";");
+            }
+            else if (const StructType *STy = dyn_cast<StructType>(element)) {
+                std::string sname = getStructName(STy);
+                if (sname.substr(0,12) != "l_struct_OC_")
+                if (!inheritsModule(STy, "class.InterfaceClass") && !inheritsModule(STy, "class.BitsClass"))
+                    table->metaList.push_back("//METAINTERNAL; " + fname + "; " + sname + ";");
+            }
+        }
+        } while(vecCount-- > 0);
+    }
     for (auto FI : table->method) {
         std::string mname = interfacePrefix[FI.first] + FI.first;
         Function *func = FI.second;

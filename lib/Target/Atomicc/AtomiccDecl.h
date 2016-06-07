@@ -134,7 +134,7 @@ std::string printString(std::string arg);
 std::string getMethodName(std::string name);
 bool endswith(std::string str, std::string suffix);
 void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr);
-void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr);
+void generateModuleDef(const StructType *STy, FILE *OStr);
 void generateModuleSignature(FILE *OStr, const StructType *STy, std::string instance);
 const StructType *findThisArgument(Function *func);
 void preprocessModule(Module *Mod);
@@ -154,7 +154,8 @@ void pushPair(Function *enaFunc, std::string enaName, std::string enaSuffix, Fun
 void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH, bool force);
 void startMeta(const Function *func);
 void appendList(int listIndex, BasicBlock *cond, std::string item);
-void metaGenerate(const StructType *STy, FILE *OStr, PrefixType &interfacePrefix);
+void metaGenerate(const StructType *STy, FILE *OStr);
 std::string baseMethod(std::string mname);
 bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);
+void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix);

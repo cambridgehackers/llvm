@@ -279,13 +279,13 @@ static std::string combineCondList(std::list<ReferenceType> &functionList)
 /*
  * Generate *.v and *.vh for a Verilog module
  */
-void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
+void generateModuleDef(const StructType *STy, FILE *OStr)
 {
     ClassMethodTable *table = classCreate[STy];
-    int Idx = 0;
     std::string name = getStructName(STy);
     std::list<std::string> alwaysLines;
     std::string extraRules = utostr(table->ruleFunctions.size());
+    std::list<std::string> resetList;
 
     muxValueList.clear();
     assignList.clear();
@@ -294,8 +294,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
     buildPrefix(table, interfacePrefix);
     generateModuleSignature(OStr, STy, "");
     // generate local state element declarations
-    Idx = 0;
-    std::list<std::string> resetList;
+    int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         const Type *element = *I;
         int64_t vecCount = -1;
@@ -310,18 +309,12 @@ void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         if (fname != "") {
             if (vecCount != -1)
                 fname += utostr(dimIndex++);
-            if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
-                if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
-                    table->metaList.push_back("//METAEXTERNAL; " + fname + "; " + getStructName(STy) + ";");
-            }
-            else if (const StructType *STy = dyn_cast<StructType>(element)) {
+            if (const StructType *STy = dyn_cast<StructType>(element)) {
                 std::string sname = getStructName(STy);
                 if (sname.substr(0,12) == "l_struct_OC_")
                     resetList.push_back(fname);
-                else if (!inheritsModule(STy, "class.InterfaceClass") && !inheritsModule(STy, "class.BitsClass"))
-                    table->metaList.push_back("//METAINTERNAL; " + fname + "; " + sname + ";");
             }
-            else
+            else if (!dyn_cast<PointerType>(element))
                 resetList.push_back(fname);
         }
         } while(vecCount-- > 0);
@@ -441,7 +434,4 @@ void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         fprintf(OStr, "    end // always @ (posedge CLK)\n");
     }
     fprintf(OStr, "endmodule \n\n");
-
-    // now generate the verilog header file '.vh'
-    metaGenerate(STy, OHdr, interfacePrefix);
 }
