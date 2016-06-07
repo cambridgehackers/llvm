@@ -46,6 +46,32 @@ static std::string gatherList(MetaData *bm, int listIndex)
     return temp;
 }
 
+void metaPrepare(const StructType *STy)
+{
+    ClassMethodTable *table = classCreate[STy];
+    for (auto FI : table->method) {
+        Function *func = FI.second;
+        baseMeta = &funcMetaMap[func];
+        processFunction(func);
+        if (!isActionMethod(func))
+            table->guard[func] = combineCondList(functionList);
+        else {
+            table->storeList[func] = storeList;
+            if (functionList.size() > 0) {
+                printf("%s: non-store lines in Action\n", __FUNCTION__);
+                func->dump();
+                for (auto info: functionList) {
+                    if (Value *cond = getCondition(info.cond, 0))
+                        printf("%s\n", ("    if (" + printOperand(cond, false) + ")").c_str());
+                    printf("%s\n", info.item.c_str());
+                }
+                exit(-1);
+            }
+        }
+    }
+    baseMeta = NULL;
+}
+
 void metaGenerate(const StructType *STy, FILE *OStr)
 {
     ClassMethodTable *table = classCreate[STy];
@@ -54,15 +80,6 @@ void metaGenerate(const StructType *STy, FILE *OStr)
     std::string name = getStructName(table->STy);
     std::map<std::string, int> exclusiveSeen;
 
-    for (auto FI : table->method) {
-        std::string mname = interfacePrefix[FI.first] + FI.first;
-        Function *func = FI.second;
-        baseMeta = &funcMetaMap[func];
-        processFunction(func);
-        if (!isActionMethod(func))
-            table->guard[func] = combineCondList(functionList);
-    }
-    baseMeta = NULL;
     // write out metadata comments at end of the file
     table->metaList.push_front("//METASTART; " + name);
     int Idx = 0;

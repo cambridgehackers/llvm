@@ -57,6 +57,16 @@ typedef struct {
     const StructType *STy;
 } InterfaceListType;
 
+typedef struct {
+    BasicBlock *cond;
+    std::string item;
+} ReferenceType;
+typedef struct {
+    std::string target;
+    BasicBlock *cond;
+    std::string item;
+} StoreType;
+
 class ClassMethodTable {
 public:
     const StructType                  *STy;
@@ -73,18 +83,9 @@ public:
     std::list<std::string>            metaList;
     std::map<const Function *, std::string> guard;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
+    std::map<const Function *,std::list<StoreType>> storeList;
     ClassMethodTable() {}
 };
-
-typedef struct {
-    BasicBlock *cond;
-    std::string item;
-} ReferenceType;
-typedef struct {
-    std::string target;
-    BasicBlock *cond;
-    std::string item;
-} StoreType;
 
 typedef  struct {
     void *p;
@@ -159,3 +160,4 @@ bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);
 void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix);
 std::string combineCondList(std::list<ReferenceType> &functionList);
+void metaPrepare(const StructType *STy);

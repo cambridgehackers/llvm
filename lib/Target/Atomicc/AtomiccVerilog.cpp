@@ -304,14 +304,14 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
         globalCondition = mname + "_internal";
         if (!isActionMethod(func)) {
-            if (ruleENAFunction[func]) {
+            if (ruleENAFunction[func])
                 assignList[globalCondition] = table->guard[func];  // collect the text of the return value into a single 'assign'
-            }
             else if (table->guard[func] != "")
                 setAssign(mname, table->guard[func]);  // collect the text of the return value into a single 'assign'
         }
         else {
-            processFunction(func);
+// needed because of muxEnable(), muxValue()
+processFunction(func);
             // generate RDY_internal wire so that we can reference RDY expression inside module
             // generate ENA_internal wire that is and'ed with RDY_internal, so that we can
             // never be enabled unless we were actually ready.
@@ -320,19 +320,9 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                 fprintf(OStr, "    wire %s_internal = %s && %s_internal;\n", mname.c_str(), mname.c_str(), rdyName.c_str());
                 assignList[rdyName] = rdyName + "_internal";
             }
-            if (functionList.size() > 0) {
-                printf("%s: non-store lines in Action\n", __FUNCTION__);
-                func->dump();
-                for (auto info: functionList) {
-                    if (Value *cond = getCondition(info.cond, 0))
-                        printf("%s\n", ("    if (" + printOperand(cond, false) + ")").c_str());
-                    printf("%s\n", info.item.c_str());
-                }
-                exit(-1);
-            }
-            if (storeList.size() > 0) {
+            if (table->storeList[func].size() > 0) {
                 alwaysLines.push_back("if (" + globalCondition + ") begin");
-                for (auto info: storeList) {
+                for (auto info: table->storeList[func]) {
                     if (Value *cond = getCondition(info.cond, 0))
                         alwaysLines.push_back("    if (" + printOperand(cond, false) + ")");
                     alwaysLines.push_back("    " + info.target + " <= " + info.item + ";");
