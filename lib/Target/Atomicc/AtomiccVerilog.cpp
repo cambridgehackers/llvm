@@ -444,6 +444,4 @@ void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
 
     // now generate the verilog header file '.vh'
     metaGenerate(STy, OHdr, interfacePrefix);
-    for (auto item : table->metaList)
-        fprintf(OHdr, "%s\n", item.c_str());
 }
