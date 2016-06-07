@@ -52,8 +52,9 @@ void startMeta(const Function *func)
     baseMeta = &funcMetaMap[func];
 }
 
-void metaGenerate(FILE *OStr, ClassMethodTable *table, PrefixType &interfacePrefix)
+void metaGenerate(const StructType *STy, FILE *OStr, PrefixType &interfacePrefix)
 {
+    ClassMethodTable *table = classCreate[STy];
     std::list<std::string> metaList;
     std::string name = getStructName(table->STy);
     std::map<std::string, int> exclusiveSeen;

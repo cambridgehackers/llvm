@@ -70,6 +70,7 @@ public:
     std::string                       instance;
     std::map<std::string, Type *>     interfaces;
     std::list<InterfaceListType>      interfaceList;
+    std::list<std::string>            metaList;
     std::map<const Function *, std::string> guard;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     ClassMethodTable() {}
@@ -153,7 +154,7 @@ void pushPair(Function *enaFunc, std::string enaName, std::string enaSuffix, Fun
 void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH, bool force);
 void startMeta(const Function *func);
 void appendList(int listIndex, BasicBlock *cond, std::string item);
-void metaGenerate(FILE *OStr, ClassMethodTable *table, PrefixType &interfacePrefix);
+void metaGenerate(const StructType *STy, FILE *OStr, PrefixType &interfacePrefix);
 std::string baseMethod(std::string mname);
 bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);

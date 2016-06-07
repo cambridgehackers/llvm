@@ -283,28 +283,6 @@ void generateModuleDef(const StructType *STy, FILE *OStr, FILE *OHdr)
 {
     ClassMethodTable *table = classCreate[STy];
     int Idx = 0;
-#if 0
-static std::map<const StructType *, int> alreadySeen;
-    if (alreadySeen[STy])
-        return;
-    alreadySeen[STy] = 1;
-{
-    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        const Type *element = *I;
-        if (Type *newType = table->replaceType[Idx])
-            element = newType;
-        std::string fname = fieldName(STy, Idx);
-        if (fname != "")
-        if (const StructType *STy = dyn_cast<StructType>(element)) {
-            std::string sname = getStructName(STy);
-            if (sname.substr(0,12) != "l_struct_OC_"
-             && (!inheritsModule(STy, "class.InterfaceClass") && !inheritsModule(STy, "class.BitsClass")))
-                generateModuleDef(STy, OStr, OHdr);
-        }
-    }
-}
-#endif
-    std::list<std::string> metaList;
     std::string name = getStructName(STy);
     std::list<std::string> alwaysLines;
     std::string extraRules = utostr(table->ruleFunctions.size());
@@ -315,16 +293,6 @@ static std::map<const StructType *, int> alreadySeen;
     PrefixType interfacePrefix;
     buildPrefix(table, interfacePrefix);
     generateModuleSignature(OStr, STy, "");
-    // assign ENA/RDY lines for local rules
-    int ind = 0;
-    for (auto item : table->ruleFunctions)
-        if (item.second) {
-            std::string rdyName = item.first + "__RDY";
-            fprintf(OStr, "    wire %s_internal;\n", rdyName.c_str());
-            fprintf(OStr, "    wire %s__ENA_internal = rule_enable[%d] && %s_internal;\n", item.first.c_str(), ind, rdyName.c_str());
-            assignList["rule_ready[" + utostr(ind) + "]"] = rdyName + "_internal";
-            ind++;
-        }
     // generate local state element declarations
     Idx = 0;
     std::list<std::string> resetList;
@@ -344,18 +312,14 @@ static std::map<const StructType *, int> alreadySeen;
                 fname += utostr(dimIndex++);
             if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
                 if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
-                    metaList.push_back("//METAEXTERNAL; " + fname + "; " + getStructName(STy) + ";");
+                    table->metaList.push_back("//METAEXTERNAL; " + fname + "; " + getStructName(STy) + ";");
             }
             else if (const StructType *STy = dyn_cast<StructType>(element)) {
                 std::string sname = getStructName(STy);
-                if (sname.substr(0,12) == "l_struct_OC_") {
-                    //////////////////////////////////includeLines[sname] = 1;
+                if (sname.substr(0,12) == "l_struct_OC_")
                     resetList.push_back(fname);
-                }
-                else if (!inheritsModule(STy, "class.InterfaceClass") && !inheritsModule(STy, "class.BitsClass")) {
-                    metaList.push_back("//METAINTERNAL; " + fname + "; " + sname + ";");
-                    //////////////////////////////////includeLines[sname] = 1;
-                }
+                else if (!inheritsModule(STy, "class.InterfaceClass") && !inheritsModule(STy, "class.BitsClass"))
+                    table->metaList.push_back("//METAINTERNAL; " + fname + "; " + sname + ";");
             }
             else
                 resetList.push_back(fname);
@@ -479,7 +443,7 @@ static std::map<const StructType *, int> alreadySeen;
     fprintf(OStr, "endmodule \n\n");
 
     // now generate the verilog header file '.vh'
-    metaGenerate(OHdr, table, interfacePrefix);
-    for (auto item : metaList)
+    metaGenerate(STy, OHdr, interfacePrefix);
+    for (auto item : table->metaList)
         fprintf(OHdr, "%s\n", item.c_str());
 }
