@@ -377,8 +377,10 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                 fname += utostr(dimIndex++);
             if (const StructType *STy = dyn_cast<StructType>(element)) {
                 std::string sname = getStructName(STy);
-                if (sname.substr(0,12) == "l_struct_OC_")
+                if (sname.substr(0,12) == "l_struct_OC_") {
                     fprintf(OStr, "    reg%s %s;\n", verilogArrRange(element).c_str(), fname.c_str());
+                    resetList.push_back(fname);
+                }
                 else if (inheritsModule(STy, "class.BitsClass")) {
                     ClassMethodTable *table = classCreate[STy];
                     fprintf(OStr, "    reg[%s:0] %s;\n", table->instance.c_str(), fname.c_str());
@@ -386,34 +388,10 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                 else if (!inheritsModule(STy, "class.InterfaceClass"))
                     generateModuleSignature(OStr, STy, fname);
             }
-            else if (!dyn_cast<PointerType>(element))
+            else if (!dyn_cast<PointerType>(element)) {
                 fprintf(OStr, "    %s;\n", printType(element, false, fname, "", "", false).c_str());
-        }
-        } while(vecCount-- > 0);
-    }
-    // generate clocked updates to state elements
-    Idx = 0;
-    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        const Type *element = *I;
-        int64_t vecCount = -1;
-        int dimIndex = 0;
-        std::string vecDim;
-        if (Type *newType = table->replaceType[Idx]) {
-            element = newType;
-            vecCount = table->replaceCount[Idx];
-        }
-        do {
-        std::string fname = fieldName(STy, Idx);
-        if (fname != "") {
-            if (vecCount != -1)
-                fname += utostr(dimIndex++);
-            if (const StructType *STy = dyn_cast<StructType>(element)) {
-                std::string sname = getStructName(STy);
-                if (sname.substr(0,12) == "l_struct_OC_")
-                    resetList.push_back(fname);
-            }
-            else if (!dyn_cast<PointerType>(element))
                 resetList.push_back(fname);
+            }
         }
         } while(vecCount-- > 0);
     }
@@ -421,6 +399,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     for (auto item: assignList)
         if (item.second != "")
             fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.c_str());
+    // generate clocked updates to state elements
     if (resetList.size() > 0 || alwaysLines.size() > 0) {
         fprintf(OStr, "\n    always @( posedge CLK) begin\n      if (!nRST) begin\n");
         for (auto item: resetList)
