@@ -248,12 +248,16 @@ void muxEnable(BasicBlock *bb, std::string signal)
      assignList[signal] += tempCond;
 }
 // 'Mux' together parameter settings from all invocations of a method from this class
+typedef struct {
+    BasicBlock *bb;
+    std::string signal;
+    std::string value;
+} MuxValueEntry;
+    
+static std::list<MuxValueEntry> muxList;
 void muxValue(BasicBlock *bb, std::string signal, std::string value)
 {
-     std::string tempCond = globalCondition;
-     if (Value *cond = getCondition(bb, 0))
-         tempCond += " & " + printOperand(cond, false);
-     muxValueList[signal].push_back(MUX_VALUE{tempCond, value});
+    muxList.push_back(MuxValueEntry{bb, signal, value});
 }
 
 std::string combineCondList(std::list<ReferenceType> &functionList)
@@ -288,6 +292,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     std::list<std::string> resetList;
 
     muxValueList.clear();
+    muxList.clear();
     assignList.clear();
     // first generate the verilog module file '.v'
     PrefixType interfacePrefix;
@@ -330,6 +335,13 @@ processFunction(func);
                 alwaysLines.push_back("end; // End of " + mname);
             }
         }
+    }
+    for (auto item: muxList) {
+        Function *func = item.bb->getParent();
+        std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
+        if (Value *cond = getCondition(item.bb, 0))
+            tempCond += " & " + printOperand(cond, false);
+        muxValueList[item.signal].push_back(MUX_VALUE{tempCond, item.value});
     }
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
