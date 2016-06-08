@@ -714,14 +714,7 @@ static std::string processInstruction(Instruction &I)
         std::string pdest = printOperand(IS.getPointerOperand(), true);
         if (pdest[0] == '&')
             pdest = pdest.substr(1);
-        Value *Operand = I.getOperand(0);
-        Constant *BitMask = 0;
-        IntegerType* ITy = dyn_cast<IntegerType>(Operand->getType());
-        if (ITy && !ITy->isPowerOf2ByteWidth())
-            BitMask = ConstantInt::get(ITy, ITy->getBitMask());
-        std::string sval = printOperand(Operand, false);
-        if (BitMask)
-            sval = "((" + sval + ") & " + parenOperand(BitMask) + ")";
+        std::string sval = printOperand(I.getOperand(0), false);
         if (generateRegion == ProcessVerilog && isAlloca(IS.getPointerOperand()))
             setAssign(pdest, sval);
         else {
