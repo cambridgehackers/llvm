@@ -716,7 +716,7 @@ static std::string processInstruction(Instruction &I)
             pdest = pdest.substr(1);
         std::string sval = printOperand(I.getOperand(0), false);
         if (generateRegion == ProcessVerilog && isAlloca(IS.getPointerOperand()))
-            setAssign(pdest, sval);
+            verilogAssign(pdest, sval);
         else {
 //printf("[%s:%d] STORE[%s] %s\n", __FUNCTION__, __LINE__, sval.c_str(), pdest.c_str());
             appendList(MetaWrite, I.getParent(), pdest);

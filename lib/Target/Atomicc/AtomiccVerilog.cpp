@@ -246,18 +246,28 @@ typedef struct {
     BasicBlock *bb;
     std::string signal;
 } MuxEnableEntry;
+
+typedef struct {
+    std::string target;
+    std::string value;
+} VerilogAssignEntry;
     
-static std::list<MuxEnableEntry> muxEnableList;
-static std::list<MuxValueEntry> muxList;
 // 'Or' together ENA lines from all invocations of a method from this class
+static std::list<MuxEnableEntry> muxEnableList;
+// 'Mux' together parameter settings from all invocations of a method from this class
+static std::list<MuxValueEntry> muxParamList;
+static std::list<VerilogAssignEntry> assignSavedList;
+void verilogAssign(std::string target, std::string value)
+{
+    assignSavedList.push_back(VerilogAssignEntry{target, value});
+}
 void muxEnable(BasicBlock *bb, std::string signal)
 {
     muxEnableList.push_back(MuxEnableEntry{bb, signal});
 }
-// 'Mux' together parameter settings from all invocations of a method from this class
 void muxValue(BasicBlock *bb, std::string signal, std::string value)
 {
-    muxList.push_back(MuxValueEntry{bb, signal, value});
+    muxParamList.push_back(MuxValueEntry{bb, signal, value});
 }
 
 std::string combineCondList(std::list<ReferenceType> &functionList)
@@ -292,9 +302,10 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     std::list<std::string> resetList;
 
     muxValueList.clear();
-    muxList.clear();
+    muxParamList.clear();
     muxEnableList.clear();
     assignList.clear();
+    assignSavedList.clear();
     // first generate the verilog module file '.v'
     PrefixType interfacePrefix;
     buildPrefix(table, interfacePrefix);
@@ -337,6 +348,9 @@ processFunction(func);
             }
         }
     }
+    for (auto item: assignSavedList) {
+        setAssign(item.target, item.value);
+    }
     for (auto item: muxEnableList) {
         Function *func = item.bb->getParent();
         std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
@@ -346,7 +360,7 @@ processFunction(func);
             assignList[item.signal] += " || ";
         assignList[item.signal] += tempCond;
     }
-    for (auto item: muxList) {
+    for (auto item: muxParamList) {
         Function *func = item.bb->getParent();
         std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
         if (Value *cond = getCondition(item.bb, 0))
