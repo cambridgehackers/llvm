@@ -539,6 +539,26 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
 }
 
 /*
+ * These functions are called back from AtomiccGenerate
+ */
+ClassMethodTable *globalClassTable;
+static void verilogAssign(std::string target, std::string value)
+{
+    if (globalClassTable)
+    globalClassTable->assignSavedList.push_back(VerilogAssignEntry{target, value});
+}
+static void muxEnable(BasicBlock *bb, std::string signal)
+{
+    if (globalClassTable)
+    globalClassTable->muxEnableList.push_back(MuxEnableEntry{bb, signal});
+}
+static void muxValue(BasicBlock *bb, std::string signal, std::string value)
+{
+    if (globalClassTable)
+    globalClassTable->muxParamList.push_back(MuxValueEntry{bb, signal, value});
+}
+
+/*
  * Generate a string for a function/method call
  */
 static std::string printCall(Instruction &I)

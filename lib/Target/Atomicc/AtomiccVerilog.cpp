@@ -236,26 +236,6 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     fprintf(OStr, ");\n");
 }
 
-/*
- * These functions are called back from AtomiccGenerate
- */
-ClassMethodTable *globalClassTable;
-void verilogAssign(std::string target, std::string value)
-{
-    if (globalClassTable)
-    globalClassTable->assignSavedList.push_back(VerilogAssignEntry{target, value});
-}
-void muxEnable(BasicBlock *bb, std::string signal)
-{
-    if (globalClassTable)
-    globalClassTable->muxEnableList.push_back(MuxEnableEntry{bb, signal});
-}
-void muxValue(BasicBlock *bb, std::string signal, std::string value)
-{
-    if (globalClassTable)
-    globalClassTable->muxParamList.push_back(MuxValueEntry{bb, signal, value});
-}
-
 std::string combineCondList(std::list<ReferenceType> &functionList)
 {
     std::string temp, valsep;
