@@ -236,25 +236,25 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     fprintf(OStr, ");\n");
 }
 
-static std::string globalCondition;
-// 'Or' together ENA lines from all invocations of a method from this class
-void muxEnable(BasicBlock *bb, std::string signal)
-{
-     std::string tempCond = globalCondition;
-     if (Value *cond = getCondition(bb, 0))
-         tempCond += " & " + printOperand(cond, false);
-     if (assignList[signal] != "")
-         assignList[signal] += " || ";
-     assignList[signal] += tempCond;
-}
-// 'Mux' together parameter settings from all invocations of a method from this class
 typedef struct {
     BasicBlock *bb;
     std::string signal;
     std::string value;
 } MuxValueEntry;
+
+typedef struct {
+    BasicBlock *bb;
+    std::string signal;
+} MuxEnableEntry;
     
+static std::list<MuxEnableEntry> muxEnableList;
 static std::list<MuxValueEntry> muxList;
+// 'Or' together ENA lines from all invocations of a method from this class
+void muxEnable(BasicBlock *bb, std::string signal)
+{
+    muxEnableList.push_back(MuxEnableEntry{bb, signal});
+}
+// 'Mux' together parameter settings from all invocations of a method from this class
 void muxValue(BasicBlock *bb, std::string signal, std::string value)
 {
     muxList.push_back(MuxValueEntry{bb, signal, value});
@@ -293,6 +293,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
 
     muxValueList.clear();
     muxList.clear();
+    muxEnableList.clear();
     assignList.clear();
     // first generate the verilog module file '.v'
     PrefixType interfacePrefix;
@@ -307,7 +308,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         std::string rdyName = mname.substr(0, mname.length()-5) + "__RDY";
         if (endswith(mname, "__VALID"))
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
-        globalCondition = mname + "_internal";
+        std::string globalCondition = mname + "_internal";
         if (!isActionMethod(func)) {
             if (ruleENAFunction[func])
                 assignList[globalCondition] = table->guard[func];  // collect the text of the return value into a single 'assign'
@@ -335,6 +336,15 @@ processFunction(func);
                 alwaysLines.push_back("end; // End of " + mname);
             }
         }
+    }
+    for (auto item: muxEnableList) {
+        Function *func = item.bb->getParent();
+        std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
+        if (Value *cond = getCondition(item.bb, 0))
+            tempCond += " & " + printOperand(cond, false);
+        if (assignList[item.signal] != "")
+            assignList[item.signal] += " || ";
+        assignList[item.signal] += tempCond;
     }
     for (auto item: muxList) {
         Function *func = item.bb->getParent();
