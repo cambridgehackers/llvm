@@ -18,14 +18,7 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
-typedef struct {
-    std::string condition;
-    std::string value;
-} MUX_VALUE;
-
 static int dontInlineValues;//=1;
-static std::map<std::string, std::list<MUX_VALUE>> muxValueList;
-static std::map<std::string, std::string> assignList;
 
 static uint64_t sizeType(Type *Ty)
 {
@@ -81,6 +74,7 @@ static bool findExact(std::string haystack, std::string needle)
 /*
  * lookup/replace values for class variables that are assigned only 1 time.
  */
+std::map<std::string, std::string> assignList;
 static std::string inlineValue(std::string wname, bool clear)
 {
     std::string temp, exactMatch;
@@ -267,7 +261,6 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     std::string extraRules = utostr(table->ruleFunctions.size());
     std::list<std::string> resetList;
 
-    muxValueList.clear();
     assignList.clear();
     // first generate the verilog module file '.v'
     PrefixType interfacePrefix;
@@ -321,6 +314,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             assignList[item.signal] += " || ";
         assignList[item.signal] += tempCond;
     }
+    std::map<std::string, std::list<MUX_VALUE>> muxValueList;
     for (auto item: table->muxParamList) {
         Function *func = item.bb->getParent();
         std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";

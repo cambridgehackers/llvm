@@ -74,6 +74,11 @@ typedef struct {
 } MuxValueEntry;
 
 typedef struct {
+    std::string condition;
+    std::string value;
+} MUX_VALUE;
+
+typedef struct {
     BasicBlock *bb;
     std::string signal;
 } MuxEnableEntry;
@@ -104,6 +109,7 @@ public:
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
     std::list<MuxValueEntry> muxParamList;
+    std::map<std::string, std::list<MUX_VALUE>> muxValueList;
     std::list<VerilogAssignEntry> assignSavedList;
     ClassMethodTable() {}
 };
