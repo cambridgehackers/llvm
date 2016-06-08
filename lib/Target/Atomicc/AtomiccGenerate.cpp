@@ -572,6 +572,7 @@ static std::string printCall(Instruction &I)
         prefix = pcalledFunction + prefix;
     std::string mname = prefix + fname;
     Argument *calledRet = callingFunction->arg_begin();
+#if 1
     if (calledName == "fixedGet") {
         std::string str = printOperand(I.getOperand(0), false);
         if (str[0] == '&')
@@ -586,6 +587,7 @@ static std::string printCall(Instruction &I)
         storeList.push_back(StoreType{pdest, I.getParent(), printOperand(I.getOperand(1), false)});
         return "";
     }
+#endif
     if (Instruction *dest = dyn_cast<Instruction>(I.getOperand(0)))
     if (dest->getOpcode() == Instruction::BitCast) {
     if (calledName == "llvm.memcpy.p0i8.p0i8.i64") {
@@ -949,8 +951,7 @@ func->dump();
             if (!isInlinableInst(*II)) {
                 std::string vout = processInstruction(*II);
                 if (vout != "") {
-                    if (!isDirectAlloca(&*II) && II->use_begin() != II->use_end()
-                         && II->getType() != Type::getVoidTy(BI->getContext())) {
+                    if (!isDirectAlloca(&*II) && II->use_begin() != II->use_end()) {
                         std::string resname = GetValueName(&*II);
                         declareList[resname] = printType(II->getType(), false, resname, "", "", false);
                         storeList.push_back(StoreType{resname, II->getParent(), vout});
