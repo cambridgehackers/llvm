@@ -235,6 +235,10 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     }
     fprintf(OStr, ");\n");
 }
+
+/*
+ * These functions are called back from AtomiccGenerate
+ */
 ClassMethodTable *globalClassTable;
 void verilogAssign(std::string target, std::string value)
 {
@@ -284,10 +288,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     std::list<std::string> resetList;
 
     muxValueList.clear();
-    //muxParamList.clear();
-    //muxEnableList.clear();
     assignList.clear();
-    //assignSavedList.clear();
     // first generate the verilog module file '.v'
     PrefixType interfacePrefix;
     buildPrefix(table, interfacePrefix);
@@ -309,8 +310,6 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                 setAssign(mname, table->guard[func]);  // collect the text of the return value into a single 'assign'
         }
         else {
-// needed because of muxEnable(), muxValue()
-//processFunction(func);
             // generate RDY_internal wire so that we can reference RDY expression inside module
             // generate ENA_internal wire that is and'ed with RDY_internal, so that we can
             // never be enabled unless we were actually ready.
