@@ -314,22 +314,18 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             assignList[item.signal] += " || ";
         assignList[item.signal] += tempCond;
     }
-    std::map<std::string, std::list<MUX_VALUE>> muxValueList;
-    for (auto item: table->muxParamList) {
-        Function *func = item.bb->getParent();
-        std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
-        if (Value *cond = getCondition(item.bb, 0))
-            tempCond += " & " + printOperand(cond, false);
-        muxValueList[item.signal].push_back(MUX_VALUE{tempCond, item.value});
-    }
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
-    for (auto item: muxValueList) {
+    for (auto item: table->muxValueList) {
         int remain = item.second.size();
         std::string temp;
         for (auto element: item.second) {
+            Function *func = element.bb->getParent();
+            std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
+            if (Value *cond = getCondition(element.bb, 0))
+                tempCond += " & " + printOperand(cond, false);
             if (--remain)
-                temp += element.condition + " ? ";
+                temp += tempCond + " ? ";
             temp += element.value;
             if (remain)
                 temp += " : ";

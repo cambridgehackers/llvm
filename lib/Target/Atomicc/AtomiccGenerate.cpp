@@ -555,7 +555,7 @@ static void muxEnable(BasicBlock *bb, std::string signal)
 static void muxValue(BasicBlock *bb, std::string signal, std::string value)
 {
     if (globalClassTable)
-    globalClassTable->muxParamList.push_back(MuxValueEntry{bb, signal, value});
+    globalClassTable->muxValueList[signal].push_back(MuxValueEntry{bb, value});
 }
 
 /*

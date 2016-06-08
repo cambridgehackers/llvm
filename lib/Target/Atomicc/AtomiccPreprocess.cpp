@@ -340,7 +340,7 @@ void preprocessModule(Module *Mod)
         {"llvm.memcpy.p0i8.p0i8.i64", processMemcpy},
         {"_ZL20atomiccNewArrayCountm", processMSize},
         {"atomiccSchedulePriority", processPriority},
-        {NULL}};
+        {NULL, NULL}};
 
     for (int i = 0; callProcess[i].name; i++) {
         if (Function *Declare = Mod->getFunction(callProcess[i].name))

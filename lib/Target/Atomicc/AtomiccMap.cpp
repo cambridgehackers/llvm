@@ -619,7 +619,7 @@ printf("[%s:%d] start\n", __FUNCTION__, __LINE__);
         void *addr = EE->getPointerToGlobal(MI);
         Type *Ty = MI->getType()->getElementType();
         memoryRegion.push_back(MEMORY_REGION{addr,
-            EE->getDataLayout()->getTypeAllocSize(Ty), MI->getType(), NULL});
+            EE->getDataLayout()->getTypeAllocSize(Ty), MI->getType(), NULL, 0});
         mapType(Mod, (char *)addr, Ty, MI->getName());
     }
     // promote guards from contained calls to be guards for this function

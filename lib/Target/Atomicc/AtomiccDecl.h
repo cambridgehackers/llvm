@@ -69,7 +69,6 @@ typedef struct {
 
 typedef struct {
     BasicBlock *bb;
-    std::string signal;
     std::string value;
 } MuxValueEntry;
 
@@ -108,8 +107,7 @@ public:
 // 'Or' together ENA lines from all invocations of a method from this class
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
-    std::list<MuxValueEntry> muxParamList;
-    std::map<std::string, std::list<MUX_VALUE>> muxValueList;
+    std::map<std::string, std::list<MuxValueEntry>> muxValueList;
     std::list<VerilogAssignEntry> assignSavedList;
     ClassMethodTable() {}
 };
