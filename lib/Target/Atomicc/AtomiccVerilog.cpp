@@ -230,26 +230,6 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     fprintf(OStr, ");\n");
 }
 
-std::string combineCondList(std::list<ReferenceType> &functionList)
-{
-    std::string temp, valsep;
-    Value *prevCond = NULL;
-    int remain = functionList.size();
-    for (auto info: functionList) {
-        remain--;
-        temp += valsep;
-        valsep = "";
-        Value *opCond = getCondition(info.cond, 0);
-        if (opCond && (remain || getCondition(info.cond, 1) != prevCond))
-            temp += printOperand(opCond, false) + " ? ";
-        temp += info.item;
-        if (opCond && remain)
-            valsep = " : ";
-        prevCond = opCond;
-    }
-    return temp;
-}
-
 /*
  * Generate *.v and *.vh for a Verilog module
  */

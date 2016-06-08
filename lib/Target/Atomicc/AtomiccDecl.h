@@ -73,11 +73,6 @@ typedef struct {
 } MuxValueEntry;
 
 typedef struct {
-    std::string condition;
-    std::string value;
-} MUX_VALUE;
-
-typedef struct {
     BasicBlock *bb;
     std::string signal;
 } MuxEnableEntry;
@@ -182,5 +177,4 @@ std::string baseMethod(std::string mname);
 bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);
 void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix);
-std::string combineCondList(std::list<ReferenceType> &functionList);
 void metaPrepare(const StructType *STy);

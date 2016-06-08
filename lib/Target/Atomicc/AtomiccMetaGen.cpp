@@ -46,6 +46,26 @@ static std::string gatherList(MetaData *bm, int listIndex)
     return temp;
 }
 
+static std::string combineCondList(std::list<ReferenceType> &functionList)
+{
+    std::string temp, valsep;
+    Value *prevCond = NULL;
+    int remain = functionList.size();
+    for (auto info: functionList) {
+        remain--;
+        temp += valsep;
+        valsep = "";
+        Value *opCond = getCondition(info.cond, 0);
+        if (opCond && (remain || getCondition(info.cond, 1) != prevCond))
+            temp += printOperand(opCond, false) + " ? ";
+        temp += info.item;
+        if (opCond && remain)
+            valsep = " : ";
+        prevCond = opCond;
+    }
+    return temp;
+}
+
 void metaPrepare(const StructType *STy)
 {
     ClassMethodTable *table = classCreate[STy];
