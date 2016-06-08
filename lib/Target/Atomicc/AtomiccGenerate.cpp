@@ -990,9 +990,11 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
          */
         if (STy->getName() != "class.Module") {
             generateRegion = ProcessVerilog;
+            globalClassTable = table;
             if (inheritsModule(STy, "class.Module")
              && !inheritsModule(STy, "class.InterfaceClass"))
                 metaPrepare(STy);
+            globalClassTable = NULL;
             // now generate the verilog header file '.vh'
             if (inheritsModule(STy, "class.Module")
              && !inheritsModule(STy, "class.InterfaceClass"))

@@ -67,6 +67,22 @@ typedef struct {
     std::string item;
 } StoreType;
 
+typedef struct {
+    BasicBlock *bb;
+    std::string signal;
+    std::string value;
+} MuxValueEntry;
+
+typedef struct {
+    BasicBlock *bb;
+    std::string signal;
+} MuxEnableEntry;
+
+typedef struct {
+    std::string target;
+    std::string value;
+} VerilogAssignEntry;
+
 class ClassMethodTable {
 public:
     const StructType                  *STy;
@@ -84,6 +100,11 @@ public:
     std::map<const Function *, std::string> guard;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::map<const Function *,std::list<StoreType>> storeList;
+// 'Or' together ENA lines from all invocations of a method from this class
+    std::list<MuxEnableEntry> muxEnableList;
+// 'Mux' together parameter settings from all invocations of a method from this class
+    std::list<MuxValueEntry> muxParamList;
+    std::list<VerilogAssignEntry> assignSavedList;
     ClassMethodTable() {}
 };
 
@@ -114,6 +135,7 @@ extern std::list<Function *> fixupFuncList;
 extern int trace_pair;
 extern Module *globalMod;
 extern int generateRegion;
+extern ClassMethodTable *globalClassTable;
 
 int validateAddress(int arg, void *p);
 void constructAddressMap(Module *Mod);

@@ -235,39 +235,21 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     }
     fprintf(OStr, ");\n");
 }
-
-typedef struct {
-    BasicBlock *bb;
-    std::string signal;
-    std::string value;
-} MuxValueEntry;
-
-typedef struct {
-    BasicBlock *bb;
-    std::string signal;
-} MuxEnableEntry;
-
-typedef struct {
-    std::string target;
-    std::string value;
-} VerilogAssignEntry;
-    
-// 'Or' together ENA lines from all invocations of a method from this class
-static std::list<MuxEnableEntry> muxEnableList;
-// 'Mux' together parameter settings from all invocations of a method from this class
-static std::list<MuxValueEntry> muxParamList;
-static std::list<VerilogAssignEntry> assignSavedList;
+ClassMethodTable *globalClassTable;
 void verilogAssign(std::string target, std::string value)
 {
-    assignSavedList.push_back(VerilogAssignEntry{target, value});
+    if (globalClassTable)
+    globalClassTable->assignSavedList.push_back(VerilogAssignEntry{target, value});
 }
 void muxEnable(BasicBlock *bb, std::string signal)
 {
-    muxEnableList.push_back(MuxEnableEntry{bb, signal});
+    if (globalClassTable)
+    globalClassTable->muxEnableList.push_back(MuxEnableEntry{bb, signal});
 }
 void muxValue(BasicBlock *bb, std::string signal, std::string value)
 {
-    muxParamList.push_back(MuxValueEntry{bb, signal, value});
+    if (globalClassTable)
+    globalClassTable->muxParamList.push_back(MuxValueEntry{bb, signal, value});
 }
 
 std::string combineCondList(std::list<ReferenceType> &functionList)
@@ -302,10 +284,10 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     std::list<std::string> resetList;
 
     muxValueList.clear();
-    muxParamList.clear();
-    muxEnableList.clear();
+    //muxParamList.clear();
+    //muxEnableList.clear();
     assignList.clear();
-    assignSavedList.clear();
+    //assignSavedList.clear();
     // first generate the verilog module file '.v'
     PrefixType interfacePrefix;
     buildPrefix(table, interfacePrefix);
@@ -328,7 +310,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         }
         else {
 // needed because of muxEnable(), muxValue()
-processFunction(func);
+//processFunction(func);
             // generate RDY_internal wire so that we can reference RDY expression inside module
             // generate ENA_internal wire that is and'ed with RDY_internal, so that we can
             // never be enabled unless we were actually ready.
@@ -348,10 +330,10 @@ processFunction(func);
             }
         }
     }
-    for (auto item: assignSavedList) {
+    for (auto item: table->assignSavedList) {
         setAssign(item.target, item.value);
     }
-    for (auto item: muxEnableList) {
+    for (auto item: table->muxEnableList) {
         Function *func = item.bb->getParent();
         std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
         if (Value *cond = getCondition(item.bb, 0))
@@ -360,7 +342,7 @@ processFunction(func);
             assignList[item.signal] += " || ";
         assignList[item.signal] += tempCond;
     }
-    for (auto item: muxParamList) {
+    for (auto item: table->muxParamList) {
         Function *func = item.bb->getParent();
         std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
         if (Value *cond = getCondition(item.bb, 0))
