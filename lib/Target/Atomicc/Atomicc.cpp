@@ -16,6 +16,7 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Support/DynamicLibrary.h"
 
 using namespace llvm;
 #include "AtomiccDecl.h"
@@ -57,7 +58,7 @@ bool AtomiccWriter::runOnModule(Module &M)
     builder.setOptLevel(CodeGenOpt::None);
     EE = builder.create();
     assert(EE);
-#if 0 //def __APPLE__
+#ifdef __APPLE__
     std::string extraLibFilename = "libstdc++.dylib";
     if (sys::DynamicLibrary::LoadLibraryPermanently(extraLibFilename.c_str(), &ErrorMsg)) {
         printf("[%s:%d] error opening %s\n", __FUNCTION__, __LINE__, extraLibFilename.c_str());
