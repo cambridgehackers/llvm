@@ -670,7 +670,6 @@ std::string parenOperand(Value *Operand)
 /*
  * Generate a string for any valid instruction DAG.
  */
-static Function *processIFunction;
 static std::string processInstruction(Instruction &I)
 {
     std::string vout;
@@ -693,34 +692,6 @@ static std::string processInstruction(Instruction &I)
             appendList(MetaRead, I.getParent(), p);
         return p;
         }
-
-    // Memory instructions...
-    case Instruction::Store: {
-        StoreInst &IS = static_cast<StoreInst&>(I);
-        ERRORIF (IS.isVolatile());
-        std::string pdest = printOperand(IS.getPointerOperand(), true);
-        if (pdest[0] == '&')
-            pdest = pdest.substr(1);
-        std::string sval = printOperand(I.getOperand(0), false);
-        bool vassign = generateRegion == ProcessVerilog && isAlloca(IS.getPointerOperand());
-//printf("[%s:%d] STORE[%s] %s vassign %d\n", __FUNCTION__, __LINE__, sval.c_str(), pdest.c_str(), (int)vassign);
-        if (!vassign)
-            appendList(MetaWrite, I.getParent(), pdest);
-        storeList.push_back(StoreType{pdest, vassign ? NULL : I.getParent(), sval});
-        return "";
-        }
-
-    // Terminators
-    case Instruction::Ret:
-        if (I.getNumOperands() != 0) {
-            if (generateRegion == ProcessCPP)
-                vout += "return ";
-            if (I.getNumOperands())
-                vout += printOperand(I.getOperand(0), false);
-        }
-        break;
-    case Instruction::Unreachable:
-        break;
 
     // Standard binary operators...
     case Instruction::Add: case Instruction::FAdd:
@@ -798,32 +769,6 @@ static std::string processInstruction(Instruction &I)
                 vout += ":";
             prevCond = opCond;
         }
-        break;
-        }
-    case Instruction::Switch: {
-        SwitchInst* SI = cast<SwitchInst>(&I);
-        Value *switchIndex = SI->getCondition();
-        //BasicBlock *defaultBB = SI->getDefaultDest();
-        for (SwitchInst::CaseIt CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
-            BasicBlock *caseBB = CI.getCaseSuccessor();
-            int64_t val = CI.getCaseValue()->getZExtValue();
-            if (!getCondition(caseBB, 0)) { // 'true' condition
-//printf("[%s:%d] [%ld] = %s\n", __FUNCTION__, __LINE__, val, caseBB->getName().str().c_str());
-                IRBuilder<> cbuilder(caseBB);
-                setCondition(caseBB, 0,
-                    cbuilder.CreateICmp(ICmpInst::ICMP_EQ, switchIndex,
-                        ConstantInt::get(switchIndex->getType(), val)));
-            }
-        }
-        break;
-        }
-    case Instruction::Br:
-        break;
-    case Instruction::Alloca: {
-        std::string resname = GetValueName(&I);
-        if (auto *PTy = dyn_cast<PointerType>(I.getType()))
-            declareList[resname] = printType(PTy->getElementType(), false, resname, "", "", false);
-        //printf("[%s:%d] ALLOCAA %s -> %s\n", __FUNCTION__, __LINE__, processIFunction->getName().str().c_str(), allocaMap[&I].c_str());
         break;
         }
     default:
@@ -910,6 +855,61 @@ std::string printOperand(Value *Operand, bool Indirect)
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
+static std::string processITop(Instruction &I, Function *processIFunction)
+{
+    std::string vout;
+    int opcode = I.getOpcode();
+//printf("[%s:%d] op %s\n", __FUNCTION__, __LINE__, I.getOpcodeName());
+    switch(opcode) {
+    case Instruction::Store: {
+        StoreInst &IS = static_cast<StoreInst&>(I);
+        ERRORIF (IS.isVolatile());
+        std::string pdest = printOperand(IS.getPointerOperand(), true);
+        if (pdest[0] == '&')
+            pdest = pdest.substr(1);
+        std::string sval = printOperand(I.getOperand(0), false);
+        bool vassign = generateRegion == ProcessVerilog && isAlloca(IS.getPointerOperand());
+//printf("[%s:%d] STORE[%s] %s vassign %d\n", __FUNCTION__, __LINE__, sval.c_str(), pdest.c_str(), (int)vassign);
+        if (!vassign)
+            appendList(MetaWrite, I.getParent(), pdest);
+        storeList.push_back(StoreType{pdest, vassign ? NULL : I.getParent(), sval});
+        return "";
+        }
+    case Instruction::Ret:
+        if (I.getNumOperands() != 0) {
+            if (generateRegion == ProcessCPP)
+                vout += "return ";
+            if (I.getNumOperands())
+                vout += printOperand(I.getOperand(0), false);
+        }
+        break;
+    case Instruction::Switch: {
+        SwitchInst* SI = cast<SwitchInst>(&I);
+        Value *switchIndex = SI->getCondition();
+        //BasicBlock *defaultBB = SI->getDefaultDest();
+        for (SwitchInst::CaseIt CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
+            BasicBlock *caseBB = CI.getCaseSuccessor();
+            int64_t val = CI.getCaseValue()->getZExtValue();
+            if (!getCondition(caseBB, 0)) { // 'true' condition
+//printf("[%s:%d] [%ld] = %s\n", __FUNCTION__, __LINE__, val, caseBB->getName().str().c_str());
+                IRBuilder<> cbuilder(caseBB);
+                setCondition(caseBB, 0,
+                    cbuilder.CreateICmp(ICmpInst::ICMP_EQ, switchIndex,
+                        ConstantInt::get(switchIndex->getType(), val)));
+            }
+        }
+        break;
+        }
+    case Instruction::Alloca: {
+        std::string resname = GetValueName(&I);
+        if (auto *PTy = dyn_cast<PointerType>(I.getType()))
+            declareList[resname] = printType(PTy->getElementType(), false, resname, "", "", false);
+        //printf("[%s:%d] ALLOCAA %s -> %s\n", __FUNCTION__, __LINE__, processIFunction->getName().str().c_str(), allocaMap[&I].c_str());
+        break;
+        }
+    }
+    return vout;
+}
 void processFunction(Function *func)
 {
     NextAnonValueNumber = 0;
@@ -923,31 +923,28 @@ printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 func->dump();
 }
     /* Generate cpp/Verilog for all instructions.  Record function calls for post processing */
-    processIFunction = func;
     for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
         for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
-            if (II->getType() == Type::getVoidTy(II->getContext())
-              || isa<TerminatorInst>(*II) || isa<AllocaInst>(*II)) {
-                std::string vout = processInstruction(*II);
+            std::string vout;
+            switch(II->getOpcode()) {
+            case Instruction::Alloca:
+            case Instruction::Store:
+            case Instruction::Switch:
+            case Instruction::Ret: // can have value
+                vout = processITop(*II, func);
                 if (vout != "")
                     functionList.push_back(ReferenceType{II->getParent(), vout});
-switch(II->getOpcode()) {
-case Instruction::Alloca:
-case Instruction::Store:
-case Instruction::Switch:
-case Instruction::Br:
-case Instruction::Ret: // can have value
-case Instruction::Call: // can have value
-break;
-default:
-printf("[%s:%d]ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n", __FUNCTION__, __LINE__);
-II->dump();
-exit(-1);
-}
+                break;
+            case Instruction::Call: // can have value
+                if (II->getType() == Type::getVoidTy(II->getContext())) {
+                vout = processInstruction(*II);
+                if (vout != "")
+                    functionList.push_back(ReferenceType{II->getParent(), vout});
+                }
+                break;
             }
         }
     }
-    processIFunction = NULL;
 }
 
 /*
