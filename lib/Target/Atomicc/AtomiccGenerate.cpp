@@ -303,7 +303,7 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
         auto AI = FTy->param_begin(), AE = FTy->param_end();
         bool structRet = (*AI) != Type::getInt8PtrTy(globalMod->getContext());
         if (structRet) {  //FTy->hasStructRetAttr()
-//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+//printf("[%s:%d] structret\n", __FUNCTION__, __LINE__);
 //exit(-1);
             if (auto PTy = dyn_cast<PointerType>(*AI))
                 retType = PTy->getElementType();
@@ -539,10 +539,9 @@ static std::string printCall(Instruction &I)
 {
     Function *callingFunction = I.getParent()->getParent();
     std::string callingName = callingFunction->getName();
-    std::string vout, sep, structRet;
+    std::string vout, sep;
     CallInst &ICL = static_cast<CallInst&>(I);
     Function *func = ICL.getCalledFunction();
-    Value *structRetTemp = NULL;
     std::string prefix = MODULE_ARROW;
     CallSite CS(&I);
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
@@ -647,14 +646,6 @@ printf("[%s:%d] call %s\n", __FUNCTION__, __LINE__, mname.c_str());
     }
     if (generateRegion != ProcessVerilog)
         vout += ")";
-    if (structRet != "") {
-        if (generateRegion == ProcessCPP)
-            vout = structRet + " = " + vout;
-        else {
-            allocaMap[structRetTemp] = vout;
-            vout = "";
-        }
-    }
     return vout;
 }
 
@@ -920,7 +911,7 @@ func->dump();
                 }
             case Instruction::Call: // can have value
                 if (II->getType() == Type::getVoidTy(II->getContext())) {
-                    std::string vout = processInstruction(*II);
+                    std::string vout = printCall(*II);
                     if (vout != "")
                         functionList.push_back(ReferenceType{II->getParent(), vout});
                 }
