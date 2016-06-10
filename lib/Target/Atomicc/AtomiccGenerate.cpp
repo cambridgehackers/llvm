@@ -78,23 +78,9 @@ const char *intmapLookup(INTMAP_TYPE *map, int value)
 
 static bool isInlinableInst(const Instruction &I)
 {
-    if (isa<CallInst>(I) && generateRegion == ProcessCPP)
-        return false; // needed to force guardedValue reads before Action calls
-    if (isa<CmpInst>(I) || isa<LoadInst>(I))
-        return true;
     if (I.getType() == Type::getVoidTy(I.getContext())
-// || !I.hasOneUse()
-      || isa<TerminatorInst>(I)
-      || isa<VAArgInst>(I) || isa<InsertElementInst>(I)
-      || isa<InsertValueInst>(I) || isa<AllocaInst>(I))
+      || isa<TerminatorInst>(I) || isa<AllocaInst>(I))
         return false;
-    if (I.hasOneUse()) {
-        const Instruction &User = cast<Instruction>(*I.user_back());
-        if (isa<ExtractElementInst>(User) || isa<ShuffleVectorInst>(User))
-            return false;
-        // doesn't seem to work for PHI references isa<PHINode>(I)
-        //ERRORIF (I.getParent() != cast<Instruction>(I.user_back())->getParent());
-    }
     return true;
 }
 static const AllocaInst *isDirectAlloca(const Value *V)
@@ -875,7 +861,9 @@ std::string printOperand(Value *Operand, bool Indirect)
         prefix = "*";
     if (isAddressImplicit)
         prefix = "&";  // Global variables are referenced as their addresses by llvm
-    if (I && isInlinableInst(*I)) {
+    if (I && I->getOpcode() == Instruction::Alloca)
+        cbuffer += GetValueName(Operand);
+    else if (I) {
         std::string p = processInstruction(*I);
         if (prefix == "*" && p[0] == '&') {
             prefix = "";
@@ -886,8 +874,6 @@ std::string printOperand(Value *Operand, bool Indirect)
         else
             cbuffer += prefix + "(" + p + ")";
     }
-    else if (I && I->getOpcode() == Instruction::Alloca)
-        cbuffer += GetValueName(Operand);
     else {
         //we need pointer to pass struct params (PipeIn)
         if (prefix == "*")
@@ -950,6 +936,16 @@ func->dump();
             if (!isInlinableInst(*II)) {
                 std::string vout = processInstruction(*II);
                 if (vout != "") {
+                    if (II->use_begin() == II->use_end())
+switch(II->getOpcode()) {
+case Instruction::Ret:
+case Instruction::Call:
+break;
+default:
+printf("[%s:%d]YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY\n", __FUNCTION__, __LINE__);
+II->dump();
+exit(-1);
+}
                     if (!isDirectAlloca(&*II) && II->use_begin() != II->use_end()) {
                         std::string resname = GetValueName(&*II);
                         declareList[resname] = printType(II->getType(), false, resname, "", "", false);
@@ -958,6 +954,21 @@ func->dump();
                     else
                         functionList.push_back(ReferenceType{II->getParent(), vout});
                 }
+else {
+switch(II->getOpcode()) {
+case Instruction::Alloca:
+case Instruction::Store:
+case Instruction::Switch:
+case Instruction::Br:
+case Instruction::Ret:
+case Instruction::Call:
+break;
+default:
+printf("[%s:%d]ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n", __FUNCTION__, __LINE__);
+II->dump();
+exit(-1);
+}
+}
             }
         }
     }
