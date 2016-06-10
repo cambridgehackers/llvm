@@ -77,11 +77,6 @@ typedef struct {
     std::string signal;
 } MuxEnableEntry;
 
-typedef struct {
-    std::string target;
-    std::string value;
-} VerilogAssignEntry;
-
 class ClassMethodTable {
 public:
     const StructType                  *STy;
@@ -103,7 +98,6 @@ public:
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
-    std::list<VerilogAssignEntry> assignSavedList;
     ClassMethodTable() {}
 };
 

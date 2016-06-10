@@ -542,11 +542,6 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
  * These functions are called back from AtomiccGenerate
  */
 ClassMethodTable *globalClassTable;
-static void verilogAssign(std::string target, std::string value)
-{
-    if (globalClassTable)
-    globalClassTable->assignSavedList.push_back(VerilogAssignEntry{target, value});
-}
 static void muxEnable(BasicBlock *bb, std::string signal)
 {
     if (globalClassTable)
@@ -616,16 +611,9 @@ static std::string printCall(Instruction &I)
             std::string sval = printOperand(src->getOperand(0), dyn_cast<Argument>(src->getOperand(0)) == NULL);
             if (!dyn_cast<Argument>(src->getOperand(0)))
                 appendList(MetaRead, I.getParent(), sval);
-            if (dyn_cast<Argument>(dest->getOperand(0)) == calledRet) {
-                if (generateRegion == ProcessCPP)
-                    vout += "return ";
-                vout += sval;
-            }
-            else {
-                std::string pdest = printOperand(dest->getOperand(0), true);
-                appendList(MetaWrite, I.getParent(), pdest);
-                storeList.push_back(StoreType{pdest, I.getParent(), sval});
-            }
+            std::string pdest = printOperand(dest->getOperand(0), true);
+            appendList(MetaWrite, I.getParent(), pdest);
+            storeList.push_back(StoreType{pdest, I.getParent(), sval});
             return vout;
         }
     }
@@ -735,13 +723,11 @@ static std::string processInstruction(Instruction &I)
         if (pdest[0] == '&')
             pdest = pdest.substr(1);
         std::string sval = printOperand(I.getOperand(0), false);
-        if (generateRegion == ProcessVerilog && isAlloca(IS.getPointerOperand()))
-            verilogAssign(pdest, sval);
-        else {
-//printf("[%s:%d] STORE[%s] %s\n", __FUNCTION__, __LINE__, sval.c_str(), pdest.c_str());
+        bool vassign = generateRegion == ProcessVerilog && isAlloca(IS.getPointerOperand());
+//printf("[%s:%d] STORE[%s] %s vassign %d\n", __FUNCTION__, __LINE__, sval.c_str(), pdest.c_str(), (int)vassign);
+        if (!vassign)
             appendList(MetaWrite, I.getParent(), pdest);
-            storeList.push_back(StoreType{pdest, I.getParent(), sval});
-        }
+        storeList.push_back(StoreType{pdest, vassign ? NULL : I.getParent(), sval});
         return "";
         }
 
@@ -800,12 +786,12 @@ static std::string processInstruction(Instruction &I)
     case Instruction::ExtractValue: {
         const ExtractValueInst *EVI = cast<ExtractValueInst>(&I);
         //Vals.append(EVI->idx_begin(), EVI->idx_end());
-printf("[%s:%d] before %d\n", __FUNCTION__, __LINE__, (int)I.getNumOperands());
-I.dump();
+//printf("[%s:%d] before %d\n", __FUNCTION__, __LINE__, (int)I.getNumOperands());
+//I.dump();
         uint64_t val = *EVI->idx_begin();
-printf("[%s:%d] val %d\n", __FUNCTION__, __LINE__, (int)val);
+//printf("[%s:%d] val %d\n", __FUNCTION__, __LINE__, (int)val);
         vout += printOperand(I.getOperand(0), false) + "." + fieldName(dyn_cast<StructType>(I.getOperand(0)->getType()), val);
-printf("[%s:%d] after\n", __FUNCTION__, __LINE__);
+//printf("[%s:%d] after\n", __FUNCTION__, __LINE__);
         break;
     }
 
@@ -953,7 +939,7 @@ void processFunction(Function *func)
     declareList.clear();
     if (trace_function || trace_call)
         printf("PROCESSING %s\n", func->getName().str().c_str());
-if (func->getName() == "_ZN7IVector3sayEii") {
+if (func->getName() == "zz_ZN7IVector3sayEii") {
 printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 func->dump();
 }

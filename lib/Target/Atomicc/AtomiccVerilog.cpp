@@ -256,6 +256,12 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         if (endswith(mname, "__VALID"))
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
         std::string globalCondition = mname + "_internal";
+        int count = 0;
+        for (auto info: table->storeList[func])
+            if (info.cond)
+                count++;
+            else
+                setAssign(info.target, info.item);
         if (!isActionMethod(func)) {
             if (ruleENAFunction[func])
                 assignList[globalCondition] = table->guard[func];  // collect the text of the return value into a single 'assign'
@@ -271,19 +277,17 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                 fprintf(OStr, "    wire %s_internal = %s && %s_internal;\n", mname.c_str(), mname.c_str(), rdyName.c_str());
                 assignList[rdyName] = rdyName + "_internal";
             }
-            if (table->storeList[func].size() > 0) {
+            if (count > 0) {
                 alwaysLines.push_back("if (" + globalCondition + ") begin");
-                for (auto info: table->storeList[func]) {
+                for (auto info: table->storeList[func])
+                    if (info.cond) {
                     if (Value *cond = getCondition(info.cond, 0))
                         alwaysLines.push_back("    if (" + printOperand(cond, false) + ")");
                     alwaysLines.push_back("    " + info.target + " <= " + info.item + ";");
-                }
+                    }
                 alwaysLines.push_back("end; // End of " + mname);
             }
         }
-    }
-    for (auto item: table->assignSavedList) {
-        setAssign(item.target, item.value);
     }
     for (auto item: table->muxEnableList) {
         Function *func = item.bb->getParent();

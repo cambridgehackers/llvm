@@ -246,7 +246,7 @@ restart:
                 if (trace_hoist)
                     printf("HOIST: act %s req %s\n", calledFunctionGuard ? getMethodName(calledFunctionGuard->getName()).c_str() : " ", mName.c_str());
                 if (!calledFunctionGuard) {
-                    printf("[%s:%d] guard not found %s %p\n", __FUNCTION__, __LINE__, func->getName().str().c_str(), func);
+                    //printf("[%s:%d] guard not found %s %p\n", __FUNCTION__, __LINE__, func->getName().str().c_str(), func);
                     break;
                 }
                 std::string methName = getMethodName(calledFunctionGuard->getName());

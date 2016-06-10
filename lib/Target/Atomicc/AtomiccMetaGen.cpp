@@ -73,10 +73,10 @@ void metaPrepare(const StructType *STy)
         Function *func = FI.second;
         baseMeta = &funcMetaMap[func];
         processFunction(func);
+        table->storeList[func] = storeList;
         if (!isActionMethod(func))
             table->guard[func] = combineCondList(functionList);
         else {
-            table->storeList[func] = storeList;
             if (functionList.size() > 0) {
                 printf("%s: non-store lines in Action\n", __FUNCTION__);
                 func->dump();
