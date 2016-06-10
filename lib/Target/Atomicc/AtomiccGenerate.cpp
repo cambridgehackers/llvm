@@ -577,7 +577,7 @@ static std::string printCall(Instruction &I)
         if (pdest[0] == '&')
             pdest = pdest.substr(1);
         appendList(MetaWrite, I.getParent(), pdest);
-        storeList.push_back(StoreType{pdest, I.getParent(), printOperand(I.getOperand(1), false)});
+        storeList.push_back(StoreType{pdest, &I, printOperand(I.getOperand(1), false)});
         return "";
     }
 #endif
@@ -591,7 +591,7 @@ static std::string printCall(Instruction &I)
                 appendList(MetaRead, I.getParent(), sval);
             std::string pdest = printOperand(dest->getOperand(0), true);
             appendList(MetaWrite, I.getParent(), pdest);
-            storeList.push_back(StoreType{pdest, I.getParent(), sval});
+            storeList.push_back(StoreType{pdest, &I, sval});
             return vout;
         }
     }
@@ -873,7 +873,7 @@ func->dump();
 //printf("[%s:%d] STORE[%s] %s vassign %d\n", __FUNCTION__, __LINE__, sval.c_str(), pdest.c_str(), (int)vassign);
                 if (!vassign)
                     appendList(MetaWrite, II->getParent(), pdest);
-                storeList.push_back(StoreType{pdest, vassign ? NULL : II->getParent(), sval});
+                storeList.push_back(StoreType{pdest, vassign ? NULL : II, sval});
                 break;
                 }
             case Instruction::Ret:
@@ -882,7 +882,7 @@ func->dump();
                     if (generateRegion == ProcessCPP)
                         vout = "return ";
                     vout += printOperand(II->getOperand(0), false);
-                    functionList.push_back(ReferenceType{II->getParent(), vout});
+                    functionList.push_back(ReferenceType{II, vout});
                 }
                 break;
             case Instruction::Switch: {
@@ -913,7 +913,7 @@ func->dump();
                 if (II->getType() == Type::getVoidTy(II->getContext())) {
                     std::string vout = printCall(*II);
                     if (vout != "")
-                        functionList.push_back(ReferenceType{II->getParent(), vout});
+                        functionList.push_back(ReferenceType{II, vout});
                 }
                 break;
             }

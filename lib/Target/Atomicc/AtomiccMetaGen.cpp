@@ -61,8 +61,8 @@ void metaPrepare(const StructType *STy)
             remain--;
             temp += valsep;
             valsep = "";
-            Value *opCond = getCondition(info.cond, 0);
-            if (opCond && (remain || getCondition(info.cond, 1) != prevCond))
+            Value *opCond = getCondition(info.cond->getParent(), 0);
+            if (opCond && (remain || getCondition(info.cond->getParent(), 1) != prevCond))
                 temp += printOperand(opCond, false) + " ? ";
             temp += info.item;
             if (opCond && remain)

@@ -275,7 +275,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         for (auto info: declareList)
             fprintf(OStr, "        %s;\n", info.second.c_str());
         for (auto info: storeList) {
-            if (Value *cond = getCondition(info.cond, 0))
+            if (Value *cond = getCondition(info.cond->getParent(), 0))
                 fprintf(OStr, "        if (%s) {\n    ", printOperand(cond, false).c_str());
             if (info.target.substr(0, 7) == "thisp->" && table->shadow[info.target.substr(7)]) {
                 // State element updates are written to shadow variables so that changes
@@ -285,11 +285,11 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             }
             else
             fprintf(OStr, "        %s = %s;\n", info.target.c_str(), info.item.c_str());
-            if (getCondition(info.cond, 0))
+            if (getCondition(info.cond->getParent(), 0))
                 fprintf(OStr, "        }\n    ");
         }
         for (auto info: functionList) {
-            if (Value *cond = getCondition(info.cond, 0))
+            if (Value *cond = getCondition(info.cond->getParent(), 0))
                 fprintf(OStr, "        if (%s)\n    ", printOperand(cond, false).c_str());
             fprintf(OStr, "        %s;\n", info.item.c_str());
         }

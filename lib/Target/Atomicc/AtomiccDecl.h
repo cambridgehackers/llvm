@@ -58,12 +58,12 @@ typedef struct {
 } InterfaceListType;
 
 typedef struct {
-    BasicBlock *cond;
+    Instruction *cond;
     std::string item;
 } ReferenceType;
 typedef struct {
     std::string target;
-    BasicBlock *cond;
+    Instruction *cond;
     std::string item;
 } StoreType;
 

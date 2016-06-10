@@ -281,7 +281,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                 alwaysLines.push_back("if (" + globalCondition + ") begin");
                 for (auto info: table->storeList[func])
                     if (info.cond) {
-                    if (Value *cond = getCondition(info.cond, 0))
+                    if (Value *cond = getCondition(info.cond->getParent(), 0))
                         alwaysLines.push_back("    if (" + printOperand(cond, false) + ")");
                     alwaysLines.push_back("    " + info.target + " <= " + info.item + ";");
                     }
