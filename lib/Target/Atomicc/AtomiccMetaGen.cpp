@@ -46,26 +46,6 @@ static std::string gatherList(MetaData *bm, int listIndex)
     return temp;
 }
 
-static std::string combineCondList(std::list<ReferenceType> &functionList)
-{
-    std::string temp, valsep;
-    Value *prevCond = NULL;
-    int remain = functionList.size();
-    for (auto info: functionList) {
-        remain--;
-        temp += valsep;
-        valsep = "";
-        Value *opCond = getCondition(info.cond, 0);
-        if (opCond && (remain || getCondition(info.cond, 1) != prevCond))
-            temp += printOperand(opCond, false) + " ? ";
-        temp += info.item;
-        if (opCond && remain)
-            valsep = " : ";
-        prevCond = opCond;
-    }
-    return temp;
-}
-
 void metaPrepare(const StructType *STy)
 {
     ClassMethodTable *table = classCreate[STy];
@@ -74,19 +54,25 @@ void metaPrepare(const StructType *STy)
         baseMeta = &funcMetaMap[func];
         processFunction(func);
         table->storeList[func] = storeList;
-        if (!isActionMethod(func))
-            table->guard[func] = combineCondList(functionList);
-        else {
-            if (functionList.size() > 0) {
-                printf("%s: non-store lines in Action\n", __FUNCTION__);
-                func->dump();
-                for (auto info: functionList) {
-                    if (Value *cond = getCondition(info.cond, 0))
-                        printf("%s\n", ("    if (" + printOperand(cond, false) + ")").c_str());
-                    printf("%s\n", info.item.c_str());
-                }
-                exit(-1);
-            }
+        std::string temp, valsep;
+        Value *prevCond = NULL;
+        int remain = functionList.size();
+        for (auto info: functionList) {
+            remain--;
+            temp += valsep;
+            valsep = "";
+            Value *opCond = getCondition(info.cond, 0);
+            if (opCond && (remain || getCondition(info.cond, 1) != prevCond))
+                temp += printOperand(opCond, false) + " ? ";
+            temp += info.item;
+            if (opCond && remain)
+                valsep = " : ";
+            prevCond = opCond;
+        }
+        table->guard[func] = temp;
+        if (isActionMethod(func) && functionList.size() > 0) {
+            printf("%s: non-store lines in Action '%s'\n", __FUNCTION__, table->guard[func].c_str());
+            exit(-1);
         }
     }
     baseMeta = NULL;
