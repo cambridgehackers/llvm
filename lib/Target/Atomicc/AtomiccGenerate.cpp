@@ -76,13 +76,6 @@ const char *intmapLookup(INTMAP_TYPE *map, int value)
     return "unknown";
 }
 
-static bool isInlinableInst(const Instruction &I)
-{
-    if (I.getType() == Type::getVoidTy(I.getContext())
-      || isa<TerminatorInst>(I) || isa<AllocaInst>(I))
-        return false;
-    return true;
-}
 static const AllocaInst *isDirectAlloca(const Value *V)
 {
     const AllocaInst *AA = dyn_cast<AllocaInst>(V);
@@ -915,7 +908,7 @@ std::string printOperand(Value *Operand, bool Indirect)
 
 /*
  * Walk all BasicBlocks for a Function, generating strings for Instructions
- * that are not 'isInlinableInst'.
+ * that are not inlinable.
  */
 void processFunction(Function *func)
 {
@@ -933,41 +926,23 @@ func->dump();
     processIFunction = func;
     for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
         for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
-            if (!isInlinableInst(*II)) {
+            if (II->getType() == Type::getVoidTy(II->getContext())
+              || isa<TerminatorInst>(*II) || isa<AllocaInst>(*II)) {
                 std::string vout = processInstruction(*II);
-                if (vout != "") {
-                    if (II->use_begin() == II->use_end())
-switch(II->getOpcode()) {
-case Instruction::Ret:
-case Instruction::Call:
-break;
-default:
-printf("[%s:%d]YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY\n", __FUNCTION__, __LINE__);
-II->dump();
-exit(-1);
-}
-                    if (!isDirectAlloca(&*II) && II->use_begin() != II->use_end()) {
-                        std::string resname = GetValueName(&*II);
-                        declareList[resname] = printType(II->getType(), false, resname, "", "", false);
-                        storeList.push_back(StoreType{resname, II->getParent(), vout});
-                    }
-                    else
-                        functionList.push_back(ReferenceType{II->getParent(), vout});
-                }
-else {
+                if (vout != "")
+                    functionList.push_back(ReferenceType{II->getParent(), vout});
 switch(II->getOpcode()) {
 case Instruction::Alloca:
 case Instruction::Store:
 case Instruction::Switch:
 case Instruction::Br:
-case Instruction::Ret:
-case Instruction::Call:
+case Instruction::Ret: // can have value
+case Instruction::Call: // can have value
 break;
 default:
 printf("[%s:%d]ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n", __FUNCTION__, __LINE__);
 II->dump();
 exit(-1);
-}
 }
             }
         }
