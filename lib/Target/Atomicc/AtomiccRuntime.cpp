@@ -65,32 +65,46 @@ restart:
             case Instruction::Call: {
                 CallInst *ICL = dyn_cast<CallInst>(II);
                 Value *callV = ICL->getCalledValue();
+                IRBuilder<> builder(II->getParent());
+                builder.SetInsertPoint(II);
                 if (ICL->getDereferenceableBytes(0) > 0) {
-                    IRBuilder<> builder(II->getParent());
-                    builder.SetInsertPoint(II);
                     Value *newLoad = builder.CreateLoad(II->getOperand(1));
                     builder.CreateStore(newLoad, II->getOperand(0));
                     II->eraseFromParent();
                 }
                 else if (Function *cfunc = dyn_cast<Function>(callV)) {
                     int status;
-                    const char *ret = abi::__cxa_demangle(cfunc->getName().str().c_str(), 0, 0, &status);
-                    if (ret) {
-                        std::string temp = ret;
-                        int colon = temp.find("::");
-                        int lparen = temp.find("(");
-                        if (colon != -1 && lparen > colon) {
-                            std::string classname = temp.substr(0, colon);
-                            std::string fname = temp.substr(colon+2, lparen - colon - 2);
-                            int lt = classname.find("<");
-                            if (lt > 0)
-                                classname = classname.substr(0,lt);
-                            if (classname == fname) {
-                                processAlloca(cfunc);
-                                InlineFunctionInfo IFI;
-                                InlineFunction(ICL, IFI, false);
-                                goto restart;
-                            }
+                    std::string calledName = cfunc->getName();
+                    const char *ret = abi::__cxa_demangle(calledName.c_str(), 0, 0, &status);
+                    std::string temp;
+                    if (ret)
+                        temp = ret;
+                    int colon = temp.find("::");
+                    int lparen = temp.find("(");
+                    if (calledName == "llvm.memcpy.p0i8.p0i8.i64") {
+                    if (Instruction *dest = dyn_cast<Instruction>(II->getOperand(0)))
+                    if (dest->getOpcode() == Instruction::BitCast)
+                    if (Instruction *src = dyn_cast<Instruction>(II->getOperand(1)))
+                    if (src->getOpcode() == Instruction::BitCast) {
+Function *ff = src->getParent()->getParent();
+                        builder.CreateStore(builder.CreateLoad(src->getOperand(0)),
+                            dest->getOperand(0));
+                        recursiveDelete(II);
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+ff->dump();
+                    }
+                    }
+                    else if (colon != -1 && lparen > colon) {
+                        std::string classname = temp.substr(0, colon);
+                        std::string fname = temp.substr(colon+2, lparen - colon - 2);
+                        int lt = classname.find("<");
+                        if (lt > 0)
+                            classname = classname.substr(0,lt);
+                        if (classname == fname) {
+                            processAlloca(cfunc);
+                            InlineFunctionInfo IFI;
+                            InlineFunction(ICL, IFI, false);
+                            goto restart;
                         }
                     }
                 }

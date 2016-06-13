@@ -583,6 +583,7 @@ static std::string printCall(Instruction &I)
 #endif
     if (Instruction *dest = dyn_cast<Instruction>(I.getOperand(0)))
     if (dest->getOpcode() == Instruction::BitCast) {
+#if 0
     if (calledName == "llvm.memcpy.p0i8.p0i8.i64") {
         if (Instruction *src = dyn_cast<Instruction>(I.getOperand(1)))
         if (src->getOpcode() == Instruction::BitCast) {
@@ -595,7 +596,9 @@ static std::string printCall(Instruction &I)
             return vout;
         }
     }
-    else if (calledName == "llvm.memset.p0i8.i64") {
+    else 
+#endif
+    if (calledName == "llvm.memset.p0i8.i64") {
         if (dyn_cast<Argument>(dest->getOperand(0)) == calledRet) {
             if (generateRegion == ProcessCPP)
                 return "return {0}";
