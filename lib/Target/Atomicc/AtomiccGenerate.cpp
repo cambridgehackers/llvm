@@ -11,7 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 #include <stdio.h>
-#include <cxxabi.h> // abi::__cxa_demangle
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
@@ -564,7 +563,6 @@ static std::string printCall(Instruction &I)
     if (generateRegion == ProcessVerilog)
         prefix = pcalledFunction + prefix;
     std::string mname = prefix + fname;
-    Argument *calledRet = callingFunction->arg_begin();
 #if 1
     if (calledName == "fixedGet") {
         std::string str = printOperand(I.getOperand(0), false);
@@ -581,11 +579,7 @@ static std::string printCall(Instruction &I)
         return "";
     }
 #endif
-//HACK HACK HACK HACK HACK
-    if (mname == ".operator=" || mname == "->FixedPoint" || mname == "->ValueType") {
-        vout += pcalledFunction + " = (";
-    }
-    else if (calledName == "printf") {
+    if (calledName == "printf") {
         //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ", ";
@@ -884,7 +878,7 @@ func->dump();
             case Instruction::Call: // can have value
                 if (II->getType() == Type::getVoidTy(II->getContext())) {
                     std::string vout = printCall(*II);
-                    if (vout != "")
+                    if (generateRegion != ProcessVerilog)
                         functionList.push_back(ReferenceType{II, vout});
                 }
                 break;
@@ -925,19 +919,16 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
          */
         if (STy->getName() != "class.Module") {
             generateRegion = ProcessVerilog;
-            globalClassTable = table;
             if (inheritsModule(STy, "class.Module")
-             && !inheritsModule(STy, "class.InterfaceClass"))
+             && !inheritsModule(STy, "class.InterfaceClass")) {
+                globalClassTable = table;
                 metaPrepare(STy);
-            globalClassTable = NULL;
-            // now generate the verilog header file '.vh'
-            if (inheritsModule(STy, "class.Module")
-             && !inheritsModule(STy, "class.InterfaceClass"))
+                globalClassTable = NULL;
+                // now generate the verilog header file '.vh'
                 metaGenerate(STy, OStrVH);
-            // Only generate verilog for modules derived from Module
-            if (inheritsModule(STy, "class.Module")
-             && !inheritsModule(STy, "class.InterfaceClass"))
+                // Only generate verilog for modules derived from Module
                 generateModuleDef(STy, OStrV);
+            }
             // Generate cpp for all modules except class.ModuleExternal
             generateRegion = ProcessCPP;
             if (!inheritsModule(STy, "class.ModuleExternal")
