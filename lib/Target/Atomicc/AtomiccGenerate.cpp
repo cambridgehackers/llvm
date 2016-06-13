@@ -563,7 +563,7 @@ static std::string printCall(Instruction &I)
     if (generateRegion == ProcessVerilog)
         prefix = pcalledFunction + prefix;
     std::string mname = prefix + fname;
-#if 1
+#if 0
     if (calledName == "fixedGet") {
         std::string str = printOperand(I.getOperand(0), false);
         if (str[0] == '&')

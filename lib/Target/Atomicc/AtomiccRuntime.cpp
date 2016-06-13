@@ -95,6 +95,22 @@ restart:
                         goto restart;
                     }
                     }
+#if 1
+    else if (calledName == "fixedGet") {
+printf("[%s:%d]GET\n", __FUNCTION__, __LINE__);
+II->getParent()->getParent()->dump();
+II->dump();
+II->getOperand(0)->dump();
+        //II->replaceAllUsesWith(II->getOperand(0));
+        II->eraseFromParent();
+    }
+    else if (calledName == "fixedSet") {
+printf("[%s:%d]SET\n", __FUNCTION__, __LINE__);
+II->dump();
+        builder.CreateStore(II->getOperand(0), II->getOperand(1));
+        II->eraseFromParent();
+    }
+#endif
                     else if (colon != -1 && lparen > colon) {
                         std::string classname = temp.substr(0, colon);
                         std::string fname = temp.substr(colon+2, lparen - colon - 2);
