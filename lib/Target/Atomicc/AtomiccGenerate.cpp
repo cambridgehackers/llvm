@@ -581,35 +581,6 @@ static std::string printCall(Instruction &I)
         return "";
     }
 #endif
-    if (Instruction *dest = dyn_cast<Instruction>(I.getOperand(0)))
-    if (dest->getOpcode() == Instruction::BitCast) {
-#if 0
-    if (calledName == "llvm.memcpy.p0i8.p0i8.i64") {
-        if (Instruction *src = dyn_cast<Instruction>(I.getOperand(1)))
-        if (src->getOpcode() == Instruction::BitCast) {
-            std::string sval = printOperand(src->getOperand(0), dyn_cast<Argument>(src->getOperand(0)) == NULL);
-            if (!dyn_cast<Argument>(src->getOperand(0)))
-                appendList(MetaRead, I.getParent(), sval);
-            std::string pdest = printOperand(dest->getOperand(0), true);
-            appendList(MetaWrite, I.getParent(), pdest);
-            storeList.push_back(StoreType{pdest, &I, sval});
-            return vout;
-        }
-    }
-    else 
-#endif
-    if (calledName == "llvm.memset.p0i8.i64") {
-        if (dyn_cast<Argument>(dest->getOperand(0)) == calledRet) {
-            if (generateRegion == ProcessCPP)
-                return "return {0}";
-            return "0";
-        }
-        else
-            printf("[%s:%d] NOTARG memset\n", __FUNCTION__, __LINE__);
-    }
-    else
-        printf("[%s:%d] not memcpy/memset %s\n", __FUNCTION__, __LINE__, calledName.c_str());
-    }
 //HACK HACK HACK HACK HACK
     if (mname == ".operator=" || mname == "->FixedPoint" || mname == "->ValueType") {
         vout += pcalledFunction + " = (";
@@ -621,10 +592,7 @@ static std::string printCall(Instruction &I)
     }
     else if (generateRegion == ProcessVerilog) {
         if (isActionMethod(func))
-{
-printf("[%s:%d] call %s\n", __FUNCTION__, __LINE__, mname.c_str());
             muxEnable(I.getParent(), mname);
-}
         else
             vout += mname;
         appendList(MetaInvoke, I.getParent(), baseMethod(mname));

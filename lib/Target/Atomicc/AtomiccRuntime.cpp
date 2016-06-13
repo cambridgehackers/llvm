@@ -38,7 +38,6 @@ std::list<MEMORY_REGION> memoryRegion;
  */
 static void processAlloca(Function *func)
 {
-    bool dumpMe = false;
     std::map<const Value *,Instruction *> remapValue;
 restart:
     remapValue.clear();
@@ -53,7 +52,6 @@ restart:
                     // remember values stored in Alloca temps
                     remapValue[II->getOperand(1)] = II;
 //printf("[%s:%d] STORE %p\n", __FUNCTION__, __LINE__, II);
-//dumpMe = true;
                     }
                 }
                 }
@@ -63,7 +61,6 @@ restart:
                     // replace loads from temp areas with stored values
 //printf("[%s:%d] LOAD %p\n", __FUNCTION__, __LINE__, val);
                     II->replaceAllUsesWith(val->getOperand(0));
-                    //II->eraseFromParent();
                     recursiveDelete(II);
                 }
                 break;
@@ -91,13 +88,10 @@ restart:
                     if (dest->getOpcode() == Instruction::BitCast)
                     if (Instruction *src = dyn_cast<Instruction>(II->getOperand(1)))
                     if (src->getOpcode() == Instruction::BitCast) {
-//Function *ff = src->getParent()->getParent();
                         builder.CreateStore(builder.CreateLoad(src->getOperand(0)),
                             dest->getOperand(0));
                         printf("[%s:%d] deleting call\n", __FUNCTION__, __LINE__);
                         recursiveDelete(II);
-                        //II->eraseFromParent();
-//ff->dump();
                         goto restart;
                     }
                     }
@@ -130,10 +124,6 @@ restart:
             if (count == 1)
                 recursiveDelete(item.second);
         }
-    }
-    if (dumpMe) {
-        printf("[%s:%d] atEXIT\n", __FUNCTION__, __LINE__);
-        func->dump();
     }
 }
 
