@@ -38,8 +38,10 @@ std::list<MEMORY_REGION> memoryRegion;
  */
 static void processAlloca(Function *func)
 {
-    std::map<const Value *,Value *> remapValue;
+    bool dumpMe = false;
+    std::map<const Value *,Instruction *> remapValue;
 restart:
+    remapValue.clear();
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
         for (auto II = BB->begin(), IE = BB->end(); II != IE;) {
             auto PI = std::next(BasicBlock::iterator(II));
@@ -49,16 +51,19 @@ restart:
                 if (target->getOpcode() == Instruction::Alloca) {
                     if (!dyn_cast<CallInst>(II->getOperand(0))) { // don't do remapping for calls
                     // remember values stored in Alloca temps
-                    remapValue[II->getOperand(1)] = II->getOperand(0);
-                    recursiveDelete(II);
+                    remapValue[II->getOperand(1)] = II;
+//printf("[%s:%d] STORE %p\n", __FUNCTION__, __LINE__, II);
+//dumpMe = true;
                     }
                 }
                 }
                 break;
             case Instruction::Load:
-                if (Value *val = remapValue[II->getOperand(0)]) {
+                if (Instruction *val = remapValue[II->getOperand(0)]) {
                     // replace loads from temp areas with stored values
-                    II->replaceAllUsesWith(val);
+//printf("[%s:%d] LOAD %p\n", __FUNCTION__, __LINE__, val);
+                    II->replaceAllUsesWith(val->getOperand(0));
+                    //II->eraseFromParent();
                     recursiveDelete(II);
                 }
                 break;
@@ -86,12 +91,14 @@ restart:
                     if (dest->getOpcode() == Instruction::BitCast)
                     if (Instruction *src = dyn_cast<Instruction>(II->getOperand(1)))
                     if (src->getOpcode() == Instruction::BitCast) {
-Function *ff = src->getParent()->getParent();
+//Function *ff = src->getParent()->getParent();
                         builder.CreateStore(builder.CreateLoad(src->getOperand(0)),
                             dest->getOperand(0));
+                        printf("[%s:%d] deleting call\n", __FUNCTION__, __LINE__);
                         recursiveDelete(II);
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-ff->dump();
+                        //II->eraseFromParent();
+//ff->dump();
+                        goto restart;
                     }
                     }
                     else if (colon != -1 && lparen > colon) {
@@ -113,6 +120,20 @@ ff->dump();
             };
             II = PI;
         }
+    }
+    for (auto item: remapValue) {
+        if (item.second)
+        if (Instruction *allocItem = dyn_cast<Instruction>(item.second->getOperand(1))) {
+            int count = 0;
+            for (auto UB = allocItem->use_begin(), UE = allocItem->use_end(); UB != UE; UB++)
+                 count++;
+            if (count == 1)
+                recursiveDelete(item.second);
+        }
+    }
+    if (dumpMe) {
+        printf("[%s:%d] atEXIT\n", __FUNCTION__, __LINE__);
+        func->dump();
     }
 }
 
@@ -256,6 +277,7 @@ static Function *fixupFunction(std::string methodName, Function *argFunc, uint8_
                     Argument *newArg = new Argument(PTy, "temporary_this", func);
                     II->replaceAllUsesWith(newArg);
                     VMap[newArg] = fnew->arg_begin();
+                    //printf("[%s:%d] LoadMAP\n", __FUNCTION__, __LINE__);
                     recursiveDelete(II);
                 }
                 else if (II->use_empty())
@@ -314,6 +336,8 @@ static Function *fixupFunction(std::string methodName, Function *argFunc, uint8_
             II = PI;
         }
     }
+    if (trace_fixup)
+        printf("[%s:%d] before popArgument\n", __FUNCTION__, __LINE__);
     func->getArgumentList().pop_front(); // remove original argument
     CloneFunctionInto(fnew, func, VMap, false, Returns, "", nullptr);
     if (trace_fixup) {

@@ -766,7 +766,7 @@ static std::string processInstruction(Instruction &I)
         break;
         }
     default:
-        printf("Other opcode %d.=%s\n", opcode, I.getOpcodeName());
+        printf("processInstruction: Other opcode %d.=%s\n", opcode, I.getOpcodeName());
         I.getParent()->getParent()->dump();
         exit(1);
         break;
@@ -886,6 +886,7 @@ func->dump();
                         vout = "return ";
                     vout += printOperand(II->getOperand(0), false);
                     functionList.push_back(ReferenceType{II, vout});
+//printf("[%s:%d] RET %s\n", __FUNCTION__, __LINE__, vout.c_str());
                 }
                 break;
             case Instruction::Switch: {
