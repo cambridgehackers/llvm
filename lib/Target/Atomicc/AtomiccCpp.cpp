@@ -119,8 +119,7 @@ static std::map<const StructType *, int> alreadySeen;
 static void recurseClassDef(const StructType *iSTy, FILE *OStr, FILE *OHdr)
 {
      std::string sname = getStructName(iSTy);
-     if (!inheritsModule(iSTy, "class.BitsClass")
-      && !inheritsModule(iSTy, "class.ModuleExternal")
+     if (!inheritsModule(iSTy, "class.ModuleExternal")
       && sname != "l_class_OC_InterfaceClass"
       && sname != "l_class_OC_Module")
          generateClassDef(iSTy, OStr, OHdr);
@@ -147,24 +146,23 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             vecCount = table->replaceCount[Idx];
         }
         std::string fname = fieldName(STy, Idx);
-            if (const StructType *iSTy = dyn_cast<StructType>(element))
-                if (!inheritsModule(iSTy, "class.BitsClass")) {
-                    std::string sname = getStructName(iSTy);
-                    recurseClassDef(iSTy, OStr, OHdr);
-                    if (!inheritsModule(iSTy, "class.InterfaceClass")) {
-                    int dimIndex = 0;
-                    std::string vecDim;
-                    if (fname != "" && sname.substr(0,12) != "l_struct_OC_")
-                    do {
-                        if (vecCount != -1)
-                            vecDim = utostr(dimIndex++);
-                        runLines.push_back(fname + vecDim);
-                    } while(vecCount-- > 0);
-                    }
-                }
-            if (const PointerType *PTy = dyn_cast<PointerType>(element))
-            if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
-                recurseClassDef(iSTy, OStr, OHdr);
+        if (const StructType *iSTy = dyn_cast<StructType>(element)) {
+            std::string sname = getStructName(iSTy);
+            recurseClassDef(iSTy, OStr, OHdr);
+            if (!inheritsModule(iSTy, "class.InterfaceClass")) {
+            int dimIndex = 0;
+            std::string vecDim;
+            if (fname != "" && sname.substr(0,12) != "l_struct_OC_")
+            do {
+                if (vecCount != -1)
+                    vecDim = utostr(dimIndex++);
+                runLines.push_back(fname + vecDim);
+            } while(vecCount-- > 0);
+            }
+        }
+        if (const PointerType *PTy = dyn_cast<PointerType>(element))
+        if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
+            recurseClassDef(iSTy, OStr, OHdr);
     }
     for (auto FI : table->method) {
         Function *func = FI.second;

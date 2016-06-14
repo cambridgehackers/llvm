@@ -286,13 +286,6 @@ sourceTmp->getType()->dump();
             }
         }
     }
-    else if (const PointerType *PTy = dyn_cast<PointerType>(destTmp->getType())) {
-        if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
-        if (STy->getName() == "class.BitsClass") {
-            printf("[%s:%d] remove memcpy(BitsClass)\n", __FUNCTION__, __LINE__);
-            recursiveDelete(II);
-        }
-    }
     }
 }
 

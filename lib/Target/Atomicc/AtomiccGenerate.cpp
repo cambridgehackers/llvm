@@ -339,12 +339,7 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
         }
     case Type::StructTyID: {
         const StructType *STy = cast<StructType>(Ty);
-        if (inheritsModule(STy, "class.BitsClass")) {
-            ClassMethodTable *table = classCreate[STy];
-            cbuffer += "BITS" + table->instance + " " + NameSoFar;
-        }
-        else
-            cbuffer += getStructName(STy) + " " + NameSoFar;
+        cbuffer += getStructName(STy) + " " + NameSoFar;
         break;
         }
     case Type::ArrayTyID: {
@@ -883,8 +878,7 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
     if (!STy || !STy->hasName() || structMap[Ty] || (!force && inheritsModule(STy, "class.ModuleExternal")))
         return;
     structMap[Ty] = 1;
-    if (!inheritsModule(STy, "class.BitsClass")
-     && strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
+    if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
      && strncmp(STy->getName().str().c_str(), "struct.std::", 12)) {
         ClassMethodTable *table = classCreate[STy];
         int Idx = 0;

@@ -110,7 +110,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
             else if (const StructType *STy = dyn_cast<StructType>(element)) {
                 std::string sname = getStructName(STy);
                 if (sname.substr(0,12) != "l_struct_OC_")
-                if (!inheritsModule(STy, "class.InterfaceClass") && !inheritsModule(STy, "class.BitsClass"))
+                if (!inheritsModule(STy, "class.InterfaceClass"))
                     table->metaList.push_back("//METAINTERNAL; " + fname + "; " + sname + ";");
             }
         }

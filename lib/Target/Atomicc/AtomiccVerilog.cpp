@@ -338,10 +338,6 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                     fprintf(OStr, "    reg%s %s;\n", verilogArrRange(element).c_str(), fname.c_str());
                     resetList.push_back(fname);
                 }
-                else if (inheritsModule(STy, "class.BitsClass")) {
-                    ClassMethodTable *table = classCreate[STy];
-                    fprintf(OStr, "    reg[%s:0] %s;\n", table->instance.c_str(), fname.c_str());
-                }
                 else if (!inheritsModule(STy, "class.InterfaceClass"))
                     generateModuleSignature(OStr, STy, fname);
             }
