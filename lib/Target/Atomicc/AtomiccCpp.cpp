@@ -131,6 +131,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
     std::string name = getStructName(STy);
     std::map<std::string, int> cancelList;
     bool inInterface = inheritsModule(STy, "class.InterfaceClass");
+    bool inTypedef = name.substr(0,12) == "l_struct_OC_";
 
     if (alreadySeen[STy])
         return;
@@ -179,7 +180,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
                 recurseClassDef(iSTy, OStr, OHdr);
         }
     }
-    if (name.substr(0,12) == "l_struct_OC_")
+    if (inTypedef)
         fprintf(OHdr, "typedef struct {\n");
     else {
         if (!inInterface) {
@@ -220,7 +221,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         }
         fprintf(OHdr, "  }\n");
     }
-    else if (name.substr(0,12) != "l_struct_OC_") {
+    else if (!inTypedef) {
         fprintf(OHdr, "public:\n  void run();\n  void commit();\n");
     if (table->interfaceList.size() > 0 || table->interfaceConnect.size() > 0) {
         std::string prefix = ":";
@@ -258,10 +259,11 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         fprintf(OHdr, "  void set%s(%s) { %s = v; }\n", item.first.c_str(),
             printType(item.second, false, "v", "", "", false).c_str(), item.first.c_str());
     }
-    fprintf(OHdr, "}%s;\n", (name.substr(0,12) == "l_struct_OC_" ? name.c_str():""));
+    fprintf(OHdr, "}%s;\n", inTypedef ? name.c_str() : "");
+    if (inTypedef || inInterface)
+        return;
 
     // now generate '.cpp' file
-    if (name.substr(0,12) != "l_struct_OC_" && !inInterface) {
     for (auto FI : table->method) {
         Function *func = FI.second;
         std::string mname = FI.first;
@@ -307,7 +309,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
     fprintf(OStr, "}\n");
     // Generate 'commit()' method to copy values from shadow variable into state elements
     fprintf(OStr, "void %s::commit()\n{\n", name.c_str());
-    int Idx = 0;
+    Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         Type *element = *I;
         int64_t vecCount = -1;
@@ -325,5 +327,4 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
     for (auto item : runLines)
         fprintf(OStr, "    %s.commit();\n", item.c_str());
     fprintf(OStr, "}\n");
-    }
 }
