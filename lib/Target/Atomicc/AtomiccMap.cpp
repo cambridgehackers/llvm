@@ -206,6 +206,11 @@ static void addGuard(Instruction *argI, Function *func, Function *currentFunctio
 static void processPromote(Function *currentFunction)
 {
     Module *Mod = currentFunction->getParent();
+    const StructType *STy = findThisArgument(currentFunction);
+    ClassMethodTable *table = classCreate[STy];
+    PrefixType interfacePrefix;
+    buildPrefix(table, interfacePrefix);
+    updateParameterNames(baseMethod(pushSeen[currentFunction]), currentFunction);
 restart:
     for (auto BI = currentFunction->begin(), BE = currentFunction->end(); BI != BE; BI++) {
         for (auto II = BI->begin(), IE = BI->end(); II != IE;) {

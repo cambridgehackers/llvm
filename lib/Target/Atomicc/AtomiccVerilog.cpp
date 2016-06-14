@@ -108,18 +108,23 @@ void setAssign(std::string target, std::string value)
 
 void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix)
 {
+    if (!table->mappedInterface)
     for (auto item: table->interfaceList) {
         ClassMethodTable *itable = classCreate[item.STy];
 //printf("[%s:%d] prefix %s count %d\n", __FUNCTION__, __LINE__, item.name.c_str(), (int)itable->method.size());
         for (auto iitem: itable->method) {
-            //Function *func = iitem.second;
+            Function *func = iitem.second;
             std::string mname = iitem.first;
-            interfacePrefix[mname] = item.name + "$";
-            interfacePrefix[mname + "__ENA"] = item.name + "$";
-            interfacePrefix[mname + "__VALID"] = item.name + "$";
-//printf("[%s:%d] class %s name %s prefix %s\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), getMethodName(func->getName()).c_str(), item.name.c_str());
+            //interfacePrefix[mname] = item.name + "$";
+            //interfacePrefix[mname + "__ENA"] = item.name + "$";
+            //interfacePrefix[mname + "__VALID"] = item.name + "$";
+            Function *afunc = table->method[iitem.first];
+            if (afunc)
+                pushSeen[afunc] = item.name + "$" + pushSeen[afunc];
+printf("[%s:%d] class %s name %s prefix %s iifirst %s afunc %p\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), getMethodName(func->getName()).c_str(), item.name.c_str(), iitem.first.c_str(), afunc);
         }
     }
+    table->mappedInterface = true;
 }
 /*
  * Generate verilog module header for class definition or reference

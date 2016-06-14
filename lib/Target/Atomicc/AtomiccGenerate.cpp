@@ -171,6 +171,7 @@ void getClass(const StructType *STy)
 {
     if (!classCreate[STy]) {
         classCreate[STy] = new ClassMethodTable;
+        classCreate[STy]->mappedInterface = false;
         classCreate[STy]->STy = STy;
         checkClass(STy, STy);
     }
@@ -211,7 +212,7 @@ std::string GetValueName(const Value *Operand)
     if (VarName == "")
     for (auto charp = Name.begin(), E = Name.end(); charp != E; ++charp) {
         char ch = *charp;
-        if (isalnum(ch) || ch == '_')
+        if (isalnum(ch) || ch == '_' || ch == '$')
             VarName += ch;
         else {
             char buffer[5];

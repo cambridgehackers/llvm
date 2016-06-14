@@ -193,7 +193,7 @@ static void processMethodInlining(Function *thisFunc, Function *parentFunc)
 
 // rename parameter names so that they are prefixed by method name (so that
 // all parameter names are unique across module for verilog instantiation)
-static void updateParameterNames(std::string mName, Function *func)
+void updateParameterNames(std::string mName, Function *func)
 {
     auto AI = ++func->arg_begin(), AE = func->arg_end();
     for (; AI != AE; AI++)
@@ -217,7 +217,6 @@ static void pushWork(std::string mName, std::string suffix, Function *func)
     setSeen(func, mName + suffix);
     printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
     table->method[mName] = func;
-    updateParameterNames(mName, func);
     // inline intra-class method call bodies
     processMethodInlining(func, func);
     fixupFuncList.push_back(func);

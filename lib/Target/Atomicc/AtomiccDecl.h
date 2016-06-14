@@ -96,6 +96,7 @@ public:
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
+    bool                              mappedInterface;
     ClassMethodTable() {}
 };
 
@@ -169,3 +170,4 @@ bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);
 void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix);
 void metaPrepare(const StructType *STy);
+void updateParameterNames(std::string mName, Function *func);
