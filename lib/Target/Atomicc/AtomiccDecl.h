@@ -26,8 +26,6 @@
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 
 #define MODULE_SEPARATOR "$"
-#define MODULE_ARROW (generateRegion == ProcessVerilog ? MODULE_SEPARATOR : "->")
-#define MODULE_DOT   (generateRegion == ProcessVerilog ? MODULE_SEPARATOR : ".")
 
 #define MAX_BASIC_BLOCK_FLAGS 0x10
 #define MAX_CHAR_BUFFER 1000
@@ -127,7 +125,6 @@ extern std::list<MEMORY_REGION> memoryRegion;
 extern std::list<Function *> fixupFuncList;
 extern int trace_pair;
 extern Module *globalMod;
-extern int generateRegion;
 extern ClassMethodTable *globalClassTable;
 
 int validateAddress(int arg, void *p);

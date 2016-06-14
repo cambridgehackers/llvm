@@ -22,12 +22,15 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
+#define MODULE_ARROW (generateRegion == ProcessVerilog ? MODULE_SEPARATOR : "->")
+#define MODULE_DOT   (generateRegion == ProcessVerilog ? MODULE_SEPARATOR : ".")
+
 static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
 std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
-int generateRegion = ProcessNone;
+static int generateRegion = ProcessNone;
 
 static std::map<const Type *, int> structMap;
 static std::map<const Value *, std::string> allocaMap;

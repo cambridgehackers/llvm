@@ -25,7 +25,7 @@ static MetaData *baseMeta;
 
 void appendList(int listIndex, BasicBlock *cond, std::string item)
 {
-    if (baseMeta && generateRegion == ProcessVerilog) {
+    if (baseMeta) {
         Value *val = getCondition(cond, 0);
         if (!val)
             baseMeta->list[listIndex][item].clear();
