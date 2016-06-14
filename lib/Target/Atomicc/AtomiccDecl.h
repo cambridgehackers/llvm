@@ -109,7 +109,6 @@ typedef  struct {
 } MEMORY_REGION;
 
 typedef std::map<std::string, int> StringMapType;
-typedef std::map<std::string,std::string> PrefixType;
 
 enum {ProcessNone=0, ProcessVerilog, ProcessCPP};
 enum {MetaNone, MetaRead, MetaWrite, MetaInvoke, MetaMax};
@@ -168,6 +167,6 @@ void metaGenerate(const StructType *STy, FILE *OStr);
 std::string baseMethod(std::string mname);
 bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);
-void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix);
+void buildPrefix(ClassMethodTable *table);
 void metaPrepare(const StructType *STy);
 void updateParameterNames(std::string mName, Function *func);

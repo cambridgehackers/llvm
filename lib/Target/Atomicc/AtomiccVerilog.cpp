@@ -106,26 +106,6 @@ void setAssign(std::string target, std::string value)
      assignList[target] = inlineValue(value, true);
 }
 
-void buildPrefix(ClassMethodTable *table, PrefixType &interfacePrefix)
-{
-    if (!table->mappedInterface)
-    for (auto item: table->interfaceList) {
-        ClassMethodTable *itable = classCreate[item.STy];
-//printf("[%s:%d] prefix %s count %d\n", __FUNCTION__, __LINE__, item.name.c_str(), (int)itable->method.size());
-        for (auto iitem: itable->method) {
-            Function *func = iitem.second;
-            std::string mname = iitem.first;
-            //interfacePrefix[mname] = item.name + "$";
-            //interfacePrefix[mname + "__ENA"] = item.name + "$";
-            //interfacePrefix[mname + "__VALID"] = item.name + "$";
-            Function *afunc = table->method[iitem.first];
-            if (afunc)
-                pushSeen[afunc] = item.name + "$" + pushSeen[afunc];
-printf("[%s:%d] class %s name %s prefix %s iifirst %s afunc %p\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), getMethodName(func->getName()).c_str(), item.name.c_str(), iitem.first.c_str(), afunc);
-        }
-    }
-    table->mappedInterface = true;
-}
 /*
  * Generate verilog module header for class definition or reference
  */
@@ -135,9 +115,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     std::string name = getStructName(STy);
     std::string inp = "input ", outp = "output ", instPrefix, inpClk = "input ";
     std::list<std::string> paramList;
-    PrefixType interfacePrefix;
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, name.c_str(), instance.c_str());
-    buildPrefix(table, interfacePrefix);
     if (instance != "") {
         instPrefix = instance + MODULE_SEPARATOR;
         inp = instPrefix;
@@ -145,7 +123,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
         inpClk = "";
         for (auto FI : table->method) {
             const Function *func = FI.second;
-            std::string mname = interfacePrefix[pushSeen[func]] + pushSeen[func];
+            std::string mname = pushSeen[func];
             Type *retType = func->getReturnType();
             auto AI = func->arg_begin(), AE = func->arg_end();
             std::string arrRange;
@@ -155,7 +133,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
             if (inlineValue(wparam, false) == "")
                 fprintf(OStr, "    wire %s%s;\n", arrRange.c_str(), wparam.c_str());
             for (AI++; AI != AE; ++AI) {
-                wparam = instPrefix + interfacePrefix[pushSeen[func]] + AI->getName().str();
+                wparam = instPrefix + AI->getName().str();
                 if (inlineValue(wparam, false) == "")
                     fprintf(OStr, "    wire %s%s;\n", verilogArrRange(AI->getType()).c_str(), wparam.c_str());
             }
@@ -165,7 +143,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     paramList.push_back(inpClk + "nRST");
     for (auto FI : table->method) {
         Function *func = FI.second;
-        std::string mname = interfacePrefix[pushSeen[func]] + pushSeen[func];
+        std::string mname = pushSeen[func];
         if (table->ruleFunctions[mname.substr(0, mname.length()-5)])
             continue;
         Type *retType = func->getReturnType();
@@ -178,9 +156,9 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
         paramList.push_back(wparam);
         for (AI++; AI != AE; ++AI) {
             if (instance != "")
-                wparam = inlineValue(instPrefix + interfacePrefix[pushSeen[func]] + AI->getName().str(), true);
+                wparam = inlineValue(instPrefix + AI->getName().str(), true);
             else
-                wparam = inp + verilogArrRange(AI->getType()) + interfacePrefix[pushSeen[func]] + AI->getName().str();
+                wparam = inp + verilogArrRange(AI->getType()) + AI->getName().str();
             paramList.push_back(wparam);
         }
     }
@@ -196,11 +174,9 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
             if (const StructType *iSTy = dyn_cast<StructType>(element)) { // calling indications from this module
                 if (ClassMethodTable *itable = classCreate[iSTy]) {
 //printf("[%s:%d] indication interface topname %s sname %s fname %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), fname.c_str());
-                PrefixType interfacePrefix;
-                buildPrefix(itable, interfacePrefix);
                 for (auto FI : itable->method) {
                     Function *func = FI.second;
-                    std::string wparam, mname = fname + MODULE_SEPARATOR + interfacePrefix[pushSeen[func]] + pushSeen[func];
+                    std::string wparam, mname = fname + MODULE_SEPARATOR + pushSeen[func];
 //printf("[%s:%d] mname %s\n", __FUNCTION__, __LINE__, mname.c_str());
                     Type *retType = func->getReturnType();
                     auto AI = func->arg_begin(), AE = func->arg_end();
@@ -210,7 +186,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
                         wparam = inp + (instance == "" ? verilogArrRange(retType):"") + mname;
                     paramList.push_back(wparam);
                     for (AI++; AI != AE; ++AI) {
-                        wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + baseMethod(mname) + "_" + interfacePrefix[pushSeen[func]] + AI->getName().str();
+                        wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + baseMethod(mname) + "_" + AI->getName().str();
                         paramList.push_back(wparam);
                     }
                 }
@@ -248,15 +224,13 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
 
     assignList.clear();
     // first generate the verilog module file '.v'
-    PrefixType interfacePrefix;
-    buildPrefix(table, interfacePrefix);
     generateModuleSignature(OStr, STy, "");
     // generate local state element declarations
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : table->method) {
         Function *func = FI.second;
-        std::string mname = interfacePrefix[pushSeen[func]] + pushSeen[func];
+        std::string mname = pushSeen[func];
         std::string rdyName = mname.substr(0, mname.length()-5) + "__RDY";
         if (endswith(mname, "__VALID"))
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
@@ -296,7 +270,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     }
     for (auto item: table->muxEnableList) {
         Function *func = item.bb->getParent();
-        std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
+        std::string tempCond = pushSeen[func] + "_internal";
         if (Value *cond = getCondition(item.bb, 0))
             tempCond += " & " + printOperand(cond, false);
         if (assignList[item.signal] != "")
@@ -310,7 +284,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         std::string temp;
         for (auto element: item.second) {
             Function *func = element.bb->getParent();
-            std::string tempCond = interfacePrefix[pushSeen[func]] + pushSeen[func] + "_internal";
+            std::string tempCond = pushSeen[func] + "_internal";
             if (Value *cond = getCondition(element.bb, 0))
                 tempCond += " & " + printOperand(cond, false);
             if (--remain)

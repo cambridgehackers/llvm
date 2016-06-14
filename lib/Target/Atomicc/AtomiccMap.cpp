@@ -208,8 +208,19 @@ static void processPromote(Function *currentFunction)
     Module *Mod = currentFunction->getParent();
     const StructType *STy = findThisArgument(currentFunction);
     ClassMethodTable *table = classCreate[STy];
-    PrefixType interfacePrefix;
-    buildPrefix(table, interfacePrefix);
+    if (!table->mappedInterface)
+    for (auto item: table->interfaceList) {
+        ClassMethodTable *itable = classCreate[item.STy];
+        for (auto iitem: itable->method) {
+            //Function *func = iitem.second;
+            std::string mname = iitem.first;
+            Function *afunc = table->method[iitem.first];
+            if (afunc)
+                pushSeen[afunc] = item.name + "$" + pushSeen[afunc];
+//printf("[%s:%d] class %s name %s prefix %s iifirst %s afunc %p\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), getMethodName(func->getName()).c_str(), item.name.c_str(), iitem.first.c_str(), afunc);
+        }
+    }
+    table->mappedInterface = true;
     updateParameterNames(baseMethod(pushSeen[currentFunction]), currentFunction);
 restart:
     for (auto BI = currentFunction->begin(), BE = currentFunction->end(); BI != BE; BI++) {

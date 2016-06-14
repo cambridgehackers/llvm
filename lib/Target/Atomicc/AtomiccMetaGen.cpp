@@ -83,8 +83,6 @@ void metaPrepare(const StructType *STy)
 void metaGenerate(const StructType *STy, FILE *OStr)
 {
     ClassMethodTable *table = classCreate[STy];
-    PrefixType interfacePrefix;
-    buildPrefix(table, interfacePrefix);
     std::string name = getStructName(table->STy);
     std::map<std::string, int> exclusiveSeen;
 
@@ -121,7 +119,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
     for (auto FI : table->method) {
         Function *func = FI.second;
         std::string temp = table->guard[func];
-        std::string mname = baseMethod(interfacePrefix[pushSeen[func]] + pushSeen[func]);
+        std::string mname = baseMethod(pushSeen[func]);
         if (endswith(mname, "__RDY"))
             table->metaList.push_back("//METAGUARD; " + mname.substr(0, mname.length()-5) + "; " + temp + ";");
         else if (endswith(mname, "__READY"))
@@ -135,7 +133,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
             std::map<std::string,std::string> metaConflict;
             for (auto innerFI : table->method) {
                 Function *innerfunc = innerFI.second;
-                std::string innermname = baseMethod(interfacePrefix[pushSeen[innerfunc]] + pushSeen[innerfunc]);
+                std::string innermname = baseMethod(pushSeen[innerfunc]);
                 MetaData *innerbm = &funcMetaMap[innerfunc];
                 std::string tempConflict;
                 if (innerfunc == func)
