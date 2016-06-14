@@ -552,8 +552,6 @@ static std::string printCall(Instruction &I)
     std::string pcalledFunction = printOperand(*AI++, false); // skips 'this' param
     std::string calledName = func->getName();
     std::string fname = pushSeen[func];
-    if (trace_call)
-        printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (pcalledFunction[0] == '&') {
         pcalledFunction = pcalledFunction.substr(1);
         prefix = MODULE_DOT;
@@ -561,6 +559,8 @@ static std::string printCall(Instruction &I)
     if (generateRegion == ProcessVerilog)
         prefix = pcalledFunction + prefix;
     std::string mname = prefix + fname;
+    if (trace_call)
+        printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (calledName == "printf") {
         //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
@@ -573,9 +573,8 @@ static std::string printCall(Instruction &I)
             vout += mname;
         appendList(MetaInvoke, I.getParent(), baseMethod(mname));
     }
-    else {
+    else
         vout += pcalledFunction + baseMethod(mname) + "(";
-    }
     for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
         bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
         if (auto *ins = dyn_cast<Instruction>(*AI)) {

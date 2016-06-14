@@ -119,9 +119,9 @@ void metaGenerate(const StructType *STy, FILE *OStr)
         } while(vecCount-- > 0);
     }
     for (auto FI : table->method) {
-        std::string mname = interfacePrefix[FI.first] + FI.first;
         Function *func = FI.second;
         std::string temp = table->guard[func];
+        std::string mname = baseMethod(interfacePrefix[pushSeen[func]] + pushSeen[func]);
         if (endswith(mname, "__RDY"))
             table->metaList.push_back("//METAGUARD; " + mname.substr(0, mname.length()-5) + "; " + temp + ";");
         else if (endswith(mname, "__READY"))
@@ -134,8 +134,8 @@ void metaGenerate(const StructType *STy, FILE *OStr)
             std::map<std::string,std::string> metaBefore;
             std::map<std::string,std::string> metaConflict;
             for (auto innerFI : table->method) {
-                std::string innermname = interfacePrefix[innerFI.first] + innerFI.first;
                 Function *innerfunc = innerFI.second;
+                std::string innermname = baseMethod(interfacePrefix[pushSeen[innerfunc]] + pushSeen[innerfunc]);
                 MetaData *innerbm = &funcMetaMap[innerfunc];
                 std::string tempConflict;
                 if (innerfunc == func)

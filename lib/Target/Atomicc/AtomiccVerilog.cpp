@@ -140,7 +140,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
         inpClk = "";
         for (auto FI : table->method) {
             const Function *func = FI.second;
-            std::string mname = interfacePrefix[FI.first] + pushSeen[func];
+            std::string mname = interfacePrefix[pushSeen[func]] + pushSeen[func];
             Type *retType = func->getReturnType();
             auto AI = func->arg_begin(), AE = func->arg_end();
             std::string arrRange;
@@ -150,7 +150,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
             if (inlineValue(wparam, false) == "")
                 fprintf(OStr, "    wire %s%s;\n", arrRange.c_str(), wparam.c_str());
             for (AI++; AI != AE; ++AI) {
-                wparam = instPrefix + interfacePrefix[FI.first] + AI->getName().str();
+                wparam = instPrefix + interfacePrefix[pushSeen[func]] + AI->getName().str();
                 if (inlineValue(wparam, false) == "")
                     fprintf(OStr, "    wire %s%s;\n", verilogArrRange(AI->getType()).c_str(), wparam.c_str());
             }
@@ -160,7 +160,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     paramList.push_back(inpClk + "nRST");
     for (auto FI : table->method) {
         Function *func = FI.second;
-        std::string mname = interfacePrefix[FI.first] + pushSeen[func];
+        std::string mname = interfacePrefix[pushSeen[func]] + pushSeen[func];
         if (table->ruleFunctions[mname.substr(0, mname.length()-5)])
             continue;
         Type *retType = func->getReturnType();
@@ -173,9 +173,9 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
         paramList.push_back(wparam);
         for (AI++; AI != AE; ++AI) {
             if (instance != "")
-                wparam = inlineValue(instPrefix + interfacePrefix[FI.first] + AI->getName().str(), true);
+                wparam = inlineValue(instPrefix + interfacePrefix[pushSeen[func]] + AI->getName().str(), true);
             else
-                wparam = inp + verilogArrRange(AI->getType()) + interfacePrefix[FI.first] + AI->getName().str();
+                wparam = inp + verilogArrRange(AI->getType()) + interfacePrefix[pushSeen[func]] + AI->getName().str();
             paramList.push_back(wparam);
         }
     }
@@ -195,7 +195,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
                 buildPrefix(itable, interfacePrefix);
                 for (auto FI : itable->method) {
                     Function *func = FI.second;
-                    std::string wparam, mname = fname + MODULE_SEPARATOR + interfacePrefix[FI.first] + pushSeen[func];
+                    std::string wparam, mname = fname + MODULE_SEPARATOR + interfacePrefix[pushSeen[func]] + pushSeen[func];
 //printf("[%s:%d] mname %s\n", __FUNCTION__, __LINE__, mname.c_str());
                     Type *retType = func->getReturnType();
                     auto AI = func->arg_begin(), AE = func->arg_end();
@@ -205,7 +205,7 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
                         wparam = inp + (instance == "" ? verilogArrRange(retType):"") + mname;
                     paramList.push_back(wparam);
                     for (AI++; AI != AE; ++AI) {
-                        wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + baseMethod(mname) + "_" + interfacePrefix[FI.first] + AI->getName().str();
+                        wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + baseMethod(mname) + "_" + interfacePrefix[pushSeen[func]] + AI->getName().str();
                         paramList.push_back(wparam);
                     }
                 }
@@ -251,7 +251,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     // from each method
     for (auto FI : table->method) {
         Function *func = FI.second;
-        std::string mname = interfacePrefix[FI.first] + pushSeen[func];
+        std::string mname = interfacePrefix[pushSeen[func]] + pushSeen[func];
         std::string rdyName = mname.substr(0, mname.length()-5) + "__RDY";
         if (endswith(mname, "__VALID"))
             rdyName = mname.substr(0, mname.length()-7) + "__READY";

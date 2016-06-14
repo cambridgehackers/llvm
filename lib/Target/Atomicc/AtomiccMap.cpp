@@ -440,8 +440,8 @@ static void registerInterface(char *addr, StructType *STy, const char *name)
             std::string mName = ret.substr(idx+1);
             std::string enaSuffix;
         Function *rdyFunc = ruleRDYFunction[func];
-        std::string rdyName = pushSeen[rdyFunc];
         if (isActionMethod(func)) {
+            std::string rdyName = pushSeen[rdyFunc];
             if (endswith(rdyName, "__RDY"))
                 enaSuffix = "__ENA";
             if (endswith(rdyName, "__READY"))
