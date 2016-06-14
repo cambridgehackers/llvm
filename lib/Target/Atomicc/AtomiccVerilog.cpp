@@ -261,7 +261,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             if (info.cond)
                 count++;
             else
-                setAssign(info.target, info.item);
+                setAssign(info.target, printOperand(info.item, false));
         if (!isActionMethod(func)) {
             if (ruleENAFunction[func])
                 assignList[globalCondition] = table->guard[func];  // collect the text of the return value into a single 'assign'
@@ -283,7 +283,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                     if (info.cond) {
                     if (Value *cond = getCondition(info.cond->getParent(), 0))
                         alwaysLines.push_back("    if (" + printOperand(cond, false) + ")");
-                    alwaysLines.push_back("    " + info.target + " <= " + info.item + ";");
+                    alwaysLines.push_back("    " + info.target + " <= " + printOperand(info.item, false) + ";");
                     }
                 alwaysLines.push_back("end; // End of " + mname);
             }

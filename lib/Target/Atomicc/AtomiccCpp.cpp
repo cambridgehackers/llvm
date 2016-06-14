@@ -274,16 +274,17 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             fprintf(OStr, "        %s;\n", info.second.c_str());
         for (auto info: storeList) {
             Value *cond = getCondition(info.cond->getParent(), 0);
+            std::string items = printOperand(info.item, false);
             if (cond)
                 fprintf(OStr, "        if (%s) {\n    ", printOperand(cond, false).c_str());
             if (info.target.substr(0, 7) == "thisp->" && table->shadow[info.target.substr(7)]) {
                 // State element updates are written to shadow variables so that changes
                 // in state are not visible until 'commit()' method is called.
-                fprintf(OStr, "        %s_shadow = %s;\n", info.target.c_str(), info.item.c_str());
+                fprintf(OStr, "        %s_shadow = %s;\n", info.target.c_str(), items.c_str());
                 fprintf(OStr, "        %s_valid = 1;\n", info.target.c_str());
             }
             else
-                fprintf(OStr, "        %s = %s;\n", info.target.c_str(), info.item.c_str());
+                fprintf(OStr, "        %s = %s;\n", info.target.c_str(), items.c_str());
             if (cond)
                 fprintf(OStr, "        }\n    ");
         }

@@ -819,7 +819,7 @@ func->dump();
 //printf("[%s:%d] STORE[%s] vassign %d\n", __FUNCTION__, __LINE__, pdest.c_str(), (int)vassign);
                 if (!vassign)
                     appendList(MetaWrite, II->getParent(), pdest);
-                storeList.push_back(StoreType{pdest, vassign ? NULL : II, printOperand(II->getOperand(0), false)});
+                storeList.push_back(StoreType{pdest, vassign ? NULL : II, II->getOperand(0)});
                 break;
                 }
             case Instruction::Ret:

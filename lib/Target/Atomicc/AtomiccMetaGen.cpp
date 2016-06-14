@@ -54,6 +54,8 @@ void metaPrepare(const StructType *STy)
         baseMeta = &funcMetaMap[func];
         processFunction(func);
         table->storeList[func] = storeList;
+        for (auto info: table->storeList[func])
+            (void)printOperand(info.item, false); // force evaluation to get metadata
         std::string temp, valsep;
         Value *prevCond = NULL;
         int remain = functionList.size();

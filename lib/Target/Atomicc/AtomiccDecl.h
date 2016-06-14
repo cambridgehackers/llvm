@@ -62,7 +62,7 @@ typedef struct {
 typedef struct {
     std::string target;
     Instruction *cond;
-    std::string item;
+    Value *item;
 } StoreType;
 
 typedef struct {
