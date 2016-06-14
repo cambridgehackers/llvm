@@ -563,22 +563,6 @@ static std::string printCall(Instruction &I)
     if (generateRegion == ProcessVerilog)
         prefix = pcalledFunction + prefix;
     std::string mname = prefix + fname;
-#if 0
-    if (calledName == "fixedGet") {
-        std::string str = printOperand(I.getOperand(0), false);
-        if (str[0] == '&')
-            str = str.substr(1);
-        return str;
-    }
-    if (calledName == "fixedSet") {
-        std::string pdest = printOperand(I.getOperand(0), false);
-        if (pdest[0] == '&')
-            pdest = pdest.substr(1);
-        appendList(MetaWrite, I.getParent(), pdest);
-        storeList.push_back(StoreType{pdest, &I, printOperand(I.getOperand(1), false)});
-        return "";
-    }
-#endif
     if (calledName == "printf") {
         //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
@@ -833,12 +817,11 @@ func->dump();
                 std::string pdest = printOperand(IS->getPointerOperand(), true);
                 if (pdest[0] == '&')
                     pdest = pdest.substr(1);
-                std::string sval = printOperand(II->getOperand(0), false);
                 bool vassign = generateRegion == ProcessVerilog && isAlloca(IS->getPointerOperand());
-//printf("[%s:%d] STORE[%s] %s vassign %d\n", __FUNCTION__, __LINE__, sval.c_str(), pdest.c_str(), (int)vassign);
+//printf("[%s:%d] STORE[%s] vassign %d\n", __FUNCTION__, __LINE__, pdest.c_str(), (int)vassign);
                 if (!vassign)
                     appendList(MetaWrite, II->getParent(), pdest);
-                storeList.push_back(StoreType{pdest, vassign ? NULL : II, sval});
+                storeList.push_back(StoreType{pdest, vassign ? NULL : II, printOperand(II->getOperand(0), false)});
                 break;
                 }
             case Instruction::Ret:
