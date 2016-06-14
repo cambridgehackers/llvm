@@ -271,7 +271,8 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         fprintf(OStr, "        %s thisp = (%s)thisarg;\n", argt.c_str(), argt.c_str());
         processFunction(func);
         for (auto info: declareList)
-            fprintf(OStr, "        %s;\n", info.second.c_str());
+            if (auto *PTy = dyn_cast<PointerType>(info->getType()))
+                fprintf(OStr, "        %s;\n", printType(PTy->getElementType(), false, GetValueName(info), "", "", false).c_str());
         for (auto info: storeList) {
             Value *cond = getCondition(info.cond->getParent(), 0);
             std::string items = printOperand(info.item, false);

@@ -40,7 +40,7 @@ static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
 std::list<ReferenceType> functionList;
 std::list<StoreType> storeList;
-std::map<std::string, std::string> declareList;
+std::list<const Instruction *> declareList;
 
 static INTMAP_TYPE predText[] = {
     {FCmpInst::FCMP_FALSE, "false"}, {FCmpInst::FCMP_OEQ, "oeq"},
@@ -850,9 +850,7 @@ func->dump();
                 break;
                 }
             case Instruction::Alloca: {
-                std::string resname = GetValueName(&*II);
-                if (auto *PTy = dyn_cast<PointerType>(II->getType()))
-                    declareList[resname] = printType(PTy->getElementType(), false, resname, "", "", false);
+                declareList.push_back(&*II);
                 //printf("[%s:%d] ALLOCAA %s -> %s\n", __FUNCTION__, __LINE__, func->getName().str().c_str(), allocaMap[&I].c_str());
                 break;
                 }

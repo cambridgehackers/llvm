@@ -118,7 +118,7 @@ extern std::map<const StructType *,ClassMethodTable *> classCreate;
 extern std::map<Function *, Function *> ruleRDYFunction;
 extern std::map<Function *, Function *> ruleENAFunction;
 extern std::list<ReferenceType> functionList;
-extern std::map<std::string, std::string> declareList;
+extern std::list<const Instruction *> declareList;
 extern std::list<StoreType> storeList;
 extern std::map<const Function *, std::string> pushSeen;
 extern std::list<MEMORY_REGION> memoryRegion;
