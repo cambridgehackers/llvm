@@ -305,8 +305,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             fprintf(OStr, "    if (%s__RDY()) %s();\n", item.first.c_str(), item.first.c_str());
     for (auto item : runLines)
         fprintf(OStr, "    %s.run();\n", item.c_str());
-    fprintf(OStr, "    commit();\n");
-    fprintf(OStr, "}\n");
+    fprintf(OStr, "    commit();\n}\n");
     // Generate 'commit()' method to copy values from shadow variable into state elements
     fprintf(OStr, "void %s::commit()\n{\n", name.c_str());
     Idx = 0;
