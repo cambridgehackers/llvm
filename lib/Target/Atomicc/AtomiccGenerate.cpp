@@ -39,7 +39,7 @@ static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
 std::list<Instruction *> functionList;
-std::list<StoreType> storeList;
+std::list<StoreInst *> storeList;
 std::list<const Instruction *> declareList;
 
 static INTMAP_TYPE predText[] = {
@@ -86,7 +86,7 @@ static const AllocaInst *isDirectAlloca(const Value *V)
         return 0;
     return AA;
 }
-static bool isAlloca(Value *arg)
+bool isAlloca(Value *arg)
 {
     if (GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
         arg = dyn_cast<Instruction>(IG->getPointerOperand());
@@ -809,19 +809,9 @@ func->dump();
     for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
         for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
             switch(II->getOpcode()) {
-            case Instruction::Store: {
-                StoreInst *IS = cast<StoreInst>(II);
-                ERRORIF (IS->isVolatile());
-                std::string pdest = printOperand(IS->getPointerOperand(), true);
-                if (pdest[0] == '&')
-                    pdest = pdest.substr(1);
-                bool vassign = generateRegion == ProcessVerilog && isAlloca(IS->getPointerOperand());
-//printf("[%s:%d] STORE[%s] vassign %d\n", __FUNCTION__, __LINE__, pdest.c_str(), (int)vassign);
-                if (!vassign)
-                    appendList(MetaWrite, II->getParent(), pdest);
-                storeList.push_back(StoreType{pdest, vassign ? NULL : II, II});
+            case Instruction::Store:
+                storeList.push_back(cast<StoreInst>(II));
                 break;
-                }
             case Instruction::Ret:
                 if (II->getNumOperands() != 0)
                     functionList.push_back(II);

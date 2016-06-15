@@ -54,8 +54,14 @@ void metaPrepare(const StructType *STy)
         baseMeta = &funcMetaMap[func];
         processFunction(func);
         table->storeList[func] = storeList;
-        for (auto info: table->storeList[func])
-            (void)printOperand(info.ins->getOperand(0), false); // force evaluation to get metadata
+        for (auto info: table->storeList[func]) {
+            std::string pdest = printOperand(info->getPointerOperand(), true);
+            if (pdest[0] == '&')
+                pdest = pdest.substr(1);
+            if (!isAlloca(info->getPointerOperand()))
+                appendList(MetaWrite, info->getParent(), pdest);
+            (void)printOperand(info->getOperand(0), false); // force evaluation to get metadata
+        }
         std::string temp, valsep;
         Value *prevCond = NULL;
         int remain = 0;

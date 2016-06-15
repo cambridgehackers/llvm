@@ -24,6 +24,7 @@
 #include "llvm/IR/Operator.h"
 #include "llvm/ExecutionEngine/Interpreter.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
+#include "llvm/IR/Instructions.h"
 
 #define MODULE_SEPARATOR "$"
 
@@ -56,12 +57,6 @@ typedef struct {
 } InterfaceListType;
 
 typedef struct {
-    std::string target;
-    Instruction *cond;
-    Instruction *ins;
-} StoreType;
-
-typedef struct {
     BasicBlock *bb;
     std::string value;
 } MuxValueEntry;
@@ -87,7 +82,7 @@ public:
     std::list<std::string>            metaList;
     std::map<const Function *, std::string> guard;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
-    std::map<const Function *,std::list<StoreType>> storeList;
+    std::map<const Function *,std::list<StoreInst *>> storeList;
 // 'Or' together ENA lines from all invocations of a method from this class
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
@@ -115,7 +110,7 @@ extern std::map<Function *, Function *> ruleRDYFunction;
 extern std::map<Function *, Function *> ruleENAFunction;
 extern std::list<Instruction *> functionList;
 extern std::list<const Instruction *> declareList;
-extern std::list<StoreType> storeList;
+extern std::list<StoreInst *> storeList;
 extern std::map<const Function *, std::string> pushSeen;
 extern std::list<MEMORY_REGION> memoryRegion;
 extern std::list<Function *> fixupFuncList;
@@ -167,3 +162,4 @@ void buildPrefix(ClassMethodTable *table);
 void metaPrepare(const StructType *STy);
 void updateParameterNames(std::string mName, Function *func);
 std::string printCall(Instruction &I);
+bool isAlloca(Value *arg);

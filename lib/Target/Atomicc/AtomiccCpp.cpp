@@ -276,18 +276,22 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             if (auto *PTy = dyn_cast<PointerType>(info->getType()))
                 fprintf(OStr, "        %s;\n", printType(PTy->getElementType(), false, GetValueName(info), "", "", false).c_str());
         for (auto info: storeList) {
-            Value *cond = getCondition(info.cond->getParent(), 0);
-            std::string items = printOperand(info.ins->getOperand(0), false);
+            std::string pdest = printOperand(info->getPointerOperand(), true);
+            if (pdest[0] == '&')
+                pdest = pdest.substr(1);
+            appendList(MetaWrite, info->getParent(), pdest);
+            Value *cond = getCondition(info->getParent(), 0);
+            std::string items = printOperand(info->getOperand(0), false);
             if (cond)
                 fprintf(OStr, "        if (%s) {\n    ", printOperand(cond, false).c_str());
-            if (info.target.substr(0, 7) == "thisp->" && table->shadow[info.target.substr(7)]) {
+            if (pdest.substr(0, 7) == "thisp->" && table->shadow[pdest.substr(7)]) {
                 // State element updates are written to shadow variables so that changes
                 // in state are not visible until 'commit()' method is called.
-                fprintf(OStr, "        %s_shadow = %s;\n", info.target.c_str(), items.c_str());
-                fprintf(OStr, "        %s_valid = 1;\n", info.target.c_str());
+                fprintf(OStr, "        %s_shadow = %s;\n", pdest.c_str(), items.c_str());
+                fprintf(OStr, "        %s_valid = 1;\n", pdest.c_str());
             }
             else
-                fprintf(OStr, "        %s = %s;\n", info.target.c_str(), items.c_str());
+                fprintf(OStr, "        %s = %s;\n", pdest.c_str(), items.c_str());
             if (cond)
                 fprintf(OStr, "        }\n    ");
         }

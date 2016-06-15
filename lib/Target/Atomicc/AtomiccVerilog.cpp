@@ -236,11 +236,17 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
         std::string globalCondition = mname + "_internal";
         int count = 0;
-        for (auto info: table->storeList[func])
-            if (info.cond)
+        for (auto info: table->storeList[func]) {
+            bool vassign = isAlloca(info->getPointerOperand());
+            if (!vassign)
                 count++;
-            else
-                setAssign(info.target, printOperand(info.ins->getOperand(0), false));
+            else {
+                std::string pdest = printOperand(info->getPointerOperand(), true);
+                if (pdest[0] == '&')
+                    pdest = pdest.substr(1);
+                setAssign(pdest, printOperand(info->getOperand(0), false));
+            }
+        }
         if (!isActionMethod(func)) {
             if (ruleENAFunction[func])
                 assignList[globalCondition] = table->guard[func];  // collect the text of the return value into a single 'assign'
@@ -258,12 +264,17 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             }
             if (count > 0) {
                 alwaysLines.push_back("if (" + globalCondition + ") begin");
-                for (auto info: table->storeList[func])
-                    if (info.cond) {
-                    if (Value *cond = getCondition(info.cond->getParent(), 0))
+                for (auto info: table->storeList[func]) {
+                    bool vassign = isAlloca(info->getPointerOperand());
+                    if (!vassign) {
+                    std::string pdest = printOperand(info->getPointerOperand(), true);
+                    if (pdest[0] == '&')
+                        pdest = pdest.substr(1);
+                    if (Value *cond = getCondition(info->getParent(), 0))
                         alwaysLines.push_back("    if (" + printOperand(cond, false) + ")");
-                    alwaysLines.push_back("    " + info.target + " <= " + printOperand(info.ins->getOperand(0), false) + ";");
+                    alwaysLines.push_back("    " + pdest + " <= " + printOperand(info->getOperand(0), false) + ";");
                     }
+                }
                 alwaysLines.push_back("end; // End of " + mname);
             }
         }
