@@ -55,27 +55,38 @@ void metaPrepare(const StructType *STy)
         processFunction(func);
         table->storeList[func] = storeList;
         for (auto info: table->storeList[func])
-            (void)printOperand(info.item, false); // force evaluation to get metadata
+            (void)printOperand(info.ins->getOperand(0), false); // force evaluation to get metadata
         std::string temp, valsep;
         Value *prevCond = NULL;
-        int remain = functionList.size();
+        int remain = 0;
         for (auto info: functionList) {
+            switch(info->getOpcode()) {
+            case Instruction::Ret:
+                remain++;
+            }
+        }
+        for (auto info: functionList) {
+            std::string vout;
+            switch(info->getOpcode()) {
+            case Instruction::Ret:
+                vout = printOperand(info->getOperand(0), false);
+                break;
+            case Instruction::Call: // can have value
+                printCall(*info);   // force evaluation to get metadata and side effects....
+                break;
+            }
             remain--;
             temp += valsep;
             valsep = "";
-            Value *opCond = getCondition(info.cond->getParent(), 0);
-            if (opCond && (remain || getCondition(info.cond->getParent(), 1) != prevCond))
+            Value *opCond = getCondition(info->getParent(), 0);
+            if (opCond && (remain || getCondition(info->getParent(), 1) != prevCond))
                 temp += printOperand(opCond, false) + " ? ";
-            temp += info.item;
+            temp += vout;
             if (opCond && remain)
                 valsep = " : ";
             prevCond = opCond;
         }
         table->guard[func] = temp;
-        if (isActionMethod(func) && functionList.size() > 0) {
-            printf("%s: non-store lines in Action '%s'\n", __FUNCTION__, table->guard[func].c_str());
-            exit(-1);
-        }
     }
     baseMeta = NULL;
 }

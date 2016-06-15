@@ -38,7 +38,7 @@ static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
-std::list<ReferenceType> functionList;
+std::list<Instruction *> functionList;
 std::list<StoreType> storeList;
 std::list<const Instruction *> declareList;
 
@@ -533,7 +533,7 @@ static void muxValue(BasicBlock *bb, std::string signal, std::string value)
 /*
  * Generate a string for a function/method call
  */
-static std::string printCall(Instruction &I)
+std::string printCall(Instruction &I)
 {
     Function *callingFunction = I.getParent()->getParent();
     std::string callingName = callingFunction->getName();
@@ -819,18 +819,12 @@ func->dump();
 //printf("[%s:%d] STORE[%s] vassign %d\n", __FUNCTION__, __LINE__, pdest.c_str(), (int)vassign);
                 if (!vassign)
                     appendList(MetaWrite, II->getParent(), pdest);
-                storeList.push_back(StoreType{pdest, vassign ? NULL : II, II->getOperand(0)});
+                storeList.push_back(StoreType{pdest, vassign ? NULL : II, II});
                 break;
                 }
             case Instruction::Ret:
-                if (II->getNumOperands() != 0) {
-                    std::string vout;
-                    if (generateRegion == ProcessCPP)
-                        vout = "return ";
-                    vout += printOperand(II->getOperand(0), false);
-                    functionList.push_back(ReferenceType{II, vout});
-//printf("[%s:%d] RET %s\n", __FUNCTION__, __LINE__, vout.c_str());
-                }
+                if (II->getNumOperands() != 0)
+                    functionList.push_back(II);
                 break;
             case Instruction::Switch: {
                 SwitchInst* SI = cast<SwitchInst>(II);
@@ -849,17 +843,12 @@ func->dump();
                 }
                 break;
                 }
-            case Instruction::Alloca: {
+            case Instruction::Alloca:
                 declareList.push_back(&*II);
-                //printf("[%s:%d] ALLOCAA %s -> %s\n", __FUNCTION__, __LINE__, func->getName().str().c_str(), allocaMap[&I].c_str());
                 break;
-                }
             case Instruction::Call: // can have value
-                if (II->getType() == Type::getVoidTy(II->getContext())) {
-                    std::string vout = printCall(*II);
-                    if (generateRegion != ProcessVerilog)
-                        functionList.push_back(ReferenceType{II, vout});
-                }
+                if (II->getType() == Type::getVoidTy(II->getContext()))
+                    functionList.push_back(II);
                 break;
             }
         }

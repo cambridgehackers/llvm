@@ -56,13 +56,9 @@ typedef struct {
 } InterfaceListType;
 
 typedef struct {
-    Instruction *cond;
-    std::string item;
-} ReferenceType;
-typedef struct {
     std::string target;
     Instruction *cond;
-    Value *item;
+    Instruction *ins;
 } StoreType;
 
 typedef struct {
@@ -117,7 +113,7 @@ extern ExecutionEngine *EE;
 extern std::map<const StructType *,ClassMethodTable *> classCreate;
 extern std::map<Function *, Function *> ruleRDYFunction;
 extern std::map<Function *, Function *> ruleENAFunction;
-extern std::list<ReferenceType> functionList;
+extern std::list<Instruction *> functionList;
 extern std::list<const Instruction *> declareList;
 extern std::list<StoreType> storeList;
 extern std::map<const Function *, std::string> pushSeen;
@@ -170,3 +166,4 @@ void getClass(const StructType *STy);
 void buildPrefix(ClassMethodTable *table);
 void metaPrepare(const StructType *STy);
 void updateParameterNames(std::string mName, Function *func);
+std::string printCall(Instruction &I);

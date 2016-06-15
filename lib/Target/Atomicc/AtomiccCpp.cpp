@@ -277,7 +277,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
                 fprintf(OStr, "        %s;\n", printType(PTy->getElementType(), false, GetValueName(info), "", "", false).c_str());
         for (auto info: storeList) {
             Value *cond = getCondition(info.cond->getParent(), 0);
-            std::string items = printOperand(info.item, false);
+            std::string items = printOperand(info.ins->getOperand(0), false);
             if (cond)
                 fprintf(OStr, "        if (%s) {\n    ", printOperand(cond, false).c_str());
             if (info.target.substr(0, 7) == "thisp->" && table->shadow[info.target.substr(7)]) {
@@ -292,9 +292,18 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
                 fprintf(OStr, "        }\n    ");
         }
         for (auto info: functionList) {
-            if (Value *cond = getCondition(info.cond->getParent(), 0))
+            std::string vout;
+            switch(info->getOpcode()) {
+            case Instruction::Ret:
+                vout = "return " + printOperand(info->getOperand(0), false);
+                break;
+            case Instruction::Call: // can have value
+                vout = printCall(*info);
+                break;
+            }
+            if (Value *cond = getCondition(info->getParent(), 0))
                 fprintf(OStr, "        if (%s)\n    ", printOperand(cond, false).c_str());
-            fprintf(OStr, "        %s;\n", info.item.c_str());
+            fprintf(OStr, "        %s;\n", vout.c_str());
         }
         fprintf(OStr, "}\n");
     }
