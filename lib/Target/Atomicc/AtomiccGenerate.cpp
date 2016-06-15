@@ -801,7 +801,7 @@ void processFunction(Function *func)
     declareList.clear();
     if (trace_function || trace_call)
         printf("PROCESSING %s\n", func->getName().str().c_str());
-if (func->getName() == "zz_ZN7IVector3sayEii") {
+if (func->getName() == "_ZN16EchoRequestInput8enq__RDYEv") {
 printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 func->dump();
 }
@@ -816,6 +816,14 @@ func->dump();
                 if (II->getNumOperands() != 0)
                     functionList.push_back(II);
                 break;
+            case Instruction::Alloca:
+                declareList.push_back(&*II);
+                break;
+            case Instruction::Call: // can have value
+                if (II->getType() == Type::getVoidTy(II->getContext()))
+                    functionList.push_back(II);
+                break;
+#if 1
             case Instruction::Switch: {
                 SwitchInst* SI = cast<SwitchInst>(II);
                 Value *switchIndex = SI->getCondition();
@@ -833,13 +841,7 @@ func->dump();
                 }
                 break;
                 }
-            case Instruction::Alloca:
-                declareList.push_back(&*II);
-                break;
-            case Instruction::Call: // can have value
-                if (II->getType() == Type::getVoidTy(II->getContext()))
-                    functionList.push_back(II);
-                break;
+#endif
             }
         }
     }

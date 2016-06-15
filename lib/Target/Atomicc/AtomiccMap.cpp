@@ -61,6 +61,11 @@ Value *getCondition(BasicBlock *bb, int invert)
     if (Instruction *val = dyn_cast_or_null<Instruction>(blockCondition[1-invert].val[bb])) {
         BasicBlock *prevBB = val->getParent();
         Instruction *TI = bb->getTerminator();
+        if (!TI) {
+printf("[%s:%d] terminator not found!!\n", __FUNCTION__, __LINE__);
+            bb->dump();
+            exit(-1);
+        }
         if (prevBB != bb)
             val = cloneTree(val, TI);
         IRBuilder<> builder(bb);
@@ -297,6 +302,35 @@ restart:
                 }
                 break;
                 }
+#if 0
+            case Instruction::Switch: {
+printf("[%s:%d]SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n", __FUNCTION__, __LINE__);
+                SwitchInst* SI = cast<SwitchInst>(II);
+                Value *switchIndex = SI->getCondition();
+                //BasicBlock *defaultBB = SI->getDefaultDest();
+                for (SwitchInst::CaseIt CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
+                    BasicBlock *caseBB = CI.getCaseSuccessor();
+                    int64_t val = CI.getCaseValue()->getZExtValue();
+                    printf("[%s:%d] [%ld] = %s\n", __FUNCTION__, __LINE__, val, caseBB?caseBB->getName().str().c_str():"NONE");
+                    if (!getCondition(caseBB, 0)) { // 'true' condition
+                        IRBuilder<> cbuilder(caseBB);
+                        Instruction *TI = caseBB->getTerminator();
+                        Value *myIndex = switchIndex;
+                        if (Instruction *expr = dyn_cast<Instruction>(switchIndex)) {
+                            prepareClone(TI, II);
+                            myIndex = cloneTree(expr, TI);
+                        }
+                        cbuilder.SetInsertPoint(TI);
+                        setCondition(caseBB, 0,
+                            cbuilder.CreateICmp(ICmpInst::ICMP_EQ, myIndex,
+                                ConstantInt::get(switchIndex->getType(), val)));
+                    }
+                }
+printf("[%s:%d] after switch\n", __FUNCTION__, __LINE__);
+II->getParent()->getParent()->dump();
+                break;
+                }
+#endif
             case Instruction::GetElementPtr:
                 // Expand out index expression references
                 if (II->getNumOperands() == 2)
