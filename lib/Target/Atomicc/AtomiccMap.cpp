@@ -155,7 +155,7 @@ static Instruction *copyFunction(Instruction *insertPoint, const Instruction *I,
     std::list<Instruction *> postCopy;
     preCopy.clear();
     Instruction *retItem = NULL;
-    prepareClone(insertPoint, I);
+    prepareClone(insertPoint, I->getParent()->getParent());
     Value *new_thisp = I->getOperand(0);
     if (Instruction *orig_thisp = dyn_cast<Instruction>(new_thisp))
         new_thisp = cloneTree(orig_thisp, insertPoint);
@@ -246,7 +246,7 @@ restart:
                     std::string otherName = Fname.substr(0, Fname.length() - 8) + "2" + "3ENAEv";
                     Function *otherBody = Mod->getFunction(otherName);
                     TerminatorInst *TI = otherBody->begin()->getTerminator();
-                    prepareClone(TI, II);
+                    prepareClone(TI, II->getParent()->getParent());
                     Instruction *IT = dyn_cast<Instruction>(II->getOperand(1));
                     Instruction *IC = dyn_cast<Instruction>(II->getOperand(0));
                     Instruction *newIC = cloneTree(IC, TI);
@@ -317,7 +317,7 @@ printf("[%s:%d]SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
                         Instruction *TI = caseBB->getTerminator();
                         Value *myIndex = switchIndex;
                         if (Instruction *expr = dyn_cast<Instruction>(switchIndex)) {
-                            prepareClone(TI, II);
+                            prepareClone(TI, II->getParent()->getParent());
                             myIndex = cloneTree(expr, TI);
                         }
                         cbuilder.SetInsertPoint(TI);

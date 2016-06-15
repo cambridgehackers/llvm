@@ -133,7 +133,7 @@ bool GenerateRunOnModule(Module *Mod, std::string OutDirectory);
 const Metadata *fetchType(const Metadata *arg);
 std::string ucName(std::string inname);
 Instruction *cloneTree(const Instruction *I, Instruction *insertPoint);
-void prepareClone(Instruction *TI, const Instruction *I);
+void prepareClone(Instruction *TI, const Function *SourceF);
 std::string printString(std::string arg);
 std::string getMethodName(std::string name);
 bool endswith(std::string str, std::string suffix);
