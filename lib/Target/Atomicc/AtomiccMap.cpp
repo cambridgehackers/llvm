@@ -205,14 +205,16 @@ static void addGuard(Instruction *argI, Function *func, Function *currentFunctio
         // we must set this after the 'replaceAllUsesWith'
         newBool->setOperand(0, cond);
     }
+if (parentRDYName->getName() == "_ZN16EchoRequestInput8enq__RDYEv") {
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+parentRDYName->dump();
+}
 }
 
 // Preprocess the body rules, creating shadow variables and moving items to RDY() and ENA()
 static void processPromote(Function *currentFunction)
 {
-    Module *Mod = currentFunction->getParent();
-    const StructType *STy = findThisArgument(currentFunction);
-    ClassMethodTable *table = classCreate[STy];
+    ClassMethodTable *table = classCreate[findThisArgument(currentFunction)];
     if (!table->mappedInterface)
     for (auto item: table->interfaceList) {
         ClassMethodTable *itable = classCreate[item.STy];
@@ -233,36 +235,11 @@ restart:
             auto INEXT = std::next(BasicBlock::iterator(II));
             switch (II->getOpcode()) {
             case Instruction::Call: {
-                CallInst *ICL = dyn_cast<CallInst>(II);
-                Value *callV = ICL->getCalledValue();
-                Function *func = dyn_cast<Function>(callV);
+                Function *func = dyn_cast<Function>(dyn_cast<CallInst>(II)->getCalledValue());
                 std::string mName = getMethodName(func->getName());
-                ClassMethodTable *table = classCreate[findThisArgument(func)];
-                if (trace_hoist)
-                    printf("HOIST: CALLER %s calling '%s'[%s] table %p\n", currentFunction->getName().str().c_str(), func->getName().str().c_str(), mName.c_str(), table);
-                if (func->isDeclaration() && func->getName() == "_Z14PIPELINEMARKER") {
-                    /* for now, just remove the Call.  Later we will push processing of II->getOperand(0) into another block */
-                    std::string Fname = currentFunction->getName().str();
-                    std::string otherName = Fname.substr(0, Fname.length() - 8) + "2" + "3ENAEv";
-                    Function *otherBody = Mod->getFunction(otherName);
-                    TerminatorInst *TI = otherBody->begin()->getTerminator();
-                    prepareClone(TI, II->getParent()->getParent());
-                    Instruction *IT = dyn_cast<Instruction>(II->getOperand(1));
-                    Instruction *IC = dyn_cast<Instruction>(II->getOperand(0));
-                    Instruction *newIC = cloneTree(IC, TI);
-                    Instruction *newIT = cloneTree(IT, TI);
-                    printf("[%s:%d] other %s %p\n", __FUNCTION__, __LINE__, otherName.c_str(), otherBody);
-                    IRBuilder<> builder(TI->getParent());
-                    builder.SetInsertPoint(TI);
-                    builder.CreateStore(newIC, newIT);
-                    IRBuilder<> oldbuilder(II->getParent());
-                    oldbuilder.SetInsertPoint(II);
-                    Value *newLoad = oldbuilder.CreateLoad(IT);
-                    II->replaceAllUsesWith(newLoad);
-                    II->eraseFromParent();
-                    return;
-                }
                 Function *calledFunctionGuard = ruleRDYFunction[func];
+                if (trace_hoist)
+                    printf("HOIST: CALLER %s calling '%s'[%s]\n", currentFunction->getName().str().c_str(), func->getName().str().c_str(), mName.c_str());
                 if (trace_hoist)
                     printf("HOIST: act %s req %s\n", calledFunctionGuard ? getMethodName(calledFunctionGuard->getName()).c_str() : " ", mName.c_str());
                 if (!calledFunctionGuard) {
@@ -278,7 +255,7 @@ restart:
                 if (!isActionMethod(func))
                     suffix = "";
                 addGuard(II, calledFunctionGuard, currentFunction);
-                if (table)
+                if (ClassMethodTable *table = classCreate[findThisArgument(func)])
                     table->method[mName] = func;  // keep track of all functions that were called, not just ones that were defined
                 break;
                 }
@@ -302,11 +279,10 @@ restart:
                 }
                 break;
                 }
-#if 0
             case Instruction::Switch: {
-printf("[%s:%d]SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n", __FUNCTION__, __LINE__);
                 SwitchInst* SI = cast<SwitchInst>(II);
                 Value *switchIndex = SI->getCondition();
+                Type  *swType = switchIndex->getType();
                 //BasicBlock *defaultBB = SI->getDefaultDest();
                 for (SwitchInst::CaseIt CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
                     BasicBlock *caseBB = CI.getCaseSuccessor();
@@ -321,16 +297,16 @@ printf("[%s:%d]SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
                             myIndex = cloneTree(expr, TI);
                         }
                         cbuilder.SetInsertPoint(TI);
-                        setCondition(caseBB, 0,
-                            cbuilder.CreateICmp(ICmpInst::ICMP_EQ, myIndex,
-                                ConstantInt::get(switchIndex->getType(), val)));
+                        Value *cmp = cbuilder.CreateICmpEQ(myIndex, ConstantInt::get(swType, val));
+                        //setCondition(caseBB, 0, cmp);
+#if 0
+#endif
                     }
                 }
 printf("[%s:%d] after switch\n", __FUNCTION__, __LINE__);
 II->getParent()->getParent()->dump();
                 break;
                 }
-#endif
             case Instruction::GetElementPtr:
                 // Expand out index expression references
                 if (II->getNumOperands() == 2)
