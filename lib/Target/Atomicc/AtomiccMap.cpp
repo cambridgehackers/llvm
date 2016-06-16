@@ -129,6 +129,12 @@ int validateAddress(int arg, void *p)
 }
 
 static std::list<Instruction *> preCopy;
+static bool copyt = false;
+// This code recursively expands an expression tree that has PHI instructions
+// into a list of trees that for each possible incoming value to the PHI.
+// It is used when computing guard expressions to calculate the 'AND' of all
+// possible targets (ignoring which ones are actually going to be used
+// dynamically).
 static Instruction *defactorTree(Instruction *insertPoint, Instruction *top, Instruction *arg)
 {
     if (const PHINode *PN = dyn_cast<PHINode>(arg)) {
@@ -162,14 +168,27 @@ static Instruction *copyFunction(Instruction *insertPoint, const Instruction *I,
     preCopy.push_back(dyn_cast<Instruction>(new_thisp));
     for (auto item: preCopy) {
         defactorTree(insertPoint, item, item);
+if (copyt) {
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+item->dump();
+insertPoint->getParent()->dump();
+}
         postCopy.push_back(item);
     }
+if (copyt) {
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+insertPoint->getParent()->dump();
+}
     for (auto item: postCopy) {
         Value *Params[] = {item};
         IRBuilder<> builder(insertPoint->getParent());
         builder.SetInsertPoint(insertPoint);
         CallInst *newCall = builder.CreateCall(func, ArrayRef<Value*>(Params, 1));
         newCall->addAttribute(AttributeSet::ReturnIndex, Attribute::ZExt);
+if (copyt) {
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+insertPoint->getParent()->dump();
+}
         if (retItem)
             retItem = BinaryOperator::Create(Instruction::And, retItem, newCall, "newand", insertPoint);
         else
@@ -181,18 +200,44 @@ static Instruction *copyFunction(Instruction *insertPoint, const Instruction *I,
 /*
  * Add another condition to a guard function.
  */
+static std::string jstr = //"_ZN16EchoRequestInput8enq__RDYEv";
+"zz_ZN7IVector8say__RDYEv";
 static void addGuard(Instruction *argI, Function *func, Function *currentFunction)
 {
     /* get my function's guard function */
     Function *parentRDYName = ruleRDYFunction[currentFunction];
+printf("[%s:%d] nane %s\n", __FUNCTION__, __LINE__, parentRDYName->getName().str().c_str());
     if (!parentRDYName || !func)
         return;
+if (parentRDYName->getName() == jstr)
+copyt = true;
+if (copyt) {
+printf("[%s:%d] before\n", __FUNCTION__, __LINE__);
+argI->dump();
+func->dump();
+parentRDYName->dump();
+}
     TerminatorInst *TI = parentRDYName->begin()->getTerminator();
     /* make a call to the guard being promoted */
     Instruction *newI = copyFunction(TI, argI, func);
     /* if the promoted guard is in an 'if' block, 'or' with inverted condition of block */
+if (copyt) {
+printf("[%s:%d] mid\n", __FUNCTION__, __LINE__);
+parentRDYName->dump();
+}
     if (Instruction *bcond = dyn_cast_or_null<Instruction>(getCondition(argI->getParent(), 1))) // get inverted condition, if any
+{
+if (copyt) {
+printf("[%s:%d] bcomd\n", __FUNCTION__, __LINE__);
+bcond->dump();
+parentRDYName->dump();
+}
         newI = BinaryOperator::Create(Instruction::Or, newI, cloneTree(bcond,TI), "newor", TI);
+}
+if (copyt) {
+printf("[%s:%d] OR\n", __FUNCTION__, __LINE__);
+parentRDYName->dump();
+}
     /* get existing return value from my function's guard */
     Value *cond = TI->getOperand(0);
     const ConstantInt *CI = dyn_cast<ConstantInt>(cond);
@@ -205,10 +250,11 @@ static void addGuard(Instruction *argI, Function *func, Function *currentFunctio
         // we must set this after the 'replaceAllUsesWith'
         newBool->setOperand(0, cond);
     }
-if (parentRDYName->getName() == "_ZN16EchoRequestInput8enq__RDYEv") {
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+if (copyt) {
+printf("[%s:%d] after\n", __FUNCTION__, __LINE__);
 parentRDYName->dump();
 }
+copyt = false;
 }
 
 // Preprocess the body rules, creating shadow variables and moving items to RDY() and ENA()
@@ -325,6 +371,7 @@ II->getParent()->getParent()->dump();
                                         Values_size = table->replaceCount[Idx];
 printf("[%s:%d] get dyn size (static not handled) %d\n", __FUNCTION__, __LINE__, Values_size);
 if (Values_size < 0 || Values_size > 100) Values_size = 2;
+II->getParent()->dump();
                                     }
                         }
                         ins->getOperand(0)->dump();
@@ -332,6 +379,7 @@ if (Values_size < 0 || Values_size > 100) Values_size = 2;
                     II->getOperand(0)->dump();
                     BasicBlock *afterswitchBB = BI->splitBasicBlock(II, "afterswitch");
                     IRBuilder<> afterBuilder(afterswitchBB);
+                    afterBuilder.SetInsertPoint(II);
                     // Build Switch instruction in starting block
                     IRBuilder<> startBuilder(BI);
                     startBuilder.SetInsertPoint(BI->getTerminator());
