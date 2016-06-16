@@ -823,25 +823,6 @@ func->dump();
                 if (II->getType() == Type::getVoidTy(II->getContext()))
                     functionList.push_back(II);
                 break;
-#if 1
-            case Instruction::Switch: {
-                SwitchInst* SI = cast<SwitchInst>(II);
-                Value *switchIndex = SI->getCondition();
-                //BasicBlock *defaultBB = SI->getDefaultDest();
-                for (SwitchInst::CaseIt CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
-                    BasicBlock *caseBB = CI.getCaseSuccessor();
-                    int64_t val = CI.getCaseValue()->getZExtValue();
-                    if (!getCondition(caseBB, 0)) { // 'true' condition
-                        //printf("[%s:%d] [%ld] = %s\n", __FUNCTION__, __LINE__, val, caseBB->getName().str().c_str());
-                        IRBuilder<> cbuilder(caseBB);
-                        setCondition(caseBB, 0,
-                            cbuilder.CreateICmp(ICmpInst::ICMP_EQ, switchIndex,
-                                ConstantInt::get(switchIndex->getType(), val)));
-                    }
-                }
-                break;
-                }
-#endif
             }
         }
     }

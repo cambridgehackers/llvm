@@ -66,8 +66,10 @@ printf("[%s:%d] terminator not found!!\n", __FUNCTION__, __LINE__);
             bb->dump();
             exit(-1);
         }
-        if (prevBB != bb)
+        if (prevBB != bb) {
+            prepareReplace(NULL, NULL);
             val = cloneTree(val, TI);
+        }
         IRBuilder<> builder(bb);
         builder.SetInsertPoint(TI);
         setCondition(bb, invert, BinaryOperator::Create(Instruction::Xor,
@@ -154,9 +156,9 @@ static Instruction *defactorTree(Instruction *insertPoint, Instruction *top, Ins
                 }
             }
         }
-    return NULL;
+    return NULL; // nothing to expand
 }
-static Instruction *copyFunction(Instruction *insertPoint, const Instruction *I, Function *func)
+static Instruction *expandTreeOptions(Instruction *insertPoint, const Instruction *I, Function *func)
 {
     std::list<Instruction *> postCopy;
     preCopy.clear();
@@ -168,27 +170,14 @@ static Instruction *copyFunction(Instruction *insertPoint, const Instruction *I,
     preCopy.push_back(dyn_cast<Instruction>(new_thisp));
     for (auto item: preCopy) {
         defactorTree(insertPoint, item, item);
-if (copyt) {
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-item->dump();
-insertPoint->getParent()->dump();
-}
         postCopy.push_back(item);
     }
-if (copyt) {
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-insertPoint->getParent()->dump();
-}
     for (auto item: postCopy) {
         Value *Params[] = {item};
         IRBuilder<> builder(insertPoint->getParent());
         builder.SetInsertPoint(insertPoint);
         CallInst *newCall = builder.CreateCall(func, ArrayRef<Value*>(Params, 1));
         newCall->addAttribute(AttributeSet::ReturnIndex, Attribute::ZExt);
-if (copyt) {
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-insertPoint->getParent()->dump();
-}
         if (retItem)
             retItem = BinaryOperator::Create(Instruction::And, retItem, newCall, "newand", insertPoint);
         else
@@ -200,13 +189,12 @@ insertPoint->getParent()->dump();
 /*
  * Add another condition to a guard function.
  */
-static std::string jstr = //"_ZN16EchoRequestInput8enq__RDYEv";
-"zz_ZN7IVector8say__RDYEv";
+static std::string jstr = "_ZN16EchoRequestInput8enq__RDYEv";
 static void addGuard(Instruction *argI, Function *func, Function *currentFunction)
 {
     /* get my function's guard function */
     Function *parentRDYName = ruleRDYFunction[currentFunction];
-printf("[%s:%d] nane %s\n", __FUNCTION__, __LINE__, parentRDYName->getName().str().c_str());
+//printf("[%s:%d] nane %s\n", __FUNCTION__, __LINE__, parentRDYName->getName().str().c_str());
     if (!parentRDYName || !func)
         return;
 if (parentRDYName->getName() == jstr)
@@ -219,25 +207,12 @@ parentRDYName->dump();
 }
     TerminatorInst *TI = parentRDYName->begin()->getTerminator();
     /* make a call to the guard being promoted */
-    Instruction *newI = copyFunction(TI, argI, func);
+    Instruction *newI = expandTreeOptions(TI, argI, func);
     /* if the promoted guard is in an 'if' block, 'or' with inverted condition of block */
-if (copyt) {
-printf("[%s:%d] mid\n", __FUNCTION__, __LINE__);
-parentRDYName->dump();
-}
-    if (Instruction *bcond = dyn_cast_or_null<Instruction>(getCondition(argI->getParent(), 1))) // get inverted condition, if any
-{
-if (copyt) {
-printf("[%s:%d] bcomd\n", __FUNCTION__, __LINE__);
-bcond->dump();
-parentRDYName->dump();
-}
+    if (Instruction *bcond = dyn_cast_or_null<Instruction>(getCondition(argI->getParent(), 1))) { // get inverted condition, if any
+        prepareReplace(NULL, NULL);
         newI = BinaryOperator::Create(Instruction::Or, newI, cloneTree(bcond,TI), "newor", TI);
-}
-if (copyt) {
-printf("[%s:%d] OR\n", __FUNCTION__, __LINE__);
-parentRDYName->dump();
-}
+    }
     /* get existing return value from my function's guard */
     Value *cond = TI->getOperand(0);
     const ConstantInt *CI = dyn_cast<ConstantInt>(cond);
@@ -344,13 +319,11 @@ restart:
                         }
                         cbuilder.SetInsertPoint(TI);
                         Value *cmp = cbuilder.CreateICmpEQ(myIndex, ConstantInt::get(swType, val));
-                        //setCondition(caseBB, 0, cmp);
-#if 0
-#endif
+                        setCondition(caseBB, 0, cmp);
                     }
                 }
-printf("[%s:%d] after switch\n", __FUNCTION__, __LINE__);
-II->getParent()->getParent()->dump();
+                //printf("[%s:%d] after switch\n", __FUNCTION__, __LINE__);
+                //II->getParent()->getParent()->dump();
                 break;
                 }
             case Instruction::GetElementPtr:
@@ -371,7 +344,7 @@ II->getParent()->getParent()->dump();
                                         Values_size = table->replaceCount[Idx];
 printf("[%s:%d] get dyn size (static not handled) %d\n", __FUNCTION__, __LINE__, Values_size);
 if (Values_size < 0 || Values_size > 100) Values_size = 2;
-II->getParent()->dump();
+                                        //II->getParent()->dump();
                                     }
                         }
                         ins->getOperand(0)->dump();
@@ -398,6 +371,7 @@ II->getParent()->dump();
                         }
                         IRBuilder<> cbuilder(caseBB);
                         cbuilder.CreateBr(afterswitchBB);
+                        prepareReplace(NULL, NULL);
                         Instruction *val = cloneTree(II, caseBB->getTerminator());
                         val->setOperand(1, caseInt);
                         phi->addIncoming(val, caseBB);
