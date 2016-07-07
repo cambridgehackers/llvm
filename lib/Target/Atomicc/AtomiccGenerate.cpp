@@ -858,12 +858,13 @@ func->dump();
             temp += valsep;
             valsep = "";
             Value *opCond = getCondition(info->getParent(), 0);
-            if (opCond && (returnCount || getCondition(info->getParent(), 1) != prevCond))
-                temp += printOperand(opCond, false) + " ? ";
-            temp += printOperand(info->getOperand(0), false);
-            if (opCond)
-                valsep = " : ";
+            if (opCond) {
+                if (returnCount || getCondition(info->getParent(), 1) != prevCond)
+                    temp += printOperand(opCond, false) + " ? ";
+            }
+            valsep = " : ";
             prevCond = opCond;
+            temp += printOperand(info->getOperand(0), false);
         }
         table->guard[func] = temp;
     }
