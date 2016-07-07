@@ -17,22 +17,6 @@ using namespace llvm;
 #include "AtomiccDecl.h"
 
 std::map<const Function *, MetaData> funcMetaMap;
-MetaData *baseMeta;
-
-void appendList(int listIndex, BasicBlock *cond, std::string item)
-{
-    if (baseMeta) {
-        Value *val = getCondition(cond, 0);
-        if (!val)
-            baseMeta->list[listIndex][item].clear();
-        for (auto condIter: baseMeta->list[listIndex][item])
-             if (!condIter)
-                 return;
-             else if (condIter == val)
-                 return;
-        baseMeta->list[listIndex][item].push_back(val);
-    }
-}
 static std::string gatherList(MetaData *bm, int listIndex)
 {
     std::string temp;

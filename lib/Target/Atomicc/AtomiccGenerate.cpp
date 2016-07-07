@@ -512,14 +512,27 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
     return cbuffer;
 }
 
-/*
- * These functions are called back from AtomiccGenerate
- */
-static ClassMethodTable *globalClassTable;
+static MetaData *baseMeta;
+
+void appendList(int listIndex, BasicBlock *cond, std::string item)
+{
+    if (baseMeta) {
+        Value *val = getCondition(cond, 0);
+        if (!val)
+            baseMeta->list[listIndex][item].clear();
+        for (auto condIter: baseMeta->list[listIndex][item])
+             if (!condIter)
+                 return;
+             else if (condIter == val)
+                 return;
+        baseMeta->list[listIndex][item].push_back(val);
+    }
+}
 
 /*
  * Generate a string for a function/method call
  */
+static ClassMethodTable *globalClassTable;
 std::string printCall(Instruction *I)
 {
     Function *callingFunction = I->getParent()->getParent();
@@ -555,7 +568,9 @@ return "";
         vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ", ";
     }
-    else if (generateRegion == ProcessVerilog) {
+    else if (generateRegion == ProcessCPP)
+        vout += pcalledFunction + baseMethod(mname) + "(";
+    else {
         if (isActionMethod(func)) {
             if (globalClassTable)
             globalClassTable->muxEnableList.push_back(MuxEnableEntry{I->getParent(), mname});
@@ -564,8 +579,6 @@ return "";
             vout += mname;
         appendList(MetaInvoke, I->getParent(), baseMethod(mname));
     }
-    else
-        vout += pcalledFunction + baseMethod(mname) + "(";
     for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
         bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
         if (auto *ins = dyn_cast<Instruction>(*AI)) {
@@ -575,12 +588,13 @@ return "";
         if (dyn_cast<Argument>(*AI))
             indirect = false;
         std::string parg = printOperand(*AI, indirect);
-        if (generateRegion == ProcessVerilog) {
-            if (globalClassTable)
-            globalClassTable->muxValueList[baseMethod(mname) + "_" + FAI->getName().str()].push_back(MuxValueEntry{I->getParent(), parg});
-        }
-        else
+        if (generateRegion == ProcessCPP)
             vout += sep + parg;
+        else {
+            if (globalClassTable)
+            globalClassTable->muxValueList[baseMethod(mname) + "_" + FAI->getName().str()]
+               .push_back(MuxValueEntry{I->getParent(), parg});
+        }
         sep = ", ";
     }
     if (generateRegion != ProcessVerilog)
@@ -796,18 +810,16 @@ if (func->getName() == "_ZN16EchoRequestInput8enq__RDYEv") {
 printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 func->dump();
 }
-        /* Gather data for all instructions.  */
+        /* Gather data for top level instructions in each basic block. */
         std::string temp, valsep;
         Value *prevCond = NULL;
         int returnCount = 0;
         for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
             for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
                 switch(II->getOpcode()) {
-                case Instruction::Load: {
-                    LoadInst *IL = dyn_cast<LoadInst>(II);
-                    ERRORIF (IL->isVolatile());
+                case Instruction::Load:
+                    ERRORIF(dyn_cast<LoadInst>(II)->isVolatile());
                     break;
-                }
                 case Instruction::Store: {
                     StoreInst *SI = cast<StoreInst>(II);
                     table->storeList[func].push_back(SI);

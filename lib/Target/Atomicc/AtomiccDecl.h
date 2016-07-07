@@ -122,7 +122,6 @@ extern std::list<Function *> fixupFuncList;
 extern int trace_pair;
 extern Module *globalMod;
 extern std::map<const Function *, MetaData> funcMetaMap;
-extern MetaData *baseMeta;
 
 int validateAddress(int arg, void *p);
 void constructAddressMap(Module *Mod);

@@ -247,7 +247,6 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             std::string pdest = printOperand(info->getPointerOperand(), true);
             if (pdest[0] == '&')
                 pdest = pdest.substr(1);
-            appendList(MetaWrite, info->getParent(), pdest);
             Value *cond = getCondition(info->getParent(), 0);
             std::string items = printOperand(info->getOperand(0), false);
             if (cond)
