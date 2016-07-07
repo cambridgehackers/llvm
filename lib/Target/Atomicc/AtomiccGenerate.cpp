@@ -858,10 +858,8 @@ func->dump();
             temp += valsep;
             valsep = "";
             Value *opCond = getCondition(info->getParent(), 0);
-            if (opCond) {
-                if (returnCount || getCondition(info->getParent(), 1) != prevCond)
-                    temp += printOperand(opCond, false) + " ? ";
-            }
+            if (opCond && (returnCount || getCondition(info->getParent(), 1) != prevCond))
+                temp += printOperand(opCond, false) + " ? ";
             valsep = " : ";
             prevCond = opCond;
             temp += printOperand(info->getOperand(0), false);
@@ -877,10 +875,8 @@ func->dump();
  */
 void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH, bool force)
 {
-    if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty)) {
+    if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty))
         generateContainedStructs(dyn_cast<StructType>(PTy->getElementType()), OStrV, OStrVH, OStrC, OStrCH, false);
-        return;
-    }
     const StructType *STy = dyn_cast_or_null<StructType>(Ty);
     if (!STy || !STy->hasName() || structMap[Ty] || (!force && inheritsModule(STy, "class.ModuleExternal")))
         return;
