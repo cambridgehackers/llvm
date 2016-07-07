@@ -121,7 +121,6 @@ extern std::list<MEMORY_REGION> memoryRegion;
 extern std::list<Function *> fixupFuncList;
 extern int trace_pair;
 extern Module *globalMod;
-extern ClassMethodTable *globalClassTable;
 extern std::map<const Function *, MetaData> funcMetaMap;
 extern MetaData *baseMeta;
 

@@ -515,17 +515,7 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
 /*
  * These functions are called back from AtomiccGenerate
  */
-ClassMethodTable *globalClassTable;
-static void muxEnable(BasicBlock *bb, std::string signal)
-{
-    if (globalClassTable)
-    globalClassTable->muxEnableList.push_back(MuxEnableEntry{bb, signal});
-}
-static void muxValue(BasicBlock *bb, std::string signal, std::string value)
-{
-    if (globalClassTable)
-    globalClassTable->muxValueList[signal].push_back(MuxValueEntry{bb, value});
-}
+static ClassMethodTable *globalClassTable;
 
 /*
  * Generate a string for a function/method call
@@ -566,8 +556,10 @@ return "";
         sep = ", ";
     }
     else if (generateRegion == ProcessVerilog) {
-        if (isActionMethod(func))
-            muxEnable(I.getParent(), mname);
+        if (isActionMethod(func)) {
+            if (globalClassTable)
+            globalClassTable->muxEnableList.push_back(MuxEnableEntry{I.getParent(), mname});
+        }
         else
             vout += mname;
         appendList(MetaInvoke, I.getParent(), baseMethod(mname));
@@ -583,8 +575,10 @@ return "";
         if (dyn_cast<Argument>(*AI))
             indirect = false;
         std::string parg = printOperand(*AI, indirect);
-        if (generateRegion == ProcessVerilog)
-            muxValue(I.getParent(), baseMethod(mname) + "_" + FAI->getName().str(), parg);
+        if (generateRegion == ProcessVerilog) {
+            if (globalClassTable)
+            globalClassTable->muxValueList[baseMethod(mname) + "_" + FAI->getName().str()].push_back(MuxValueEntry{I.getParent(), parg});
+        }
         else
             vout += sep + parg;
         sep = ", ";
