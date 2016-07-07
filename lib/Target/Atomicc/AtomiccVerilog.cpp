@@ -236,7 +236,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
         std::string globalCondition = mname + "_internal";
         int count = 0;
-        for (auto info: table->storeList[func]) {
+        for (auto info: storeList[func]) {
             bool vassign = isAlloca(info->getPointerOperand());
             if (!vassign)
                 count++;
@@ -264,7 +264,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             }
             if (count > 0) {
                 alwaysLines.push_back("if (" + globalCondition + ") begin");
-                for (auto info: table->storeList[func]) {
+                for (auto info: storeList[func]) {
                     bool vassign = isAlloca(info->getPointerOperand());
                     if (!vassign) {
                     std::string pdest = printOperand(info->getPointerOperand(), true);

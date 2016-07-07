@@ -38,6 +38,10 @@ static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
+std::map<const Function *,std::list<StoreInst *>> storeList;
+std::map<const Function *,std::list<Instruction *>> functionList;
+std::map<const Function *,std::list<Instruction *>> callList;
+std::map<const Function *,std::list<Instruction *>> declareList;
 
 static INTMAP_TYPE predText[] = {
     {FCmpInst::FCMP_FALSE, "false"}, {FCmpInst::FCMP_OEQ, "oeq"},
@@ -822,7 +826,7 @@ func->dump();
                     break;
                 case Instruction::Store: {
                     StoreInst *SI = cast<StoreInst>(II);
-                    table->storeList[func].push_back(SI);
+                    storeList[func].push_back(SI);
                     std::string pdest = printOperand(SI->getPointerOperand(), true);
                     if (pdest[0] == '&')
                         pdest = pdest.substr(1);
@@ -833,23 +837,23 @@ func->dump();
                 }
                 case Instruction::Ret:
                     if (II->getNumOperands() != 0) {
-                        table->functionList[func].push_back(II);
+                        functionList[func].push_back(II);
                         returnCount++;
                     }
                     break;
                 case Instruction::Alloca:
-                    table->declareList[func].push_back(II);
+                    declareList[func].push_back(II);
                     break;
                 case Instruction::Call: // can have value
                     if (II->getType() == Type::getVoidTy(II->getContext())) {
-                        table->callList[func].push_back(II);
+                        callList[func].push_back(II);
                         printCall(II);   // force evaluation to get metadata and side effects....
                     }
                     break;
                 }
             }
         }
-        for (auto info: table->functionList[func]) {
+        for (auto info: functionList[func]) {
             returnCount--;
             temp += valsep;
             valsep = "";

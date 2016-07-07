@@ -90,10 +90,6 @@ public:
     std::list<std::string>            metaList;
     std::map<const Function *, std::string> guard;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
-    std::map<const Function *,std::list<StoreInst *>> storeList;
-    std::map<const Function *,std::list<Instruction *>> functionList;
-    std::map<const Function *,std::list<Instruction *>> callList;
-    std::map<const Function *,std::list<Instruction *>> declareList;
 // 'Or' together ENA lines from all invocations of a method from this class
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
@@ -122,6 +118,10 @@ extern std::list<Function *> fixupFuncList;
 extern int trace_pair;
 extern Module *globalMod;
 extern std::map<const Function *, MetaData> funcMetaMap;
+extern std::map<const Function *,std::list<StoreInst *>> storeList;
+extern std::map<const Function *,std::list<Instruction *>> functionList;
+extern std::map<const Function *,std::list<Instruction *>> callList;
+extern std::map<const Function *,std::list<Instruction *>> declareList;
 
 int validateAddress(int arg, void *p);
 void constructAddressMap(Module *Mod);

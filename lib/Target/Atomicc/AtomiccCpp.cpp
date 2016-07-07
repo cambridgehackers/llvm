@@ -240,10 +240,10 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         auto AI = func->arg_begin();
         std::string argt = printType(AI->getType(), /*isSigned=*/false, "", "", "", false);
         fprintf(OStr, "        %s thisp = (%s)thisarg;\n", argt.c_str(), argt.c_str());
-        for (auto info: table->declareList[func])
+        for (auto info: declareList[func])
             if (auto *PTy = dyn_cast<PointerType>(info->getType()))
                 fprintf(OStr, "        %s;\n", printType(PTy->getElementType(), false, GetValueName(info), "", "", false).c_str());
-        for (auto info: table->storeList[func]) {
+        for (auto info: storeList[func]) {
             std::string pdest = printOperand(info->getPointerOperand(), true);
             if (pdest[0] == '&')
                 pdest = pdest.substr(1);
@@ -262,12 +262,12 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             if (cond)
                 fprintf(OStr, "        }\n    ");
         }
-        for (auto info: table->functionList[func]) {
+        for (auto info: functionList[func]) {
             if (Value *cond = getCondition(info->getParent(), 0))
                 fprintf(OStr, "        if (%s)\n    ", printOperand(cond, false).c_str());
             fprintf(OStr, "        return %s;\n", printOperand(info->getOperand(0), false).c_str());
         }
-        for (auto info: table->callList[func]) {
+        for (auto info: callList[func]) {
             if (Value *cond = getCondition(info->getParent(), 0))
                 fprintf(OStr, "        if (%s)\n    ", printOperand(cond, false).c_str());
             fprintf(OStr, "        %s;\n", printCall(info).c_str());
