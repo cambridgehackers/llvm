@@ -38,9 +38,6 @@ static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
-static std::list<Instruction *> functionListM;
-static std::list<StoreInst *> storeListM;
-static std::list<const Instruction *> declareListM;
 
 static INTMAP_TYPE predText[] = {
     {FCmpInst::FCMP_FALSE, "false"}, {FCmpInst::FCMP_OEQ, "oeq"},
@@ -794,12 +791,9 @@ std::string printOperand(Value *Operand, bool Indirect)
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processFunction(Function *func)
+static void processFunction(Function *func, ClassMethodTable *table)
 {
     NextAnonValueNumber = 0;
-    storeListM.clear();
-    functionListM.clear();
-    declareListM.clear();
     if (trace_function || trace_call)
         printf("PROCESSING %s\n", func->getName().str().c_str());
 if (func->getName() == "_ZN16EchoRequestInput8enq__RDYEv") {
@@ -811,18 +805,18 @@ func->dump();
         for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
             switch(II->getOpcode()) {
             case Instruction::Store:
-                storeListM.push_back(cast<StoreInst>(II));
+                table->storeList[func].push_back(cast<StoreInst>(II));
                 break;
             case Instruction::Ret:
                 if (II->getNumOperands() != 0)
-                    functionListM.push_back(II);
+                    table->functionList[func].push_back(II);
                 break;
             case Instruction::Alloca:
-                declareListM.push_back(&*II);
+                table->declareList[func].push_back(&*II);
                 break;
             case Instruction::Call: // can have value
                 if (II->getType() == Type::getVoidTy(II->getContext()))
-                    functionListM.push_back(II);
+                    table->functionList[func].push_back(II);
                 break;
             }
         }
@@ -835,10 +829,7 @@ void metaPrepare(const StructType *STy)
     for (auto FI : table->method) {
         Function *func = FI.second;
         baseMeta = &funcMetaMap[func];
-        processFunction(func);
-        table->storeList[func] = storeListM;
-        table->functionList[func] = functionListM;
-        table->declareList[func] = declareListM;
+        processFunction(func, table);
         for (auto info: table->storeList[func]) {
             std::string pdest = printOperand(info->getPointerOperand(), true);
             if (pdest[0] == '&')
