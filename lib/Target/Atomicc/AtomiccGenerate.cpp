@@ -38,9 +38,9 @@ static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
-std::list<Instruction *> functionList;
-std::list<StoreInst *> storeList;
-std::list<const Instruction *> declareList;
+std::list<Instruction *> functionListM;
+std::list<StoreInst *> storeListM;
+std::list<const Instruction *> declareListM;
 
 static INTMAP_TYPE predText[] = {
     {FCmpInst::FCMP_FALSE, "false"}, {FCmpInst::FCMP_OEQ, "oeq"},
@@ -797,9 +797,9 @@ std::string printOperand(Value *Operand, bool Indirect)
 void processFunction(Function *func)
 {
     NextAnonValueNumber = 0;
-    storeList.clear();
-    functionList.clear();
-    declareList.clear();
+    storeListM.clear();
+    functionListM.clear();
+    declareListM.clear();
     if (trace_function || trace_call)
         printf("PROCESSING %s\n", func->getName().str().c_str());
 if (func->getName() == "_ZN16EchoRequestInput8enq__RDYEv") {
@@ -811,18 +811,18 @@ func->dump();
         for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
             switch(II->getOpcode()) {
             case Instruction::Store:
-                storeList.push_back(cast<StoreInst>(II));
+                storeListM.push_back(cast<StoreInst>(II));
                 break;
             case Instruction::Ret:
                 if (II->getNumOperands() != 0)
-                    functionList.push_back(II);
+                    functionListM.push_back(II);
                 break;
             case Instruction::Alloca:
-                declareList.push_back(&*II);
+                declareListM.push_back(&*II);
                 break;
             case Instruction::Call: // can have value
                 if (II->getType() == Type::getVoidTy(II->getContext()))
-                    functionList.push_back(II);
+                    functionListM.push_back(II);
                 break;
             }
         }

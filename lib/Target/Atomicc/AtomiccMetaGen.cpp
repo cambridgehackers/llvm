@@ -53,7 +53,9 @@ void metaPrepare(const StructType *STy)
         Function *func = FI.second;
         baseMeta = &funcMetaMap[func];
         processFunction(func);
-        table->storeList[func] = storeList;
+        table->storeList[func] = storeListM;
+        table->functionList[func] = functionListM;
+        table->declareList[func] = declareListM;
         for (auto info: table->storeList[func]) {
             std::string pdest = printOperand(info->getPointerOperand(), true);
             if (pdest[0] == '&')
@@ -65,13 +67,13 @@ void metaPrepare(const StructType *STy)
         std::string temp, valsep;
         Value *prevCond = NULL;
         int returnCount = 0;
-        for (auto info: functionList) {
+        for (auto info: table->functionList[func]) {
             switch(info->getOpcode()) {
             case Instruction::Ret:
                 returnCount++;
             }
         }
-        for (auto info: functionList) {
+        for (auto info: table->functionList[func]) {
             std::string vout;
             switch(info->getOpcode()) {
             case Instruction::Ret:

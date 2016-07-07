@@ -83,6 +83,8 @@ public:
     std::map<const Function *, std::string> guard;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::map<const Function *,std::list<StoreInst *>> storeList;
+    std::map<const Function *,std::list<Instruction *>> functionList;
+    std::map<const Function *,std::list<const Instruction *>> declareList;
 // 'Or' together ENA lines from all invocations of a method from this class
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
@@ -108,9 +110,9 @@ extern ExecutionEngine *EE;
 extern std::map<const StructType *,ClassMethodTable *> classCreate;
 extern std::map<Function *, Function *> ruleRDYFunction;
 extern std::map<Function *, Function *> ruleENAFunction;
-extern std::list<Instruction *> functionList;
-extern std::list<const Instruction *> declareList;
-extern std::list<StoreInst *> storeList;
+extern std::list<Instruction *> functionListM;
+extern std::list<const Instruction *> declareListM;
+extern std::list<StoreInst *> storeListM;
 extern std::map<const Function *, std::string> pushSeen;
 extern std::list<MEMORY_REGION> memoryRegion;
 extern std::list<Function *> fixupFuncList;

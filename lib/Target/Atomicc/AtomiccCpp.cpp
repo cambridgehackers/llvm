@@ -271,11 +271,10 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         auto AI = func->arg_begin();
         std::string argt = printType(AI->getType(), /*isSigned=*/false, "", "", "", false);
         fprintf(OStr, "        %s thisp = (%s)thisarg;\n", argt.c_str(), argt.c_str());
-        processFunction(func);
-        for (auto info: declareList)
+        for (auto info: table->declareList[func])
             if (auto *PTy = dyn_cast<PointerType>(info->getType()))
                 fprintf(OStr, "        %s;\n", printType(PTy->getElementType(), false, GetValueName(info), "", "", false).c_str());
-        for (auto info: storeList) {
+        for (auto info: table->storeList[func]) {
             std::string pdest = printOperand(info->getPointerOperand(), true);
             if (pdest[0] == '&')
                 pdest = pdest.substr(1);
@@ -295,7 +294,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             if (cond)
                 fprintf(OStr, "        }\n    ");
         }
-        for (auto info: functionList) {
+        for (auto info: table->functionList[func]) {
             std::string vout;
             switch(info->getOpcode()) {
             case Instruction::Ret:
