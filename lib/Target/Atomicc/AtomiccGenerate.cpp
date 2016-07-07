@@ -805,9 +805,17 @@ func->dump();
         for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
             for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
                 switch(II->getOpcode()) {
-                case Instruction::Store:
-                    table->storeList[func].push_back(cast<StoreInst>(II));
+                case Instruction::Store: {
+                    StoreInst *SI = cast<StoreInst>(II);
+                    table->storeList[func].push_back(SI);
+                    std::string pdest = printOperand(SI->getPointerOperand(), true);
+                    if (pdest[0] == '&')
+                        pdest = pdest.substr(1);
+                    if (!isAlloca(SI->getPointerOperand()))
+                        appendList(MetaWrite, II->getParent(), pdest);
+                    (void)printOperand(II->getOperand(0), false); // force evaluation to get metadata
                     break;
+                }
                 case Instruction::Ret:
                     if (II->getNumOperands() != 0) {
                         table->functionList[func].push_back(II);
@@ -815,7 +823,7 @@ func->dump();
                     }
                     break;
                 case Instruction::Alloca:
-                    table->declareList[func].push_back(&*II);
+                    table->declareList[func].push_back(II);
                     break;
                 case Instruction::Call: // can have value
                     if (II->getType() == Type::getVoidTy(II->getContext())) {
@@ -825,14 +833,6 @@ func->dump();
                     break;
                 }
             }
-        }
-        for (auto info: table->storeList[func]) {
-            std::string pdest = printOperand(info->getPointerOperand(), true);
-            if (pdest[0] == '&')
-                pdest = pdest.substr(1);
-            if (!isAlloca(info->getPointerOperand()))
-                appendList(MetaWrite, info->getParent(), pdest);
-            (void)printOperand(info->getOperand(0), false); // force evaluation to get metadata
         }
         for (auto info: table->functionList[func]) {
             std::string vout = printOperand(info->getOperand(0), false);
