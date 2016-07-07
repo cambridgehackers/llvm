@@ -64,11 +64,11 @@ void metaPrepare(const StructType *STy)
         }
         std::string temp, valsep;
         Value *prevCond = NULL;
-        int remain = 0;
+        int returnCount = 0;
         for (auto info: functionList) {
             switch(info->getOpcode()) {
             case Instruction::Ret:
-                remain++;
+                returnCount++;
             }
         }
         for (auto info: functionList) {
@@ -81,14 +81,14 @@ void metaPrepare(const StructType *STy)
                 printCall(*info);   // force evaluation to get metadata and side effects....
                 break;
             }
-            remain--;
+            returnCount--;
             temp += valsep;
             valsep = "";
             Value *opCond = getCondition(info->getParent(), 0);
-            if (opCond && (remain || getCondition(info->getParent(), 1) != prevCond))
+            if (opCond && (returnCount || getCondition(info->getParent(), 1) != prevCond))
                 temp += printOperand(opCond, false) + " ? ";
             temp += vout;
-            if (opCond && remain)
+            if (opCond && returnCount)
                 valsep = " : ";
             prevCond = opCond;
         }

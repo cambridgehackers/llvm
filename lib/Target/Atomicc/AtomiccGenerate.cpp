@@ -545,6 +545,7 @@ std::string printCall(Instruction &I)
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
     if (!func) {
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI, false).c_str());
+return "";
         I.dump();
         callingFunction->dump();
         exit(-1);
@@ -857,13 +858,14 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
         /*
          * Actual generation of output files takes place here
          */
+        generateRegion = ProcessVerilog;
+        globalClassTable = table;
+        metaPrepare(STy);
+        globalClassTable = NULL;
+        if (STy->getName() != "class.InterfaceClass")
         if (STy->getName() != "class.Module") {
-            generateRegion = ProcessVerilog;
             if (inheritsModule(STy, "class.Module")
              && !inheritsModule(STy, "class.InterfaceClass")) {
-                globalClassTable = table;
-                metaPrepare(STy);
-                globalClassTable = NULL;
                 // now generate the verilog header file '.vh'
                 metaGenerate(STy, OStrVH);
                 // Only generate verilog for modules derived from Module
@@ -871,8 +873,7 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
             }
             // Generate cpp for all modules except class.ModuleExternal
             generateRegion = ProcessCPP;
-            if (!inheritsModule(STy, "class.ModuleExternal")
-             && STy->getName() != "class.InterfaceClass")
+            if (!inheritsModule(STy, "class.ModuleExternal"))
                 generateClassDef(STy, OStrC, OStrCH);
         }
     }
