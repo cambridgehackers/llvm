@@ -165,5 +165,5 @@ bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);
 void buildPrefix(ClassMethodTable *table);
 void updateParameterNames(std::string mName, Function *func);
-std::string printCall(Instruction &I);
+std::string printCall(Instruction *I);
 bool isAlloca(Value *arg);

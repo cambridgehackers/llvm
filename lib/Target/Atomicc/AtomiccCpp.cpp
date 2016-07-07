@@ -271,7 +271,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         for (auto info: table->callList[func]) {
             if (Value *cond = getCondition(info->getParent(), 0))
                 fprintf(OStr, "        if (%s)\n    ", printOperand(cond, false).c_str());
-            fprintf(OStr, "        %s;\n", printCall(*info).c_str());
+            fprintf(OStr, "        %s;\n", printCall(info).c_str());
         }
         fprintf(OStr, "}\n");
     }
