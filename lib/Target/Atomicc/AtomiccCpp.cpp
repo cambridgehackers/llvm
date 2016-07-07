@@ -308,6 +308,20 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
                 fprintf(OStr, "        if (%s)\n    ", printOperand(cond, false).c_str());
             fprintf(OStr, "        %s;\n", vout.c_str());
         }
+        for (auto info: table->callList[func]) {
+            std::string vout;
+            switch(info->getOpcode()) {
+            case Instruction::Ret:
+                vout = "return " + printOperand(info->getOperand(0), false);
+                break;
+            case Instruction::Call: // can have value
+                vout = printCall(*info);
+                break;
+            }
+            if (Value *cond = getCondition(info->getParent(), 0))
+                fprintf(OStr, "        if (%s)\n    ", printOperand(cond, false).c_str());
+            fprintf(OStr, "        %s;\n", vout.c_str());
+        }
         fprintf(OStr, "}\n");
     }
     // Generate 'run()' method to execute all rules in this and contained Modules

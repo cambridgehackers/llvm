@@ -805,6 +805,9 @@ printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 func->dump();
 }
         /* Gather data for all instructions.  */
+        std::string temp, valsep;
+        Value *prevCond = NULL;
+        int returnCount = 0;
         for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
             for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
                 switch(II->getOpcode()) {
@@ -820,7 +823,7 @@ func->dump();
                     break;
                 case Instruction::Call: // can have value
                     if (II->getType() == Type::getVoidTy(II->getContext()))
-                        table->functionList[func].push_back(II);
+                        table->callList[func].push_back(II);
                     break;
                 }
             }
@@ -833,9 +836,6 @@ func->dump();
                 appendList(MetaWrite, info->getParent(), pdest);
             (void)printOperand(info->getOperand(0), false); // force evaluation to get metadata
         }
-        std::string temp, valsep;
-        Value *prevCond = NULL;
-        int returnCount = 0;
         for (auto info: table->functionList[func]) {
             switch(info->getOpcode()) {
             case Instruction::Ret:
@@ -843,6 +843,27 @@ func->dump();
             }
         }
         for (auto info: table->functionList[func]) {
+            std::string vout;
+            switch(info->getOpcode()) {
+            case Instruction::Ret:
+                vout = printOperand(info->getOperand(0), false);
+                break;
+            case Instruction::Call: // can have value
+                printCall(*info);   // force evaluation to get metadata and side effects....
+                break;
+            }
+            returnCount--;
+            temp += valsep;
+            valsep = "";
+            Value *opCond = getCondition(info->getParent(), 0);
+            if (opCond && (returnCount || getCondition(info->getParent(), 1) != prevCond))
+                temp += printOperand(opCond, false) + " ? ";
+            temp += vout;
+            if (opCond && returnCount)
+                valsep = " : ";
+            prevCond = opCond;
+        }
+        for (auto info: table->callList[func]) {
             std::string vout;
             switch(info->getOpcode()) {
             case Instruction::Ret:

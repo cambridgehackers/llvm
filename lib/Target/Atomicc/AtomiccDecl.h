@@ -92,6 +92,7 @@ public:
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::map<const Function *,std::list<StoreInst *>> storeList;
     std::map<const Function *,std::list<Instruction *>> functionList;
+    std::map<const Function *,std::list<Instruction *>> callList;
     std::map<const Function *,std::list<const Instruction *>> declareList;
 // 'Or' together ENA lines from all invocations of a method from this class
     std::list<MuxEnableEntry> muxEnableList;
