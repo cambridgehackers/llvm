@@ -791,45 +791,40 @@ std::string printOperand(Value *Operand, bool Indirect)
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processFunction(Function *func, ClassMethodTable *table)
+static void processClass(ClassMethodTable *table)
 {
-    NextAnonValueNumber = 0;
-    if (trace_function || trace_call)
-        printf("PROCESSING %s\n", func->getName().str().c_str());
+    globalClassTable = table;
+    for (auto FI : table->method) {
+        Function *func = FI.second;
+        baseMeta = &funcMetaMap[func];
+        NextAnonValueNumber = 0;
+        if (trace_function || trace_call)
+            printf("PROCESSING %s\n", func->getName().str().c_str());
 if (func->getName() == "_ZN16EchoRequestInput8enq__RDYEv") {
 printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 func->dump();
 }
-    /* Generate cpp/Verilog for all instructions.  Record function calls for post processing */
-    for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
-        for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
-            switch(II->getOpcode()) {
-            case Instruction::Store:
-                table->storeList[func].push_back(cast<StoreInst>(II));
-                break;
-            case Instruction::Ret:
-                if (II->getNumOperands() != 0)
-                    table->functionList[func].push_back(II);
-                break;
-            case Instruction::Alloca:
-                table->declareList[func].push_back(&*II);
-                break;
-            case Instruction::Call: // can have value
-                if (II->getType() == Type::getVoidTy(II->getContext()))
-                    table->functionList[func].push_back(II);
-                break;
+        /* Gather data for all instructions.  */
+        for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
+            for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
+                switch(II->getOpcode()) {
+                case Instruction::Store:
+                    table->storeList[func].push_back(cast<StoreInst>(II));
+                    break;
+                case Instruction::Ret:
+                    if (II->getNumOperands() != 0)
+                        table->functionList[func].push_back(II);
+                    break;
+                case Instruction::Alloca:
+                    table->declareList[func].push_back(&*II);
+                    break;
+                case Instruction::Call: // can have value
+                    if (II->getType() == Type::getVoidTy(II->getContext()))
+                        table->functionList[func].push_back(II);
+                    break;
+                }
             }
         }
-    }
-}
-
-void metaPrepare(const StructType *STy)
-{
-    ClassMethodTable *table = classCreate[STy];
-    for (auto FI : table->method) {
-        Function *func = FI.second;
-        baseMeta = &funcMetaMap[func];
-        processFunction(func, table);
         for (auto info: table->storeList[func]) {
             std::string pdest = printOperand(info->getPointerOperand(), true);
             if (pdest[0] == '&')
@@ -870,6 +865,7 @@ void metaPrepare(const StructType *STy)
         }
         table->guard[func] = temp;
     }
+    globalClassTable = NULL;
     baseMeta = NULL;
 }
 
@@ -903,9 +899,7 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
          * Actual generation of output files takes place here
          */
         generateRegion = ProcessVerilog;
-        globalClassTable = table;
-        metaPrepare(STy);
-        globalClassTable = NULL;
+        processClass(table);
         if (STy->getName() != "class.InterfaceClass")
         if (STy->getName() != "class.Module") {
             if (inheritsModule(STy, "class.Module")

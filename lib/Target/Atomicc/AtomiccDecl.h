@@ -164,7 +164,6 @@ std::string baseMethod(std::string mname);
 bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);
 void buildPrefix(ClassMethodTable *table);
-void metaPrepare(const StructType *STy);
 void updateParameterNames(std::string mName, Function *func);
 std::string printCall(Instruction &I);
 bool isAlloca(Value *arg);
