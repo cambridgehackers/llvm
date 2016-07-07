@@ -295,32 +295,14 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
                 fprintf(OStr, "        }\n    ");
         }
         for (auto info: table->functionList[func]) {
-            std::string vout;
-            switch(info->getOpcode()) {
-            case Instruction::Ret:
-                vout = "return " + printOperand(info->getOperand(0), false);
-                break;
-            case Instruction::Call: // can have value
-                vout = printCall(*info);
-                break;
-            }
             if (Value *cond = getCondition(info->getParent(), 0))
                 fprintf(OStr, "        if (%s)\n    ", printOperand(cond, false).c_str());
-            fprintf(OStr, "        %s;\n", vout.c_str());
+            fprintf(OStr, "        return %s;\n", printOperand(info->getOperand(0), false).c_str());
         }
         for (auto info: table->callList[func]) {
-            std::string vout;
-            switch(info->getOpcode()) {
-            case Instruction::Ret:
-                vout = "return " + printOperand(info->getOperand(0), false);
-                break;
-            case Instruction::Call: // can have value
-                vout = printCall(*info);
-                break;
-            }
             if (Value *cond = getCondition(info->getParent(), 0))
                 fprintf(OStr, "        if (%s)\n    ", printOperand(cond, false).c_str());
-            fprintf(OStr, "        %s;\n", vout.c_str());
+            fprintf(OStr, "        %s;\n", printCall(*info).c_str());
         }
         fprintf(OStr, "}\n");
     }
