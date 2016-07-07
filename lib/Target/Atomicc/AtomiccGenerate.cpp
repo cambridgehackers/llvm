@@ -885,6 +885,21 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
             std::string fname = fieldName(STy, Idx);
             generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH, fname == "");
         }
+        for (auto FI : table->method) {
+            Function *func = FI.second;
+            Type *retType = func->getReturnType();
+            auto AI = func->arg_begin(), AE = func->arg_end();
+            if (const StructType *iSTy = dyn_cast<StructType>(retType))
+                generateContainedStructs(iSTy, OStrV, OStrVH, OStrC, OStrCH, false);
+            AI++;
+            for (; AI != AE; ++AI) {
+                Type *element = AI->getType();
+                if (auto PTy = dyn_cast<PointerType>(element))
+                    element = PTy->getElementType();
+                if (const StructType *iSTy = dyn_cast<StructType>(element))
+                    generateContainedStructs(iSTy, OStrV, OStrVH, OStrC, OStrCH, false);
+            }
+        }
         /*
          * Actual generation of output files takes place here
          */
