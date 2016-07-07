@@ -38,9 +38,9 @@ static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
-std::list<Instruction *> functionListM;
-std::list<StoreInst *> storeListM;
-std::list<const Instruction *> declareListM;
+static std::list<Instruction *> functionListM;
+static std::list<StoreInst *> storeListM;
+static std::list<const Instruction *> declareListM;
 
 static INTMAP_TYPE predText[] = {
     {FCmpInst::FCMP_FALSE, "false"}, {FCmpInst::FCMP_OEQ, "oeq"},
@@ -794,7 +794,7 @@ std::string printOperand(Value *Operand, bool Indirect)
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-void processFunction(Function *func)
+static void processFunction(Function *func)
 {
     NextAnonValueNumber = 0;
     storeListM.clear();
@@ -827,6 +827,59 @@ func->dump();
             }
         }
     }
+}
+
+void metaPrepare(const StructType *STy)
+{
+    ClassMethodTable *table = classCreate[STy];
+    for (auto FI : table->method) {
+        Function *func = FI.second;
+        baseMeta = &funcMetaMap[func];
+        processFunction(func);
+        table->storeList[func] = storeListM;
+        table->functionList[func] = functionListM;
+        table->declareList[func] = declareListM;
+        for (auto info: table->storeList[func]) {
+            std::string pdest = printOperand(info->getPointerOperand(), true);
+            if (pdest[0] == '&')
+                pdest = pdest.substr(1);
+            if (!isAlloca(info->getPointerOperand()))
+                appendList(MetaWrite, info->getParent(), pdest);
+            (void)printOperand(info->getOperand(0), false); // force evaluation to get metadata
+        }
+        std::string temp, valsep;
+        Value *prevCond = NULL;
+        int returnCount = 0;
+        for (auto info: table->functionList[func]) {
+            switch(info->getOpcode()) {
+            case Instruction::Ret:
+                returnCount++;
+            }
+        }
+        for (auto info: table->functionList[func]) {
+            std::string vout;
+            switch(info->getOpcode()) {
+            case Instruction::Ret:
+                vout = printOperand(info->getOperand(0), false);
+                break;
+            case Instruction::Call: // can have value
+                printCall(*info);   // force evaluation to get metadata and side effects....
+                break;
+            }
+            returnCount--;
+            temp += valsep;
+            valsep = "";
+            Value *opCond = getCondition(info->getParent(), 0);
+            if (opCond && (returnCount || getCondition(info->getParent(), 1) != prevCond))
+                temp += printOperand(opCond, false) + " ? ";
+            temp += vout;
+            if (opCond && returnCount)
+                valsep = " : ";
+            prevCond = opCond;
+        }
+        table->guard[func] = temp;
+    }
+    baseMeta = NULL;
 }
 
 /*

@@ -40,6 +40,9 @@
 
 #define GIANT_SIZE 1024
 
+enum {ProcessNone=0, ProcessVerilog, ProcessCPP};
+enum {MetaNone, MetaRead, MetaWrite, MetaInvoke, MetaMax};
+
 typedef struct {
     int value;
     const char *name;
@@ -65,6 +68,11 @@ typedef struct {
     BasicBlock *bb;
     std::string signal;
 } MuxEnableEntry;
+
+typedef std::map<std::string,std::list<Value *>> MetaRef;
+typedef struct {
+    MetaRef list[MetaMax];
+} MetaData;
 
 class ClassMethodTable {
 public:
@@ -103,22 +111,18 @@ typedef  struct {
 
 typedef std::map<std::string, int> StringMapType;
 
-enum {ProcessNone=0, ProcessVerilog, ProcessCPP};
-enum {MetaNone, MetaRead, MetaWrite, MetaInvoke, MetaMax};
-
 extern ExecutionEngine *EE;
 extern std::map<const StructType *,ClassMethodTable *> classCreate;
 extern std::map<Function *, Function *> ruleRDYFunction;
 extern std::map<Function *, Function *> ruleENAFunction;
-extern std::list<Instruction *> functionListM;
-extern std::list<const Instruction *> declareListM;
-extern std::list<StoreInst *> storeListM;
 extern std::map<const Function *, std::string> pushSeen;
 extern std::list<MEMORY_REGION> memoryRegion;
 extern std::list<Function *> fixupFuncList;
 extern int trace_pair;
 extern Module *globalMod;
 extern ClassMethodTable *globalClassTable;
+extern std::map<const Function *, MetaData> funcMetaMap;
+extern MetaData *baseMeta;
 
 int validateAddress(int arg, void *p);
 void constructAddressMap(Module *Mod);
@@ -127,7 +131,6 @@ std::string printType(Type *Ty, bool isSigned, std::string NameSoFar, std::strin
 std::string printOperand(Value *Operand, bool Indirect);
 std::string getStructName(const StructType *STy);
 std::string CBEMangle(const std::string &S);
-void processFunction(Function *func);
 std::string verilogArrRange(Type *Ty);
 void memdump(unsigned char *p, int len, const char *title);
 void memdumpl(unsigned char *p, int len, const char *title);
