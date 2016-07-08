@@ -621,8 +621,8 @@ std::string printOperand(Value *Operand, bool Indirect)
     std::string cbuffer;
     if (!Operand)
         return "";
-    std::string prefix;
     if (Instruction *I = dyn_cast<Instruction>(Operand)) {
+        std::string prefix;
         bool isAddressImplicit = isAddressExposed(Operand);
         if (Indirect && isAddressImplicit) {
             isAddressImplicit = false;
@@ -751,9 +751,6 @@ std::string printOperand(Value *Operand, bool Indirect)
     }
     else {
         //we need pointer to pass struct params (PipeIn)
-        if (prefix == "*")
-            prefix = "";
-        cbuffer += prefix;
         Constant* CPV = dyn_cast<Constant>(Operand);
         if (!CPV || isa<GlobalValue>(CPV))
             cbuffer += GetValueName(Operand);
