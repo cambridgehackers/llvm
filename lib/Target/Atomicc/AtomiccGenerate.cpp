@@ -614,120 +614,6 @@ std::string parenOperand(Value *Operand)
 }
 
 /*
- * Generate a string for any valid instruction DAG.
- */
-static std::string processInstruction(Instruction *I)
-{
-    std::string vout;
-    int opcode = I->getOpcode();
-//printf("[%s:%d] op %s\n", __FUNCTION__, __LINE__, I.getOpcodeName());
-    switch(opcode) {
-    case Instruction::Call:
-        vout += printCall(I);
-        break;
-    case Instruction::GetElementPtr: {
-        GetElementPtrInst *IG = dyn_cast<GetElementPtrInst>(I);
-        return printGEPExpression(IG->getPointerOperand(), gep_type_begin(IG), gep_type_end(IG));
-        }
-    case Instruction::Load: {
-        std::string p = printOperand(I->getOperand(0), true);
-        if (I->getType()->getTypeID() != Type::PointerTyID && !isAlloca(I->getOperand(0))
-         && !dyn_cast<Argument>(I->getOperand(0)))
-            appendList(MetaRead, I->getParent(), p);
-        return p;
-        }
-
-    // Standard binary operators...
-    case Instruction::Add: case Instruction::FAdd:
-    case Instruction::Sub: case Instruction::FSub:
-    case Instruction::Mul: case Instruction::FMul:
-    case Instruction::UDiv: case Instruction::SDiv: case Instruction::FDiv:
-    case Instruction::URem: case Instruction::SRem: case Instruction::FRem:
-    case Instruction::Shl: case Instruction::LShr: case Instruction::AShr:
-    // Logical operators...
-    case Instruction::And: case Instruction::Or: case Instruction::Xor:
-        assert(!I->getType()->isPointerTy());
-        if (BinaryOperator::isNeg(I))
-            vout += "-(" + printOperand(BinaryOperator::getNegArgument(cast<BinaryOperator>(I)), false) + ")";
-        else if (BinaryOperator::isFNeg(I))
-            vout += "-(" + printOperand(BinaryOperator::getFNegArgument(cast<BinaryOperator>(I)), false) + ")";
-        else if (I->getOpcode() == Instruction::FRem) {
-            if (I->getType() == Type::getFloatTy(I->getContext()))
-                vout += "fmodf(";
-            else if (I->getType() == Type::getDoubleTy(I->getContext()))
-                vout += "fmod(";
-            else  // all 3 flavors of long double
-                vout += "fmodl(";
-            vout += printOperand(I->getOperand(0), false) + ", "
-                 + printOperand(I->getOperand(1), false) + ")";
-        } else
-            vout += parenOperand(I->getOperand(0))
-                 + " " + intmapLookup(opcodeMap, I->getOpcode()) + " "
-                 + parenOperand(I->getOperand(1));
-        break;
-
-    // Convert instructions...
-    case Instruction::SExt:
-    case Instruction::FPTrunc: case Instruction::FPExt:
-    case Instruction::FPToUI: case Instruction::FPToSI:
-    case Instruction::UIToFP: case Instruction::SIToFP:
-    case Instruction::IntToPtr: case Instruction::PtrToInt:
-    case Instruction::AddrSpaceCast:
-    case Instruction::Trunc: case Instruction::ZExt: case Instruction::BitCast:
-        vout += printOperand(I->getOperand(0), false);
-        break;
-
-    case Instruction::ExtractValue: {
-        const ExtractValueInst *EVI = dyn_cast<ExtractValueInst>(I);
-        //Vals.append(EVI->idx_begin(), EVI->idx_end());
-//printf("[%s:%d] before %d\n", __FUNCTION__, __LINE__, (int)I->getNumOperands());
-//I->dump();
-        uint64_t val = *EVI->idx_begin();
-//printf("[%s:%d] val %d\n", __FUNCTION__, __LINE__, (int)val);
-        vout += printOperand(I->getOperand(0), false) + "." + fieldName(dyn_cast<StructType>(I->getOperand(0)->getType()), val);
-//printf("[%s:%d] after\n", __FUNCTION__, __LINE__);
-        break;
-    }
-
-    // Other instructions...
-    case Instruction::ICmp: case Instruction::FCmp: {
-        ICmpInst *CI = dyn_cast<ICmpInst>(I);
-        vout += parenOperand(I->getOperand(0))
-             + " " + intmapLookup(predText, CI->getPredicate()) + " "
-             + parenOperand(I->getOperand(1));
-        break;
-        }
-    case Instruction::PHI: {
-        const PHINode *PN = dyn_cast<PHINode>(I);
-        Value *prevCond = NULL;
-        for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
-            BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
-            Value *opCond = getCondition(inBlock, 0);
-            if (opIndex != Eop - 1 || getCondition(inBlock, 1) != prevCond) {
-                std::string cStr = printOperand(opCond, false);
-                if (cStr != "")
-                    vout += cStr + " ? ";
-            }
-            vout += printOperand(PN->getIncomingValue(opIndex), false);
-            if (opIndex != Eop - 1)
-                vout += ":";
-            prevCond = opCond;
-        }
-        break;
-        }
-    case Instruction::Alloca:
-        vout += GetValueName(I);
-        break;
-    default:
-        printf("processInstruction: Other opcode %d.=%s\n", opcode, I->getOpcodeName());
-        I->getParent()->getParent()->dump();
-        exit(1);
-        break;
-    }
-    return vout;
-}
-
-/*
  * Generate a string for the value generated by an Instruction DAG
  */
 std::string printOperand(Value *Operand, bool Indirect)
@@ -748,15 +634,121 @@ std::string printOperand(Value *Operand, bool Indirect)
         && (!I || (I->getOpcode() != Instruction::Alloca)))
         prefix = "&";  // Global variables are referenced as their addresses by llvm
     if (I) {
-        std::string p = processInstruction(I);
-        if (prefix == "*" && p[0] == '&') {
+        std::string vout;
+        int opcode = I->getOpcode();
+//printf("[%s:%d] op %s\n", __FUNCTION__, __LINE__, I.getOpcodeName());
+        switch(opcode) {
+        case Instruction::Call:
+            vout += printCall(I);
+            break;
+        case Instruction::GetElementPtr: {
+            GetElementPtrInst *IG = dyn_cast<GetElementPtrInst>(I);
+            vout = printGEPExpression(IG->getPointerOperand(), gep_type_begin(IG), gep_type_end(IG));
+            break;
+            }
+        case Instruction::Load: {
+            vout = printOperand(I->getOperand(0), true);
+            if (I->getType()->getTypeID() != Type::PointerTyID && !isAlloca(I->getOperand(0))
+             && !dyn_cast<Argument>(I->getOperand(0)))
+                appendList(MetaRead, I->getParent(), vout);
+            break;
+            }
+
+        // Standard binary operators...
+        case Instruction::Add: case Instruction::FAdd:
+        case Instruction::Sub: case Instruction::FSub:
+        case Instruction::Mul: case Instruction::FMul:
+        case Instruction::UDiv: case Instruction::SDiv: case Instruction::FDiv:
+        case Instruction::URem: case Instruction::SRem: case Instruction::FRem:
+        case Instruction::Shl: case Instruction::LShr: case Instruction::AShr:
+        // Logical operators...
+        case Instruction::And: case Instruction::Or: case Instruction::Xor:
+            assert(!I->getType()->isPointerTy());
+            if (BinaryOperator::isNeg(I))
+                vout += "-(" + printOperand(BinaryOperator::getNegArgument(cast<BinaryOperator>(I)), false) + ")";
+            else if (BinaryOperator::isFNeg(I))
+                vout += "-(" + printOperand(BinaryOperator::getFNegArgument(cast<BinaryOperator>(I)), false) + ")";
+            else if (I->getOpcode() == Instruction::FRem) {
+                if (I->getType() == Type::getFloatTy(I->getContext()))
+                    vout += "fmodf(";
+                else if (I->getType() == Type::getDoubleTy(I->getContext()))
+                    vout += "fmod(";
+                else  // all 3 flavors of long double
+                    vout += "fmodl(";
+                vout += printOperand(I->getOperand(0), false) + ", "
+                     + printOperand(I->getOperand(1), false) + ")";
+            } else
+                vout += parenOperand(I->getOperand(0))
+                     + " " + intmapLookup(opcodeMap, I->getOpcode()) + " "
+                     + parenOperand(I->getOperand(1));
+            break;
+
+        // Convert instructions...
+        case Instruction::SExt:
+        case Instruction::FPTrunc: case Instruction::FPExt:
+        case Instruction::FPToUI: case Instruction::FPToSI:
+        case Instruction::UIToFP: case Instruction::SIToFP:
+        case Instruction::IntToPtr: case Instruction::PtrToInt:
+        case Instruction::AddrSpaceCast:
+        case Instruction::Trunc: case Instruction::ZExt: case Instruction::BitCast:
+            vout += printOperand(I->getOperand(0), false);
+            break;
+
+        case Instruction::ExtractValue: {
+            const ExtractValueInst *EVI = dyn_cast<ExtractValueInst>(I);
+            //Vals.append(EVI->idx_begin(), EVI->idx_end());
+    //printf("[%s:%d] before %d\n", __FUNCTION__, __LINE__, (int)I->getNumOperands());
+    //I->dump();
+            uint64_t val = *EVI->idx_begin();
+    //printf("[%s:%d] val %d\n", __FUNCTION__, __LINE__, (int)val);
+            vout += printOperand(I->getOperand(0), false) + "." + fieldName(dyn_cast<StructType>(I->getOperand(0)->getType()), val);
+    //printf("[%s:%d] after\n", __FUNCTION__, __LINE__);
+            break;
+        }
+
+        // Other instructions...
+        case Instruction::ICmp: case Instruction::FCmp: {
+            ICmpInst *CI = dyn_cast<ICmpInst>(I);
+            vout += parenOperand(I->getOperand(0))
+                 + " " + intmapLookup(predText, CI->getPredicate()) + " "
+                 + parenOperand(I->getOperand(1));
+            break;
+            }
+        case Instruction::PHI: {
+            const PHINode *PN = dyn_cast<PHINode>(I);
+            Value *prevCond = NULL;
+            for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
+                BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
+                Value *opCond = getCondition(inBlock, 0);
+                if (opIndex != Eop - 1 || getCondition(inBlock, 1) != prevCond) {
+                    std::string cStr = printOperand(opCond, false);
+                    if (cStr != "")
+                        vout += cStr + " ? ";
+                }
+                vout += printOperand(PN->getIncomingValue(opIndex), false);
+                if (opIndex != Eop - 1)
+                    vout += ":";
+                prevCond = opCond;
+            }
+            break;
+            }
+        case Instruction::Alloca:
+            vout += GetValueName(I);
+            break;
+        default:
+            printf("printOperand: Other opcode %d.=%s\n", opcode, I->getOpcodeName());
+            I->getParent()->getParent()->dump();
+            exit(1);
+            break;
+        }
+        if (prefix == "*" && vout[0] == '&') {
             prefix = "";
-            p = p.substr(1);
+            vout = vout.substr(1);
         }
         if (prefix == "")
-            cbuffer += p;
+            cbuffer += vout;
         else
-            cbuffer += prefix + "(" + p + ")";
+            cbuffer += prefix + "(" + vout + ")";
     }
     else {
         //we need pointer to pass struct params (PipeIn)
