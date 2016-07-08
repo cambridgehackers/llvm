@@ -231,7 +231,7 @@ static const StructType *findThisArgumentType(const PointerType *PTy, int ind)
     if (func->getNumParams() > 0)
     if ((PTy = dyn_cast<PointerType>(func->getParamType(ind))))
     if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
-        getStructName(STy);
+        getClass(STy);
         return STy;
     }
     return NULL;
@@ -525,10 +525,8 @@ void appendList(int listIndex, BasicBlock *cond, std::string item)
         if (!val)
             baseMeta->list[listIndex][item].clear();
         for (auto condIter: baseMeta->list[listIndex][item])
-             if (!condIter)
-                 return;
-             else if (condIter == val)
-                 return;
+            if (!condIter || condIter == val)
+                return;
         baseMeta->list[listIndex][item].push_back(val);
     }
 }

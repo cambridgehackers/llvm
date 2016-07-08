@@ -596,7 +596,7 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
     switch (Ty->getTypeID()) {
     case Type::StructTyID: {
         StructType *STy = cast<StructType>(Ty);
-        getStructName(STy); // allocate classCreate
+        getClass(STy); // allocate classCreate
         const StructLayout *SLO = TD->getStructLayout(STy);
         ClassMethodTable *table = classCreate[STy];
         int Idx = 0;

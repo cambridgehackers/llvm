@@ -99,7 +99,7 @@ static void processConnectInterface(CallInst *II)
     if (ins->getOpcode() == Instruction::BitCast)
     if (PointerType *PTy = dyn_cast<PointerType>(ins->getOperand(0)->getType()))
     if (StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
-        getStructName(STy);  // make sure that classCreate is initialized
+        getClass(STy);  // make sure that classCreate is initialized
         ClassMethodTable *table = classCreate[STy];
         std::string sname = STy->getName();
         std::string target = printOperand(II->getOperand(1), false);
@@ -347,7 +347,7 @@ void preprocessModule(Module *Mod)
     for (unsigned i = 0, e = StructTypes.size(); i != e; ++i) {
         StructType *STy = StructTypes[i];
         if (STy->isLiteral() || STy->getName().empty()) continue;
-        getStructName(STy);  // make sure that classCreate is initialized
+        getClass(STy);  // make sure that classCreate is initialized
         ClassMethodTable *table = classCreate[STy];
         std::map<std::string, Function *> funcMap;
         int len = STy->structFieldMap.length();
