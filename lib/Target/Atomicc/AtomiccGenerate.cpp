@@ -621,19 +621,17 @@ std::string printOperand(Value *Operand, bool Indirect)
     std::string cbuffer;
     if (!Operand)
         return "";
-    Instruction *I = dyn_cast<Instruction>(Operand);
-    bool isAddressImplicit = isAddressExposed(Operand);
     std::string prefix;
-    if (Indirect && isAddressImplicit) {
-        isAddressImplicit = false;
-        Indirect = false;
-    }
-    if (Indirect)
-        prefix = "*";
-    if (isAddressImplicit
-        && (!I || (I->getOpcode() != Instruction::Alloca)))
-        prefix = "&";  // Global variables are referenced as their addresses by llvm
-    if (I) {
+    if (Instruction *I = dyn_cast<Instruction>(Operand)) {
+        bool isAddressImplicit = isAddressExposed(Operand);
+        if (Indirect && isAddressImplicit) {
+            isAddressImplicit = false;
+            Indirect = false;
+        }
+        if (Indirect)
+            prefix = "*";
+        if (isAddressImplicit)
+            prefix = "&";  // Global variables are referenced as their addresses by llvm
         std::string vout;
         int opcode = I->getOpcode();
 //printf("[%s:%d] op %s\n", __FUNCTION__, __LINE__, I.getOpcodeName());
@@ -733,6 +731,7 @@ std::string printOperand(Value *Operand, bool Indirect)
             break;
             }
         case Instruction::Alloca:
+            prefix = "";
             vout += GetValueName(I);
             break;
         default:
