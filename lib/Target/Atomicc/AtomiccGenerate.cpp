@@ -744,11 +744,10 @@ std::string printOperand(Value *Operand, bool Indirect)
     }
     if (Indirect)
         prefix = "*";
-    if (isAddressImplicit)
+    if (isAddressImplicit
+        && (!I || (I->getOpcode() != Instruction::Alloca)))
         prefix = "&";  // Global variables are referenced as their addresses by llvm
-    if (I && I->getOpcode() == Instruction::Alloca)
-        cbuffer += processInstruction(I);
-    else if (I) {
+    if (I) {
         std::string p = processInstruction(I);
         if (prefix == "*" && p[0] == '&') {
             prefix = "";
