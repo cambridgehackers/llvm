@@ -516,25 +516,25 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
     return cbuffer;
 }
 
-static MetaData *baseMeta;
+static ClassMethodTable *globalClassTable;
+static Function *globalProcessFunction;
 
-void appendList(int listIndex, BasicBlock *cond, std::string item)
+static void appendList(int listIndex, BasicBlock *cond, std::string item)
 {
-    if (baseMeta) {
+    if (globalProcessFunction) {
         Value *val = getCondition(cond, 0);
         if (!val)
-            baseMeta->list[listIndex][item].clear();
-        for (auto condIter: baseMeta->list[listIndex][item])
+            funcMetaMap[globalProcessFunction].list[listIndex][item].clear();
+        for (auto condIter: funcMetaMap[globalProcessFunction].list[listIndex][item])
             if (!condIter || condIter == val)
                 return;
-        baseMeta->list[listIndex][item].push_back(val);
+        funcMetaMap[globalProcessFunction].list[listIndex][item].push_back(val);
     }
 }
 
 /*
  * Generate a string for a function/method call
  */
-static ClassMethodTable *globalClassTable;
 std::string printCall(Instruction *I)
 {
     Function *callingFunction = I->getParent()->getParent();
@@ -715,6 +715,9 @@ static std::string processInstruction(Instruction *I)
         }
         break;
         }
+    case Instruction::Alloca:
+        vout += GetValueName(I);
+        break;
     default:
         printf("processInstruction: Other opcode %d.=%s\n", opcode, I->getOpcodeName());
         I->getParent()->getParent()->dump();
@@ -744,7 +747,7 @@ std::string printOperand(Value *Operand, bool Indirect)
     if (isAddressImplicit)
         prefix = "&";  // Global variables are referenced as their addresses by llvm
     if (I && I->getOpcode() == Instruction::Alloca)
-        cbuffer += GetValueName(Operand);
+        cbuffer += processInstruction(I);
     else if (I) {
         std::string p = processInstruction(I);
         if (prefix == "*" && p[0] == '&') {
@@ -804,18 +807,12 @@ static void processClass(ClassMethodTable *table)
     globalClassTable = table;
     for (auto FI : table->method) {
         Function *func = FI.second;
-        baseMeta = &funcMetaMap[func];
+        globalProcessFunction = func;
         NextAnonValueNumber = 0;
         if (trace_function || trace_call)
             printf("PROCESSING %s\n", func->getName().str().c_str());
-if (func->getName() == "_ZN16EchoRequestInput8enq__RDYEv") {
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-func->dump();
-}
         /* Gather data for top level instructions in each basic block. */
         std::string temp, valsep;
-        Value *prevCond = NULL;
-        int returnCount = 0;
         for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
             for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
                 switch(II->getOpcode()) {
@@ -836,7 +833,12 @@ func->dump();
                 case Instruction::Ret:
                     if (II->getNumOperands() != 0) {
                         functionList[func].push_back(II);
-                        returnCount++;
+                        temp += valsep;
+                        valsep = "";
+                        if (Value *opCond = getCondition(II->getParent(), 0))
+                            temp += printOperand(opCond, false) + " ? ";
+                        valsep = " : ";
+                        temp += printOperand(II->getOperand(0), false);
                     }
                     break;
                 case Instruction::Alloca:
@@ -851,21 +853,10 @@ func->dump();
                 }
             }
         }
-        for (auto info: functionList[func]) {
-            returnCount--;
-            temp += valsep;
-            valsep = "";
-            Value *opCond = getCondition(info->getParent(), 0);
-            if (opCond && (returnCount || getCondition(info->getParent(), 1) != prevCond))
-                temp += printOperand(opCond, false) + " ? ";
-            valsep = " : ";
-            prevCond = opCond;
-            temp += printOperand(info->getOperand(0), false);
-        }
         table->guard[func] = temp;
     }
     globalClassTable = NULL;
-    baseMeta = NULL;
+    globalProcessFunction = NULL;
 }
 
 /*
