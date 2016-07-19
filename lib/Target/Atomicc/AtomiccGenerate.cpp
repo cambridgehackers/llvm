@@ -248,7 +248,8 @@ const StructType *findThisArgument(Function *func)
 std::string printType(Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr)
 {
     std::string sep, cbuffer = prefix, sp = (isSigned?"signed":"unsigned");
-    switch (Ty->getTypeID()) {
+    int thisId = Ty->getTypeID();
+    switch (thisId) {
     case Type::VoidTyID:
         if (generateRegion == ProcessVerilog)
             cbuffer += "VERILOG_void " + NameSoFar;
@@ -305,7 +306,7 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
         FunctionType *FTy = cast<FunctionType>(Ty);
         Type *retType = FTy->getReturnType();
         auto AI = FTy->param_begin(), AE = FTy->param_end();
-        bool structRet = (*AI) != Type::getInt8PtrTy(globalMod->getContext());
+        bool structRet = AI != AE && (*AI) != Type::getInt8PtrTy(globalMod->getContext());
         if (structRet) {  //FTy->hasStructRetAttr()
 //printf("[%s:%d] structret\n", __FUNCTION__, __LINE__);
 //exit(-1);
