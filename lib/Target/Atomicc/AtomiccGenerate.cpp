@@ -873,6 +873,10 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
         }
         for (auto FI : table->method) {
             Function *func = FI.second;
+            if (!func) {
+                printf("[%s:%d] missing function in table method %s\n", __FUNCTION__, __LINE__, FI.first.c_str());
+                exit(-1);
+            }
             Type *retType = func->getReturnType();
             auto AI = func->arg_begin(), AE = func->arg_end();
             if (const StructType *iSTy = dyn_cast<StructType>(retType))
