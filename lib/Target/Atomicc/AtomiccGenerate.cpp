@@ -144,6 +144,10 @@ int inheritsModule(const StructType *STy, const char *name)
 
 bool isActionMethod(const Function *func)
 {
+    if (!func) {
+printf("[%s:%d] null function pointer\n", __FUNCTION__, __LINE__);
+        exit(-1);
+    }
     Type *retType = func->getReturnType();
     return (retType == Type::getVoidTy(func->getContext()));
 }

@@ -368,10 +368,10 @@ void preprocessModule(Module *Mod)
                 std::string fname = ret.substr(0, idx);
                 std::string mname = ret.substr(idx+1);
                 Function *func = Mod->getFunction(fname);
-                //printf("[%s:%d] mname %s func %p\n", __FUNCTION__, __LINE__, mname.c_str(), func);
+                printf("[%s:%d] mname %s func %p\n", __FUNCTION__, __LINE__, mname.c_str(), func);
                 if (!func) {
                     printf("[%s:%d] function def missing %s\n", __FUNCTION__, __LINE__, fname.c_str());
-                    exit(-1);
+                    //exit(-1);
                 }
                 funcMap[mname] = func;
             }
