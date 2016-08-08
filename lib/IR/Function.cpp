@@ -246,7 +246,7 @@ void Function::eraseFromParent() {
 // Function Implementation
 //===----------------------------------------------------------------------===//
 
-extern "C" void jca(void) {}
+//extern "C" void jca(void) {}
 Function::Function(FunctionType *Ty, LinkageTypes Linkage, const Twine &name,
                    Module *ParentModule)
     : GlobalObject(PointerType::getUnqual(Ty), Value::FunctionVal,
@@ -263,8 +263,9 @@ Function::Function(FunctionType *Ty, LinkageTypes Linkage, const Twine &name,
 
   if (ParentModule)
     ParentModule->getFunctionList().push_back(this);
-printf("[%s:%d] Functionadd %p %s\n", __FUNCTION__, __LINE__, ParentModule, name.str().c_str());
-jca();
+//printf("[%s:%d] Functionadd %p %s\n", __FUNCTION__, __LINE__, ParentModule, name.str().c_str());
+//if (name.str() == "_ZN11EchoRequest3sayEii" || name.str() == "_ZN11EchoRequest8say__RDYEv")
+//jca();
 
   // Ensure intrinsics have the right parameter attributes.
   // Note, the IntID field will have been set in Value::setName if this function
