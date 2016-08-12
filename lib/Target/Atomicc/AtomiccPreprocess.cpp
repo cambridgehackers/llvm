@@ -78,21 +78,20 @@ static void processMethodToFunction(CallInst *II)
     }
     Value *val = NULL;
     if (const ConstantStruct *CS = cast<ConstantStruct>(store->getOperand(0))) {
-        Value *vop = CS->getOperand(0);
-        Function *func = NULL;
-        if (ConstantExpr *CE = dyn_cast<ConstantExpr>(vop)) {
+        if (ConstantExpr *CE = dyn_cast<ConstantExpr>(CS->getOperand(0))) {
             ERRORIF(CE->getOpcode() != Instruction::PtrToInt);
-            func = dyn_cast<Function>(CE->getOperand(0));
+            Function *func = dyn_cast<Function>(CE->getOperand(0));
+            //printf("[%s:%d] STY %s offset %ld. func %p [%s]\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), offset, func, func->getName().str().c_str());
+            val = ConstantInt::get(Type::getInt64Ty(II->getContext()), (uint64_t)func);
         }
         else
             ERRORIF(1);
-        //printf("[%s:%d] STY %s offset %ld. func %p [%s]\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), offset, func, func->getName().str().c_str());
-        val = ConstantInt::get(Type::getInt64Ty(II->getContext()), (uint64_t)func);
     }
     recursiveDelete(store);
     II->replaceAllUsesWith(val);
     recursiveDelete(II);      // No longer need to call methodToFunction() !
 }
+
 static void processConnectInterface(CallInst *II)
 {
     if (Instruction *ins = dyn_cast<Instruction>(II->getOperand(0)))
