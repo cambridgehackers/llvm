@@ -142,6 +142,11 @@ int inheritsModule(const StructType *STy, const char *name)
     return 0;
 }
 
+bool isInterface(const StructType *STy)
+{
+    return inheritsModule(STy, "class.InterfaceClass");
+}
+
 bool isActionMethod(const Function *func)
 {
     if (!func) {
@@ -166,7 +171,7 @@ static void checkClass(const StructType *STy, const StructType *ActSTy)
         if (const StructType *iSTy = dyn_cast<StructType>(element)) {
             if (fname == "")
                 checkClass(iSTy, ActSTy);
-            else if (inheritsModule(iSTy, "class.InterfaceClass"))
+            else if (isInterface(iSTy))
                 atable->interfaceList.push_back(InterfaceListType{fname, iSTy});
         }
     }
@@ -902,7 +907,7 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
         if (STy->getName() != "class.InterfaceClass")
         if (STy->getName() != "class.Module") {
             if (inheritsModule(STy, "class.Module")
-             && !inheritsModule(STy, "class.InterfaceClass")) {
+             && !isInterface(STy)) {
                 // now generate the verilog header file '.vh'
                 metaGenerate(STy, OStrVH);
                 // Only generate verilog for modules derived from Module

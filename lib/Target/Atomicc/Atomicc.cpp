@@ -97,7 +97,7 @@ bool AtomiccWriter::runOnModule(Module &M)
     fprintf(OStrC, "#include \"%s.generated.h\"\n", OutputDir.c_str());
     fprintf(OStrCH, "#ifndef __%s_H__\n#define __%s_H__\n", myName.c_str(), myName.c_str());
     for (auto current : classCreate)
-        if (!inheritsModule(current.first, "class.InterfaceClass"))
+        if (!isInterface(current.first))
             generateContainedStructs(current.first, OStrV, OStrVH, OStrC, OStrCH, false);
     fprintf(OStrCH, "#endif  // __%s_H__\n", myName.c_str());
     fprintf(OStrVH, "`endif\n");

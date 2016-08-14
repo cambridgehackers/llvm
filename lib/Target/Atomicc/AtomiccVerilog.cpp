@@ -328,7 +328,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                     fprintf(OStr, "    reg%s %s;\n", verilogArrRange(element).c_str(), fname.c_str());
                     resetList.push_back(fname);
                 }
-                else if (!inheritsModule(STy, "class.InterfaceClass"))
+                else if (!isInterface(STy))
                     generateModuleSignature(OStr, STy, fname);
             }
             else if (!dyn_cast<PointerType>(element)) {

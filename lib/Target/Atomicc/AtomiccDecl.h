@@ -165,3 +165,4 @@ void buildPrefix(ClassMethodTable *table);
 void updateParameterNames(std::string mName, Function *func);
 std::string printCall(Instruction *I);
 bool isAlloca(Value *arg);
+bool isInterface(const StructType *STy);

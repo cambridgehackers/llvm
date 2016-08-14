@@ -121,7 +121,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
     ClassMethodTable *table = classCreate[STy];
     std::string name = getStructName(STy);
     std::map<std::string, int> cancelList;
-    bool inInterface = inheritsModule(STy, "class.InterfaceClass");
+    bool inInterface = isInterface(STy);
     bool inTypedef = name.substr(0,12) == "l_struct_OC_";
 
     // first generate '.h' file
@@ -137,7 +137,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         std::string fname = fieldName(STy, Idx);
         if (const StructType *iSTy = dyn_cast<StructType>(element)) {
             std::string sname = getStructName(iSTy);
-            if (!inheritsModule(iSTy, "class.InterfaceClass")) {
+            if (!isInterface(iSTy)) {
             int dimIndex = 0;
             std::string vecDim;
             if (fname != "" && sname.substr(0,12) != "l_struct_OC_")
