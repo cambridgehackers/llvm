@@ -144,7 +144,7 @@ int inheritsModule(const StructType *STy, const char *name)
 
 bool isInterface(const StructType *STy)
 {
-    return inheritsModule(STy, "class.InterfaceClass");
+    return STy && getStructName(STy).substr(0, 12) == "l_ainterface";
 }
 
 bool isActionMethod(const Function *func)
@@ -904,7 +904,6 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
          */
         generateRegion = ProcessVerilog;
         processClass(table);
-        if (STy->getName() != "class.InterfaceClass")
         if (STy->getName() != "class.Module") {
             if (inheritsModule(STy, "class.Module")
              && !isInterface(STy)) {
