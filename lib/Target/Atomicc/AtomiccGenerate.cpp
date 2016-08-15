@@ -69,6 +69,9 @@ static INTMAP_TYPE opcodeMap[] = {
 /*
  * Utility functions
  */
+extern "C" void parseError(void)
+{
+}
 const char *intmapLookup(INTMAP_TYPE *map, int value)
 {
     while (map->name) {
@@ -557,9 +560,10 @@ std::string printCall(Instruction *I)
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
     if (!func) {
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI, false).c_str());
-return "";
         I->dump();
         callingFunction->dump();
+        parseError();
+return "";
         exit(-1);
     }
     auto FAI = func->arg_begin();
