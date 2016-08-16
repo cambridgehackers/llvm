@@ -494,7 +494,8 @@ static void registerInterface(char *addr, StructType *STy, const char *name)
     std::map<Function *, STRINGPAIR> methodNameMap;
     int Idx = 0;
     if (trace_pair)
-        printf("[%s:%d] addr %p struct %s name %s\n", __FUNCTION__, __LINE__, addr, STy->getName().str().c_str(), name);
+        printf("[%s:%d] addr %p struct %s name %s map %s\n", __FUNCTION__, __LINE__, addr, STy->getName().str().c_str(), name, STy->structFieldMap.c_str());
+    if (addr)
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++)
         if (PointerType *PTy = dyn_cast<PointerType>(*I))
         if (PTy->getElementType()->getTypeID() == Type::FunctionTyID) {
@@ -643,9 +644,15 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                 }
                 once = 1;
                 if (setInterface)
+                if (StructType *iSTy = dyn_cast<StructType>(PTy->getElementType())) {
+                    printf("%s: setInterface for %s\n", __FUNCTION__, fname.c_str());
                     table->interfaces[fname] = element;  // add called interfaces from this module
+                    registerInterface((char *)p, iSTy, fname.c_str());
+                }
             }
             if (fname != "") {
+                if (trace_map)
+                    printf("%s: recurse mapType for %s\n", __FUNCTION__, (aname + "$$" + fname).c_str());
                 mapType(Mod, eaddr, element, aname + "$$" + fname);
                 if (StructType *iSTy = dyn_cast<StructType>(element))
                     registerInterface(eaddr, iSTy, fname.c_str());
