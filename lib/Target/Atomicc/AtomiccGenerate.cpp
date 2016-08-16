@@ -907,7 +907,8 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
          * Actual generation of output files takes place here
          */
         generateRegion = ProcessVerilog;
-        processClass(table);
+        if (!isInterface(STy))
+            processClass(table);
         if (STy->getName() != "class.Module") {
             if (inheritsModule(STy, "class.Module")
              && !isInterface(STy)) {

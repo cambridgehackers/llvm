@@ -646,35 +646,6 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                     table->interfaces[fname] = element;  // add called interfaces from this module
             }
             if (fname != "") {
-                if (StructType *iSTy = dyn_cast<StructType>(element)) {
-                    if (iSTy->hasName() && iSTy->getName() == "class.FixedPointV") {
-                        int iIdx = 0;
-                        const StructLayout *iSLO = TD->getStructLayout(iSTy);
-                        uint64_t size = -1;
-                        Type *bitc = NULL;
-                        for (auto I = iSTy->element_begin(), E = iSTy->element_end(); I != E; ++I, iIdx++) {
-                            std::string fname = fieldName(iSTy, iIdx);
-                            if (fname == "") {
-                                if (bitc)
-                                    printf("[%s:%d] already had bitc\n", __FUNCTION__, __LINE__);
-                                bitc = *I;
-                            }
-                            else if (fname == "size" && (*I)->getTypeID() == Type::IntegerTyID)
-                                size = *(uint64_t *)(eaddr + iSLO->getElementOffset(iIdx));
-                        }
-                        printf("[%s:%d] make new FixedPoint isize %lx bitc %p\n", __FUNCTION__, __LINE__, size, bitc);
-                        Type *EltTys[] = {bitc, Type::getInt64Ty(Mod->getContext())};
-                        StructType *nSTy = StructType::create(EltTys, "newStructName");
-                        getClass(nSTy);
-                        classCreate[nSTy]->instance = utostr(size);
-                        if (!classCreate[STy]) {
-                            classCreate[STy] = new ClassMethodTable;
-                            classCreate[STy]->STy = STy;
-                        }
-                        classCreate[STy]->replaceType[Idx] = nSTy;
-                        classCreate[STy]->replaceCount[Idx] = -1;
-                    }
-                }
                 mapType(Mod, eaddr, element, aname + "$$" + fname);
                 if (StructType *iSTy = dyn_cast<StructType>(element))
                     registerInterface(eaddr, iSTy, fname.c_str());
