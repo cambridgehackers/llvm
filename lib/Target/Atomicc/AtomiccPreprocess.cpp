@@ -388,7 +388,7 @@ void preprocessModule(Module *Mod)
                 Function *enaFunc = funcMap[enaName];
                 if (!isActionMethod(enaFunc))
                     enaSuffix = "";
-printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, (enaName+enaSuffix).c_str(), enaFunc);
+//printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, (enaName+enaSuffix).c_str(), enaFunc);
                 table->method[enaName] = enaFunc;
                 table->method[item.first] = item.second;
                 ruleRDYFunction[enaFunc] = item.second; // must be before pushWork() calls
