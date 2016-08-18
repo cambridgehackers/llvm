@@ -990,9 +990,18 @@ void StoreInst::AssertOK() {
   assert(getOperand(0) && getOperand(1) && "Both operands must be non-null!");
   assert(getOperand(1)->getType()->isPointerTy() &&
          "Ptr must have pointer type!");
+#if 1
+  if(getOperand(0)->getType() != cast<PointerType>(getOperand(1)->getType())->getElementType()) {
+printf("[%s:%d]Ptr must be a pointer to Val type!ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n", __FUNCTION__, __LINE__);
+this->dump();
+getOperand(0)->getType()->dump();
+getOperand(1)->getType()->dump();
+  }
+#else
   assert(getOperand(0)->getType() ==
                  cast<PointerType>(getOperand(1)->getType())->getElementType()
          && "Ptr must be a pointer to Val type!");
+#endif
   assert(!(isAtomic() && getAlignment() == 0) &&
          "Alignment required for atomic store");
 }
