@@ -1808,8 +1808,12 @@ Constant *ConstantExpr::getFPToSI(Constant *C, Type *Ty, bool OnlyIfReduced) {
 
 Constant *ConstantExpr::getPtrToInt(Constant *C, Type *DstTy,
                                     bool OnlyIfReduced) {
+#if 1
+  if(!C->getType()->getScalarType()->isPointerTy()) printf("[%s:%d]PtrToInt source must be pointer or pointer vector\n", __FUNCTION__, __LINE__);
+#else
   assert(C->getType()->getScalarType()->isPointerTy() &&
          "PtrToInt source must be pointer or pointer vector");
+#endif
   assert(DstTy->getScalarType()->isIntegerTy() && 
          "PtrToInt destination must be integer or integer vector");
   assert(isa<VectorType>(C->getType()) == isa<VectorType>(DstTy));

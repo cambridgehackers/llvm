@@ -2701,12 +2701,16 @@ CastInst::getCastOpcode(
 bool 
 CastInst::castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
 
+printf("[%s:%d] op %s\n", __FUNCTION__, __LINE__, getOpcodeName(op));
   // Check for type sanity on the arguments
   Type *SrcTy = S->getType();
 
   if (!SrcTy->isFirstClassType() || !DstTy->isFirstClassType() ||
       SrcTy->isAggregateType() || DstTy->isAggregateType())
-    return false;
+{
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+    //return false;
+}
 
   // Get the size of the types in bits, we'll need this later
   unsigned SrcBitSize = SrcTy->getScalarSizeInBits();
@@ -2752,6 +2756,10 @@ CastInst::castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
     if (VectorType *VT = dyn_cast<VectorType>(SrcTy))
       if (VT->getNumElements() != cast<VectorType>(DstTy)->getNumElements())
         return false;
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+SrcTy->getScalarType()->dump();
+DstTy->getScalarType()->dump();
+return true;
     return SrcTy->getScalarType()->isPointerTy() &&
            DstTy->getScalarType()->isIntegerTy();
   case Instruction::IntToPtr:
@@ -2766,10 +2774,12 @@ CastInst::castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
     PointerType *SrcPtrTy = dyn_cast<PointerType>(SrcTy->getScalarType());
     PointerType *DstPtrTy = dyn_cast<PointerType>(DstTy->getScalarType());
 
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     // BitCast implies a no-op cast of type only. No bits change.
     // However, you can't cast pointers to anything but pointers.
     if (!SrcPtrTy != !DstPtrTy)
       return false;
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 
     // For non-pointer cases, the cast is okay if the source and destination bit
     // widths are identical.
@@ -2792,10 +2802,12 @@ CastInst::castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
   }
   case Instruction::AddrSpaceCast: {
     PointerType *SrcPtrTy = dyn_cast<PointerType>(SrcTy->getScalarType());
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     if (!SrcPtrTy)
       return false;
 
     PointerType *DstPtrTy = dyn_cast<PointerType>(DstTy->getScalarType());
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     if (!DstPtrTy)
       return false;
 
