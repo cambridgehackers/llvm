@@ -3,11 +3,14 @@
 set -e
 set -x
 
+#RELEASE="DEBUG"
+RELEASE="PRODUCTION"
+
 CC=/usr/bin/clang CXX=/usr/bin/clang++ LDFLAGS="-g -lBlocksRuntime" CFLAGS="-fblocks -g" CXXFLAGS="-fblocks -g" cmake \
     -DLLVM_EXTERNAL_CLANG_SOURCE_DIR:PATH=../../clang \
     -DLLVM_TARGETS_TO_BUILD=Atomicc \
     -DBUILD_SHARED_LIBS:BOOL=OFF \
-    -DCMAKE_BUILD_TYPE="DEBUG" \
+    -DCMAKE_BUILD_TYPE=$RELEASE \
     -DLLVM_INCLUDE_TESTS:BOOL=OFF \
     -DLLVM_ENABLE_FFI:BOOL=ON \
     -DLLVM_INCLUDE_EXAMPLES:BOOL=OFF \
