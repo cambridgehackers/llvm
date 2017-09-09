@@ -128,7 +128,7 @@ std::string fieldName(const StructType *STy, uint64_t ind)
     return ret;
 }
 
-int inheritsModule(const StructType *STy, const char *name)
+static int inheritsModule(const StructType *STy, const char *name)
 {
     if (STy && STy->hasName()) {
         std::string sname = STy->getName();
@@ -914,8 +914,7 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
         if (!isInterface(STy))
             processClass(table);
         if (STy->getName() != "class.Module") {
-            if (inheritsModule(STy, "class.Module")
-             && !isInterface(STy)) {
+            if (getStructName(STy).substr(0, 8) == "l_module") {
                 // now generate the verilog header file '.vh'
                 metaGenerate(STy, OStrVH);
                 // Only generate verilog for modules derived from Module

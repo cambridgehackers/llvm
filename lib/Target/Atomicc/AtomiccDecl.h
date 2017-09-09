@@ -147,7 +147,6 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
 const StructType *findThisArgument(Function *func);
 void preprocessModule(Module *Mod);
 std::string GetValueName(const Value *Operand);
-int inheritsModule(const StructType *STy, const char *name);
 Value *getCondition(BasicBlock *bb, int invert);
 int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_type_iterator E);
 void prepareReplace(const Value *olda, Value *newa);
