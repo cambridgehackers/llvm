@@ -197,8 +197,12 @@ std::string getStructName(const StructType *STy)
 {
     assert(STy);
     getClass(STy);
-    if (!STy->isLiteral() && !STy->getName().empty())
-        return CBEMangle("l_"+STy->getName().str());
+    if (!STy->isLiteral() && !STy->getName().empty()) {
+        std::string temp = STy->getName().str();
+        if (temp.substr(0,7) == "emodule")
+            temp = temp.substr(1);
+        return CBEMangle("l_" + temp);
+    }
     if (!UnnamedStructIDs[STy])
         UnnamedStructIDs[STy] = NextTypeID++;
     return "l_unnamed_" + utostr(UnnamedStructIDs[STy]);
@@ -872,7 +876,10 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
     if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty))
         generateContainedStructs(dyn_cast<StructType>(PTy->getElementType()), OStrV, OStrVH, OStrC, OStrCH, false);
     const StructType *STy = dyn_cast_or_null<StructType>(Ty);
-    if (!STy || !STy->hasName() || structMap[Ty] || (!force && inheritsModule(STy, "class.ModuleExternal")))
+    if (!STy || !STy->hasName() || structMap[Ty] || (!force && 
+            STy->getName().substr(0, 7) == "emodule"
+//inheritsModule(STy, "class.ModuleExternal")
+))
         return;
     structMap[Ty] = 1;
     if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
@@ -914,7 +921,11 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
         if (!isInterface(STy))
             processClass(table);
         if (STy->getName() != "class.Module") {
-            if (getStructName(STy).substr(0, 8) == "l_module") {
+            std::string temp;
+            getClass(STy);
+            if (!STy->isLiteral() && !STy->getName().empty())
+                temp = STy->getName();
+            if (temp.substr(0, 6) == "module") {
                 // now generate the verilog header file '.vh'
                 metaGenerate(STy, OStrVH);
                 // Only generate verilog for modules derived from Module
@@ -922,7 +933,8 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
             }
             // Generate cpp for all modules except class.ModuleExternal
             generateRegion = ProcessCPP;
-            if (!inheritsModule(STy, "class.ModuleExternal"))
+            //if (!inheritsModule(STy, "class.ModuleExternal"))
+            if (temp.substr(0, 7) != "emodule")
                 generateClassDef(STy, OStrC, OStrCH);
         }
     }
