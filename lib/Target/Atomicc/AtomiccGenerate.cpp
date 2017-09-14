@@ -128,23 +128,6 @@ std::string fieldName(const StructType *STy, uint64_t ind)
     return ret;
 }
 
-static int inheritsModule(const StructType *STy, const char *name)
-{
-    if (STy && STy->hasName()) {
-        std::string sname = STy->getName();
-        if (sname == name)
-            return 1;
-        int Idx = 0;
-        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-            std::string fname = fieldName(STy, Idx);
-            if (const StructType *inheritSTy = dyn_cast<StructType>(*I))
-            if (fname == "" && inheritSTy->hasName() && inheritSTy->getName() == name)
-                return 1;
-        }
-    }
-    return 0;
-}
-
 bool isInterface(const StructType *STy)
 {
     return STy && getStructName(STy).substr(0, 12) == "l_ainterface";
@@ -877,9 +860,7 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
         generateContainedStructs(dyn_cast<StructType>(PTy->getElementType()), OStrV, OStrVH, OStrC, OStrCH, false);
     const StructType *STy = dyn_cast_or_null<StructType>(Ty);
     if (!STy || !STy->hasName() || structMap[Ty] || (!force && 
-            STy->getName().substr(0, 7) == "emodule"
-//inheritsModule(STy, "class.ModuleExternal")
-))
+            STy->getName().substr(0, 7) == "emodule"))
         return;
     structMap[Ty] = 1;
     if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
@@ -933,7 +914,6 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
             }
             // Generate cpp for all modules except class.ModuleExternal
             generateRegion = ProcessCPP;
-            //if (!inheritsModule(STy, "class.ModuleExternal"))
             if (temp.substr(0, 7) != "emodule")
                 generateClassDef(STy, OStrC, OStrCH);
         }
