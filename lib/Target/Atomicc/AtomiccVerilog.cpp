@@ -109,7 +109,7 @@ void setAssign(std::string target, std::string value)
 /*
  * Generate verilog module header for class definition or reference
  */
-void generateModuleSignature(FILE *OStr, const StructType *STy, std::string instance)
+static void generateModuleSignature(FILE *OStr, const StructType *STy, std::string instance)
 {
     ClassMethodTable *table = classCreate[STy];
     std::string name = getStructName(STy);
@@ -123,6 +123,8 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
         inpClk = "";
         for (auto FI : table->method) {
             const Function *func = FI.second;
+            if (!func)
+                continue;
             std::string mname = pushSeen[func];
             Type *retType = func->getReturnType();
             auto AI = func->arg_begin(), AE = func->arg_end();
@@ -143,6 +145,8 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
     paramList.push_back(inpClk + "nRST");
     for (auto FI : table->method) {
         Function *func = FI.second;
+        if (!func)
+            continue;
         std::string mname = pushSeen[func];
         if (table->ruleFunctions[mname.substr(0, mname.length()-5)])
             continue;
@@ -176,6 +180,8 @@ void generateModuleSignature(FILE *OStr, const StructType *STy, std::string inst
 //printf("[%s:%d] indication interface topname %s sname %s fname %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), fname.c_str());
                 for (auto FI : itable->method) {
                     Function *func = FI.second;
+                    if (!func)
+                        continue;
                     std::string wparam, mname = fname + MODULE_SEPARATOR + pushSeen[func];
 //printf("[%s:%d] mname %s\n", __FUNCTION__, __LINE__, mname.c_str());
                     Type *retType = func->getReturnType();
@@ -230,6 +236,8 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     // from each method
     for (auto FI : table->method) {
         Function *func = FI.second;
+        if (!func)
+             continue;
         std::string mname = pushSeen[func];
         std::string rdyName = mname.substr(0, mname.length()-5) + "__RDY";
         if (endswith(mname, "__VALID"))

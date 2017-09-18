@@ -143,7 +143,6 @@ std::string getMethodName(std::string name);
 bool endswith(std::string str, std::string suffix);
 void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr);
 void generateModuleDef(const StructType *STy, FILE *OStr);
-void generateModuleSignature(FILE *OStr, const StructType *STy, std::string instance);
 const StructType *findThisArgument(Function *func);
 void preprocessModule(Module *Mod);
 std::string GetValueName(const Value *Operand);

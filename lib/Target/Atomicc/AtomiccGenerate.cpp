@@ -800,6 +800,8 @@ static void processClass(ClassMethodTable *table)
     for (auto FI : table->method) {
         Function *func = FI.second;
         globalProcessFunction = func;
+        if (!func)
+            continue;
         NextAnonValueNumber = 0;
         if (trace_function || trace_call)
             printf("PROCESSING %s\n", func->getName().str().c_str());
@@ -880,7 +882,8 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
             Function *func = FI.second;
             if (!func) {
                 printf("[%s:%d] missing function in table method %s\n", __FUNCTION__, __LINE__, FI.first.c_str());
-                exit(-1);
+                continue;
+                //exit(-1);
             }
             Type *retType = func->getReturnType();
             auto AI = func->arg_begin(), AE = func->arg_end();

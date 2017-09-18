@@ -217,6 +217,8 @@ void setSeen(Function *func, std::string mName)
  */
 static void pushWork(std::string mName, std::string suffix, Function *func)
 {
+    if (!func)
+        return;
     const StructType *STy = findThisArgument(func);
     ClassMethodTable *table = classCreate[STy];
     if (pushSeen[func] != "")

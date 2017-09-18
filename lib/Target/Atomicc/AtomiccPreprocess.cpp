@@ -370,7 +370,7 @@ void preprocessModule(Module *Mod)
                 //printf("[%s:%d] mname %s func %p\n", __FUNCTION__, __LINE__, mname.c_str(), func);
                 if (!func) {
                     printf("[%s:%d] function def missing %s\n", __FUNCTION__, __LINE__, fname.c_str());
-                    exit(-1);
+                    //exit(-1);
                 }
                 funcMap[mname] = func;
             }
@@ -386,6 +386,10 @@ void preprocessModule(Module *Mod)
                     enaSuffix = "__VALID";
                 }
                 Function *enaFunc = funcMap[enaName];
+                if (!enaFunc) {
+                    printf("[%s:%d] function NULL\n", __FUNCTION__, __LINE__);
+                    continue;
+                }
                 if (!isActionMethod(enaFunc))
                     enaSuffix = "";
 //printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, (enaName+enaSuffix).c_str(), enaFunc);

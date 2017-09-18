@@ -156,6 +156,8 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         fprintf(OHdr, "class %s;\n", name.c_str());
         for (auto FI : table->method) {
             Function *func = FI.second;
+            if (!func)
+                continue;
             std::string mname = baseMethod(pushSeen[func]);
             fprintf(OHdr, "extern %s;\n", printFunctionSignature(func, name + "__" + mname, true).c_str());
         }
@@ -167,6 +169,8 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         fprintf(OHdr, "public:\n");
         for (auto FI : table->method) {
             Function *func = FI.second;
+            if (!func)
+                continue;
             std::string mname = baseMethod(pushSeen[func]);
             fprintf(OHdr, "  %s { %s; }\n", printFunctionSignature(func, mname, false).c_str(),
                 printFunctionInstance(func, mname + "p", "p").c_str());
@@ -219,6 +223,8 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
     }
     for (auto FI : table->method) {
         Function *func = FI.second;
+        if (!func)
+            continue;
         std::string mname = baseMethod(pushSeen[func]);
         if (!cancelList[mname])
         fprintf(OHdr, "  %s { %s; }\n", printFunctionSignature(func, mname, false).c_str(),
@@ -235,6 +241,8 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
     // now generate '.cpp' file
     for (auto FI : table->method) {
         Function *func = FI.second;
+        if (!func)
+            continue;
         std::string mname = baseMethod(pushSeen[func]);
         fprintf(OStr, "%s {\n", printFunctionSignature(func, name + "__" + mname, true).c_str());
         auto AI = func->arg_begin();
