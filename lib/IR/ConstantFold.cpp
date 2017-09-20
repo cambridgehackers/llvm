@@ -533,7 +533,6 @@ Constant *llvm::ConstantFoldCastInstruction(unsigned opc, Constant *V,
     return UndefValue::get(DestTy);
   }
 
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
   if (V->isNullValue() && !DestTy->isX86_MMXTy())
     return Constant::getNullValue(DestTy);
 
@@ -567,7 +566,6 @@ printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     }
   }
 
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
   // If the cast operand is a constant vector, perform the cast by
   // operating on each element. In the cast of bitcasts, the element
   // count may be mismatched; don't attempt to handle that here.
