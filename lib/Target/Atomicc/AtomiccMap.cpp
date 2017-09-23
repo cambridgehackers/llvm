@@ -527,8 +527,8 @@ static void registerInterface(char *addr, StructType *STy, const char *name)
         if (idx >= 0) {
             Function *func = globalMod->getFunction(ret.substr(0, idx));
             if (!func) {
-                printf("[%s:%d] name %s func %p\n", __FUNCTION__, __LINE__, ret.substr(0, idx).c_str(), func);
-                exit(-1);
+                printf("[%s:%d] name not found %s func %p\n", __FUNCTION__, __LINE__, ret.substr(0, idx).c_str(), func);
+                continue;
             }
             std::string mName = ret.substr(idx+1);
             std::string enaSuffix;

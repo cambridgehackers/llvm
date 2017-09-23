@@ -568,6 +568,7 @@ return "";
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s missing\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+        return "caller_error";
         exit(-1);
     }
     if (calledName == "printf") {
