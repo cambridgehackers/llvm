@@ -413,8 +413,7 @@ extern "C" void atomiccSchedulePriority(const char *rule, const char *priority, 
 /*
  * Called from user constructors to set interface methods
  */
-//extern "C" 
-void atomiccInterfaceName(const char *target, const char *source)
+extern "C" void atomiccInterfaceName(const char *target, const char *source)
 {
 printf("[%s:%d] target %s source %s\n", __FUNCTION__, __LINE__, target, source);
 }
