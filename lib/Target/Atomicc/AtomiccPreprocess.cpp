@@ -92,6 +92,18 @@ static void processMethodToFunction(CallInst *II)
     recursiveDelete(II);      // No longer need to call methodToFunction() !
 }
 
+static void processInterfaceName(CallInst *II)
+{
+printf("[%s:%d] before\n", __FUNCTION__, __LINE__);
+II->dump();
+    Function *callingFunction = II->getParent()->getParent();
+    IRBuilder<> builder(II->getParent());
+    builder.SetInsertPoint(II);
+    const StructType *STy = findThisArgument(callingFunction);
+    Value *oldOp = II->getOperand(2);
+    II->setOperand(2, ConstantInt::get(Type::getInt64Ty(II->getContext()), (uint64_t)STy));
+}
+
 static void processConnectInterface(CallInst *II)
 {
     if (Instruction *ins = dyn_cast<Instruction>(II->getOperand(0)))
@@ -331,6 +343,7 @@ void preprocessModule(Module *Mod)
         {"llvm.memcpy.p0i8.p0i8.i64", processMemcpy},
         {"_ZL20atomiccNewArrayCountm", processMSize},
         {"atomiccSchedulePriority", processPriority},
+        {"atomiccInterfaceName", processInterfaceName},
         {NULL, NULL}};
 
     for (int i = 0; callProcess[i].name; i++) {
