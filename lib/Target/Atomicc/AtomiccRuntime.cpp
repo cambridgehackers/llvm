@@ -376,7 +376,7 @@ extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType
     void *ptr = malloc(newsize);
     memset(ptr, 0x5a, newsize);
     if (trace_malloc)
-        printf("[%s:%d] %ld = %p type %p sty %p vecCount %ld\n", __FUNCTION__, __LINE__, size, ptr, type, STy, vecCount);
+        printf("[%s:%d] %ld = %p type %p sty %p vecCount %lld\n", __FUNCTION__, __LINE__, size, ptr, type, STy, vecCount);
     memoryRegion.push_back(MEMORY_REGION{ptr, newsize, type, STy, vecCount});
     return ptr;
 }
@@ -418,5 +418,32 @@ extern "C" void atomiccInterfaceName(const char *target, const char *source, con
     ClassMethodTable *table = classCreate[STy];
 printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
     STy->dump();
-printf("[%s:%d] '%s'\n", __FUNCTION__, __LINE__, STy->structFieldMap.c_str());
+//printf("[%s:%d] '%s'\n", __FUNCTION__, __LINE__, STy->structFieldMap.c_str());
+    std::map<std::string, std::string> methodMap;
+    int len = STy->structFieldMap.length();
+    int subs = 0, last_subs = 0;
+    while (subs < len) {
+        while (subs < len && STy->structFieldMap[subs] != ',') {
+            subs++;
+        }
+        subs++;
+        if (STy->structFieldMap[last_subs] == '/')
+            last_subs++;
+        std::string ret = STy->structFieldMap.substr(last_subs);
+        int idx = ret.find(',');
+        if (idx >= 0)
+            ret = ret.substr(0,idx);
+        idx = ret.find(':');
+        if (idx >= 0) {
+            std::string fname = ret.substr(0, idx);
+            Function *func = globalMod->getFunction(fname);
+            std::string mName = ret.substr(idx+1);
+            methodMap[mName] = fname;
+//printf("[%s:%d] fname %s mName %s func %p\n", __FUNCTION__, __LINE__, fname.c_str(), mName.c_str(), func);
+            }
+        last_subs = subs;
+    }
+printf("[%s:%d] functions: target %s / %s           source %s / %s\n", __FUNCTION__, __LINE__,
+    methodMap[target].c_str(), methodMap[std::string(target) + "__RDY"].c_str(),
+    methodMap[source].c_str(), methodMap[std::string(source) + "__RDY"].c_str());
 }
