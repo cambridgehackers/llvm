@@ -380,7 +380,7 @@ void preprocessModule(Module *Mod)
                 std::string fname = ret.substr(0, idx);
                 std::string mname = ret.substr(idx+1);
                 Function *func = Mod->getFunction(fname);
-                //printf("[%s:%d] mname %s func %p\n", __FUNCTION__, __LINE__, mname.c_str(), func);
+                printf("[%s:%d] %s mname %s fname %s func %p\n", __FUNCTION__, __LINE__, getStructName(STy).c_str(), mname.c_str(), fname.c_str(), func);
                 if (!func) {
                     printf("[%s:%d] function def missing %s\n", __FUNCTION__, __LINE__, fname.c_str());
                     //exit(-1);
@@ -400,7 +400,7 @@ void preprocessModule(Module *Mod)
                 }
                 Function *enaFunc = funcMap[enaName];
                 if (!enaFunc) {
-                    printf("[%s:%d] function NULL\n", __FUNCTION__, __LINE__);
+                    printf("[%s:%d] %s function NULL\n", __FUNCTION__, __LINE__, enaName.c_str());
                     continue;
                 }
                 if (!isActionMethod(enaFunc))
