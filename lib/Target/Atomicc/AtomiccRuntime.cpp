@@ -413,13 +413,17 @@ extern "C" void atomiccSchedulePriority(const char *rule, const char *priority, 
 /*
  * Called from user constructors to set interface methods
  */
+typedef struct {
+    std::string fname;
+    Function   *func;
+} FuncInfo;
 extern "C" void atomiccInterfaceName(const char *target, const char *source, const StructType *STy)
 {
     ClassMethodTable *table = classCreate[STy];
 printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
     STy->dump();
-//printf("[%s:%d] '%s'\n", __FUNCTION__, __LINE__, STy->structFieldMap.c_str());
-    std::map<std::string, std::string> methodMap;
+printf("[%s:%d] '%s'\n", __FUNCTION__, __LINE__, STy->structFieldMap.c_str());
+    std::map<std::string, FuncInfo> funcMap;
     int len = STy->structFieldMap.length();
     int subs = 0, last_subs = 0;
     while (subs < len) {
@@ -438,12 +442,41 @@ printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, 
             std::string fname = ret.substr(0, idx);
             Function *func = globalMod->getFunction(fname);
             std::string mName = ret.substr(idx+1);
-            methodMap[mName] = fname;
-//printf("[%s:%d] fname %s mName %s func %p\n", __FUNCTION__, __LINE__, fname.c_str(), mName.c_str(), func);
+            funcMap[mName] = {fname, func};
+printf("[%s:%d] fname %s mName %s func %p\n", __FUNCTION__, __LINE__, fname.c_str(), mName.c_str(), func);
             }
         last_subs = subs;
     }
 printf("[%s:%d] functions: target %s / %s           source %s / %s\n", __FUNCTION__, __LINE__,
-    methodMap[target].c_str(), methodMap[std::string(target) + "__RDY"].c_str(),
-    methodMap[source].c_str(), methodMap[std::string(source) + "__RDY"].c_str());
+    funcMap[target].fname.c_str(), funcMap[std::string(target) + "__RDY"].fname.c_str(),
+    funcMap[source].fname.c_str(), funcMap[std::string(source) + "__RDY"].fname.c_str());
+printf("[%s:%d] functions: target %p / %p           source %p / %p\n", __FUNCTION__, __LINE__,
+    funcMap[target].func, funcMap[std::string(target) + "__RDY"].func,
+    funcMap[source].func, funcMap[std::string(source) + "__RDY"].func);
+#if 1
+                std::string enaName = target;
+// item.first.substr(0, item.first.length() - 5);
+                std::string enaSuffix = "__ENA";
+                //if (endswith(item.first, "__READY")) {
+                    //enaName = item.first.substr(0, item.first.length() - 7);
+                    //enaSuffix = "__VALID";
+                //}
+std::string rdyString = "__RDY";
+                Function *enaFunc = funcMap[source].func;
+                Function *rdyFunc = funcMap[source + rdyString].func;
+                if (!enaFunc || !rdyFunc) {
+                    printf("[%s:%d] %s function NULL %p rdy %p\n", __FUNCTION__, __LINE__, enaName.c_str(), enaFunc, rdyFunc);
+                    return;
+                }
+                if (!isActionMethod(enaFunc))
+                    enaSuffix = "";
+//printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, (enaName+enaSuffix).c_str(), enaFunc);
+                table->method[enaName] = enaFunc;
+                table->method[enaName + rdyString] = rdyFunc;
+                ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
+                ruleENAFunction[rdyFunc] = enaFunc;
+                // too early?
+                //if (!isInterface(STy))
+                    pushPair(enaFunc, enaName, enaSuffix, rdyFunc, enaName + rdyString);
+#endif
 }

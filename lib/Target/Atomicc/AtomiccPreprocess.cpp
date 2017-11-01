@@ -354,6 +354,7 @@ void preprocessModule(Module *Mod)
             I = NI;
         }
     }
+#if 0
     TypeFinder StructTypes;
     StructTypes.run(*Mod, true);
     for (unsigned i = 0, e = StructTypes.size(); i != e; ++i) {
@@ -416,4 +417,5 @@ void preprocessModule(Module *Mod)
             }
         }
     }
+#endif
 }

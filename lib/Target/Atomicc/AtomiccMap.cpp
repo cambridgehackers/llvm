@@ -651,15 +651,15 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                 if (StructType *iSTy = dyn_cast<StructType>(PTy->getElementType())) {
                     printf("%s: setInterface for %s\n", __FUNCTION__, fname.c_str());
                     table->interfaces[fname] = element;  // add called interfaces from this module
-                    registerInterface((char *)p, iSTy, fname.c_str());
+                    //registerInterface((char *)p, iSTy, fname.c_str());
                 }
             }
             if (fname != "") {
                 if (trace_map)
                     printf("%s: recurse mapType for %s\n", __FUNCTION__, (aname + "$$" + fname).c_str());
                 mapType(Mod, eaddr, element, aname + "$$" + fname);
-                if (StructType *iSTy = dyn_cast<StructType>(element))
-                    registerInterface(eaddr, iSTy, fname.c_str());
+                //if (StructType *iSTy = dyn_cast<StructType>(element))
+                    //registerInterface(eaddr, iSTy, fname.c_str());
             }
             else if (dyn_cast<StructType>(element))
                 mapType(Mod, eaddr, element, aname);
