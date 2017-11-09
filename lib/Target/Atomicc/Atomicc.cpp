@@ -108,9 +108,8 @@ bool AtomiccTargetMachine::addPassesToEmitFile(
     PassManagerBase &PM, raw_pwrite_stream &o, CodeGenFileType FileType,
     bool DisableVerify, AnalysisID StartBefore, AnalysisID StartAfter,
     AnalysisID StopAfter, MachineFunctionInitializer *MFInitializer) {
-printf("[%s:%d]  AtomiccTargetMachine::addPassesToEmitFile ZZZZZZZ %d filename %s\n", __FUNCTION__, __LINE__, (FileType != TargetMachine::CGFT_AssemblyFile), o.getFilename().c_str());
-  if (FileType != TargetMachine::CGFT_AssemblyFile)
-    return true;
-  PM.add(new AtomiccWriter(o.getFilename()));
-  return false;
+    if (FileType != TargetMachine::CGFT_AssemblyFile)
+      return true;
+    PM.add(new AtomiccWriter(o.getFilename()));
+    return false;
 }
