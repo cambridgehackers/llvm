@@ -417,12 +417,28 @@ typedef struct {
     std::string fname;
     Function   *func;
 } FuncInfo;
+static void replaceFunc(Function *target, Function *source)
+{
+    for (auto BI = target->begin(), BE = target->end(); BI != BE; ++BI)
+        for (auto II = BI->begin(), IE = BI->end(); II != IE;II++)
+            if (II->getOpcode() == Instruction::Call) {
+                cast<CallInst>(II)->setCalledFunction(source);
+                return;
+            }
+}
 extern "C" void atomiccInterfaceName(const char *target, const char *source, const StructType *STy)
 {
     ClassMethodTable *table = classCreate[STy];
+    std::string enaName = target;
+    std::string enaSuffix = "__ENA";
+    //if (endswith(item.first, "__READY")) {
+        //enaName = item.first.substr(0, item.first.length() - 7);
+        //enaSuffix = "__VALID";
+    //}
+std::string rdyString = "__RDY";
 printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
-    STy->dump();
-printf("[%s:%d] '%s'\n", __FUNCTION__, __LINE__, STy->structFieldMap.c_str());
+    //STy->dump();
+//printf("[%s:%d] '%s'\n", __FUNCTION__, __LINE__, STy->structFieldMap.c_str());
     std::map<std::string, FuncInfo> funcMap;
     int len = STy->structFieldMap.length();
     int subs = 0, last_subs = 0;
@@ -443,40 +459,31 @@ printf("[%s:%d] '%s'\n", __FUNCTION__, __LINE__, STy->structFieldMap.c_str());
             Function *func = globalMod->getFunction(fname);
             std::string mName = ret.substr(idx+1);
             funcMap[mName] = {fname, func};
-printf("[%s:%d] fname %s mName %s func %p\n", __FUNCTION__, __LINE__, fname.c_str(), mName.c_str(), func);
+//printf("[%s:%d] fname %s mName %s func %p\n", __FUNCTION__, __LINE__, fname.c_str(), mName.c_str(), func);
             }
         last_subs = subs;
     }
-printf("[%s:%d] functions: target %s / %s           source %s / %s\n", __FUNCTION__, __LINE__,
-    funcMap[target].fname.c_str(), funcMap[std::string(target) + "__RDY"].fname.c_str(),
-    funcMap[source].fname.c_str(), funcMap[std::string(source) + "__RDY"].fname.c_str());
-printf("[%s:%d] functions: target %p / %p           source %p / %p\n", __FUNCTION__, __LINE__,
-    funcMap[target].func, funcMap[std::string(target) + "__RDY"].func,
-    funcMap[source].func, funcMap[std::string(source) + "__RDY"].func);
-#if 1
-                std::string enaName = target;
-// item.first.substr(0, item.first.length() - 5);
-                std::string enaSuffix = "__ENA";
-                //if (endswith(item.first, "__READY")) {
-                    //enaName = item.first.substr(0, item.first.length() - 7);
-                    //enaSuffix = "__VALID";
-                //}
-std::string rdyString = "__RDY";
-                Function *enaFunc = funcMap[source].func;
-                Function *rdyFunc = funcMap[source + rdyString].func;
-                if (!enaFunc || !rdyFunc) {
-                    printf("[%s:%d] %s function NULL %p rdy %p\n", __FUNCTION__, __LINE__, enaName.c_str(), enaFunc, rdyFunc);
-                    return;
-                }
-                if (!isActionMethod(enaFunc))
-                    enaSuffix = "";
-//printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, (enaName+enaSuffix).c_str(), enaFunc);
-                table->method[enaName] = enaFunc;
-                table->method[enaName + rdyString] = rdyFunc;
-                ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
-                ruleENAFunction[rdyFunc] = enaFunc;
-                // too early?
-                //if (!isInterface(STy))
-                    pushPair(enaFunc, enaName, enaSuffix, rdyFunc, enaName + rdyString);
-#endif
+    Function *enaFunc = funcMap[target].func;
+    Function *rdyFunc = funcMap[target + rdyString].func;
+    Function *senaFunc = funcMap[source].func;
+    Function *srdyFunc = funcMap[source + rdyString].func;
+printf("[%s:%d] functions: target %s / %s  source %s / %s\n", __FUNCTION__, __LINE__,
+    funcMap[target].fname.c_str(), funcMap[target + rdyString].fname.c_str(),
+    funcMap[source].fname.c_str(), funcMap[source + rdyString].fname.c_str());
+printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFunc, srdyFunc);
+    if (!enaFunc || !rdyFunc || !senaFunc || !srdyFunc) {
+        printf("[%s:%d] %s function NULL %p rdy %p\n", __FUNCTION__, __LINE__, enaName.c_str(), enaFunc, rdyFunc);
+        return;
+    }
+    replaceFunc(enaFunc, senaFunc);
+    replaceFunc(rdyFunc, srdyFunc);
+    if (!isActionMethod(enaFunc))
+        enaSuffix = "";
+    table->method[enaName] = enaFunc;
+    table->method[enaName + rdyString] = rdyFunc;
+    ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
+    ruleENAFunction[rdyFunc] = enaFunc;
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+    pushPair(enaFunc, enaName, enaSuffix, rdyFunc, enaName + rdyString);
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 }

@@ -94,8 +94,6 @@ static void processMethodToFunction(CallInst *II)
 
 static void processInterfaceName(CallInst *II)
 {
-printf("[%s:%d] before\n", __FUNCTION__, __LINE__);
-II->dump();
     Function *callingFunction = II->getParent()->getParent();
     IRBuilder<> builder(II->getParent());
     builder.SetInsertPoint(II);
