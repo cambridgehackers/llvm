@@ -285,7 +285,6 @@ static void processPromote(Function *currentFunction)
         }
     }
     table->mappedInterface = true;
-    updateParameterNames(baseMethod(pushSeen[currentFunction]), currentFunction);
 restart:
     for (auto BI = currentFunction->begin(), BE = currentFunction->end(); BI != BE; BI++) {
         for (auto II = BI->begin(), IE = BI->end(); II != IE;) {
