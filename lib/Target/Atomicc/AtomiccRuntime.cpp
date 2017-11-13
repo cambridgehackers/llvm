@@ -403,12 +403,22 @@ typedef struct {
 } FuncInfo;
 static void replaceFunc(Function *target, Function *source)
 {
-    for (auto BI = target->begin(), BE = target->end(); BI != BE; ++BI)
-        for (auto II = BI->begin(), IE = BI->end(); II != IE;II++)
+    auto bb = target->begin();
+    Instruction *TI = bb->getTerminator();
+    if (source) {
+        for (auto II = bb->begin(), IE = bb->end(); II != IE;II++)
             if (II->getOpcode() == Instruction::Call) {
                 cast<CallInst>(II)->setCalledFunction(source);
                 return;
             }
+    }
+    else if (TI->getOpcode() == Instruction::Ret) {
+        IRBuilder<> builder(bb);
+        builder.SetInsertPoint(TI);
+        Value *oldI = TI->getOperand(0);
+        oldI->replaceAllUsesWith(builder.getInt1(1));
+        recursiveDelete(oldI);
+    }
 }
 extern "C" void atomiccInterfaceName(const char *target, const char *source, const StructType *STy)
 {
@@ -421,8 +431,6 @@ extern "C" void atomiccInterfaceName(const char *target, const char *source, con
     //}
 std::string rdyString = "__RDY";
 printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
-    //STy->dump();
-//printf("[%s:%d] '%s'\n", __FUNCTION__, __LINE__, STy->structFieldMap.c_str());
     std::map<std::string, FuncInfo> funcMap;
     int len = STy->structFieldMap.length();
     int subs = 0, last_subs = 0;
@@ -455,7 +463,7 @@ printf("[%s:%d] functions: target %s / %s  source %s / %s\n", __FUNCTION__, __LI
     funcMap[target].fname.c_str(), funcMap[target + rdyString].fname.c_str(),
     funcMap[source].fname.c_str(), funcMap[source + rdyString].fname.c_str());
 printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFunc, srdyFunc);
-    if (!enaFunc || !rdyFunc || !senaFunc || !srdyFunc) {
+    if (!enaFunc || !rdyFunc || !senaFunc) {
         printf("[%s:%d] %s function NULL %p rdy %p\n", __FUNCTION__, __LINE__, enaName.c_str(), enaFunc, rdyFunc);
         return;
     }
