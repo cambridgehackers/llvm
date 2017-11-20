@@ -450,7 +450,8 @@ printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, 
             std::string fname = ret.substr(0, idx);
             Function *func = globalMod->getFunction(fname);
             std::string mName = ret.substr(idx+1);
-            funcMap[mName] = {fname, func};
+            if (func)
+                funcMap[mName] = {fname, func};
 //printf("[%s:%d] fname %s mName %s func %p\n", __FUNCTION__, __LINE__, fname.c_str(), mName.c_str(), func);
             }
         last_subs = subs;

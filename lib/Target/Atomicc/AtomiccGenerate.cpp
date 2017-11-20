@@ -568,7 +568,8 @@ return "";
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s missing\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
-        return "caller_error";
+func->dump();
+        //return "caller_error";
         exit(-1);
     }
     if (calledName == "printf") {
@@ -866,6 +867,8 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
             STy->getName().substr(0, 7) == "emodule"))
         return;
     structMap[Ty] = 1;
+
+    if (!isInterface(STy))
     if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
      && strncmp(STy->getName().str().c_str(), "struct.std::", 12)) {
         ClassMethodTable *table = classCreate[STy];
@@ -903,8 +906,7 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
          * Actual generation of output files takes place here
          */
         generateRegion = ProcessVerilog;
-        if (!isInterface(STy))
-            processClass(table);
+        processClass(table);
         if (STy->getName() != "class.Module") {
             std::string temp;
             getClass(STy);

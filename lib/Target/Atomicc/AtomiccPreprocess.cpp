@@ -41,57 +41,6 @@ static void processSelect(Function *thisFunc)
     }
 }
 
-/*
- * Transform a MemberFunctionPointer into a normal c++ function pointer,
- * looking up as necessary in vtable.  Note that the 'this' pointer offset
- * field is assumed to be 0 and discarded in the process.  The original
- * MemberFunctionPointer is a struct of {i64, i64}.
- * The first i64 is either the address of a C++ function or (if odd)
- * the offset in bytes + 1 in the vtable.
- * The second i64 seems to be an offset for 'this', for derived types.
- *
- * Reference: ItaniumCXXABI::EmitLoadOfMemberFunctionPointer()
- */
-static void processMethodToFunction(CallInst *II)
-{
-    Function *callingFunction = II->getParent()->getParent();
-    IRBuilder<> builder(II->getParent());
-    builder.SetInsertPoint(II);
-    const StructType *STy = findThisArgument(callingFunction);
-    Value *oldOp = II->getOperand(1);
-    II->setOperand(1, ConstantInt::get(Type::getInt64Ty(II->getContext()), (uint64_t)STy));
-    recursiveDelete(oldOp);
-    Instruction *store = NULL;
-    if (Instruction *load = dyn_cast<Instruction>(II->getOperand(0)))
-    if (load->getOpcode() == Instruction::Alloca) {
-        for (auto UI = load->use_begin(), UE = load->use_end(); UI != UE; UI++) {
-            if (Instruction *IR = dyn_cast<Instruction>(UI->getUser()))
-            if (IR->getOpcode() == Instruction::Store) {
-                store = IR;
-            }
-        }
-    }
-    if (!store) {
-        printf("%s: store was NULL\n", __FUNCTION__);
-        II->getParent()->getParent()->dump();
-        exit(-1);
-    }
-    Value *val = NULL;
-    if (const ConstantStruct *CS = cast<ConstantStruct>(store->getOperand(0))) {
-        if (ConstantExpr *CE = dyn_cast<ConstantExpr>(CS->getOperand(0))) {
-            ERRORIF(CE->getOpcode() != Instruction::PtrToInt);
-            Function *func = dyn_cast<Function>(CE->getOperand(0));
-            //printf("[%s:%d] STY %s offset %ld. func %p [%s]\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), offset, func, func->getName().str().c_str());
-            val = ConstantInt::get(Type::getInt64Ty(II->getContext()), (uint64_t)func);
-        }
-        else
-            ERRORIF(1);
-    }
-    recursiveDelete(store);
-    II->replaceAllUsesWith(val);
-    recursiveDelete(II);      // No longer need to call methodToFunction() !
-}
-
 static void processInterfaceName(CallInst *II)
 {
     Function *callingFunction = II->getParent()->getParent();
@@ -334,9 +283,6 @@ void preprocessModule(Module *Mod)
         {"llvm.umul.with.overflow.i64", processOverflow}, {"llvm.uadd.with.overflow.i64", processOverflow},
         // remap all calls to 'malloc' and 'new' to our runtime.
         {"_Znwm", processMalloc}, {"_Znam", processMalloc}, {"malloc", processMalloc},
-        // replace calls to methodToFunction with "Function *" values.
-        // Context: Must be after all vtable processing.
-        {"methodToFunction", processMethodToFunction},
         {"connectInterface", processConnectInterface},
         {"llvm.memcpy.p0i8.p0i8.i64", processMemcpy},
         {"_ZL20atomiccNewArrayCountm", processMSize},
@@ -352,7 +298,6 @@ void preprocessModule(Module *Mod)
             I = NI;
         }
     }
-#if 0
     TypeFinder StructTypes;
     StructTypes.run(*Mod, true);
     for (unsigned i = 0, e = StructTypes.size(); i != e; ++i) {
@@ -360,6 +305,7 @@ void preprocessModule(Module *Mod)
         if (STy->isLiteral() || STy->getName().empty()) continue;
         getClass(STy);  // make sure that classCreate is initialized
         ClassMethodTable *table = classCreate[STy];
+printf("[%s:%d] name %s map %s\n", __FUNCTION__, __LINE__, getStructName(STy).c_str(), STy->structFieldMap.c_str());
         std::map<std::string, Function *> funcMap;
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
@@ -389,7 +335,7 @@ void preprocessModule(Module *Mod)
             last_subs = subs;
         }
         for (auto item: funcMap) {
-            //printf("[%s:%d] first %s second %p\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second);
+            printf("[%s:%d] first %s second %p\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second);
             if (endswith(item.first, "__RDY") || endswith(item.first, "__READY")) {
                 std::string enaName = item.first.substr(0, item.first.length() - 5);
                 std::string enaSuffix = "__ENA";
@@ -410,10 +356,14 @@ void preprocessModule(Module *Mod)
                 ruleRDYFunction[enaFunc] = item.second; // must be before pushWork() calls
                 ruleENAFunction[item.second] = enaFunc;
                 // too early?
-                if (!isInterface(STy))
-                    pushPair(enaFunc, enaName, enaSuffix, item.second, item.first);
+                if (isInterface(STy)) {
+                    if (enaFunc)
+                        setSeen(enaFunc, enaName + enaSuffix);
+                    if (item.second)
+                        setSeen(item.second, item.first);
+                    //pushPair(enaFunc, enaName, enaSuffix, item.second, item.first);
+                }
             }
         }
     }
-#endif
 }
