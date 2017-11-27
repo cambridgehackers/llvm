@@ -178,6 +178,7 @@ static void processMethodInlining(Function *thisFunc, Function *parentFunc)
                 const StructType *STy = findThisArgument(func);
                 //int ind = calledName.find("EEaSERKS0_");
                 //printf("%s: %s CALLS %s cSTy %p STy %p ind %d\n", __FUNCTION__, callingName.c_str(), calledName.c_str(), callingSTy, STy, ind);
+                if (parentFunc != func && thisFunc != func)
                 if (callingSTy == STy || endswith(calledName, "C2Ev") || endswith(calledName, "D2Ev")) {
                     //fprintf(stdout,"callProcess: %s cName %s single!!!!\n", callingName.c_str(), calledName.c_str());
                     processAlloca(func);
@@ -195,19 +196,22 @@ void setSeen(Function *func, std::string mName)
 {
     pushSeen[func] = mName;
     processAlloca(func);
+    // inline intra-class method call bodies
+    processMethodInlining(func, func);
 }
 /*
  * Add a function to the processing list for generation of cpp and verilog.
  */
 static void pushWork(std::string mName, std::string suffix, Function *func)
 {
+    mName += suffix;
     if (!func)
         return;
     const StructType *STy = findThisArgument(func);
     ClassMethodTable *table = classCreate[STy];
     if (pushSeen[func] != "")
         return;
-    setSeen(func, mName + suffix);
+    setSeen(func, mName);
     //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
     table->method[mName] = func;
     // inline intra-class method call bodies
@@ -472,11 +476,11 @@ printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFun
     replaceFunc(rdyFunc, srdyFunc);
     if (!isActionMethod(enaFunc))
         enaSuffix = "";
-    table->method[enaName] = enaFunc;
+    table->method[enaName + enaSuffix] = enaFunc;
     table->method[enaName + rdyString] = rdyFunc;
     ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
     ruleENAFunction[rdyFunc] = enaFunc;
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+    pushSeen[enaFunc] = "";
+    pushSeen[rdyFunc] = "";
     pushPair(enaFunc, enaName, enaSuffix, rdyFunc, enaName + rdyString);
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 }

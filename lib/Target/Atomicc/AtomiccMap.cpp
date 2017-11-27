@@ -280,7 +280,7 @@ static void processPromote(Function *currentFunction)
             std::string mname = iitem.first;
             Function *afunc = table->method[iitem.first];
             if (afunc)
-                pushSeen[afunc] = item.name + "$" + pushSeen[afunc];
+                pushSeen[afunc] = item.name + MODULE_SEPARATOR + pushSeen[afunc];
 //printf("[%s:%d] class %s name %s prefix %s iifirst %s afunc %p\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), getMethodName(func->getName()).c_str(), item.name.c_str(), iitem.first.c_str(), afunc);
         }
     }
@@ -550,7 +550,7 @@ static void registerInterface(char *addr, StructType *STy, const char *name)
                         sname = sname.substr(7);
                     Function *calledFunc = callMap[sname];
                     if (trace_pair)
-                        printf("[%s:%d] set methodMap [%s] = %p [%s]\n", __FUNCTION__, __LINE__, (name + std::string("$") + mName).c_str(), calledFunc, sname.c_str());
+                        printf("[%s:%d] set methodMap [%s] = %p [%s]\n", __FUNCTION__, __LINE__, (name + std::string(MODULE_SEPARATOR) + mName).c_str(), calledFunc, sname.c_str());
                     if (calledFunc) {
                         methodMap[mName] = calledFunc;
                         methodNameMap[calledFunc] = STRINGPAIR{mName, enaSuffix};

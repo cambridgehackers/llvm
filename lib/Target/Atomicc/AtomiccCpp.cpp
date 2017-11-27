@@ -16,14 +16,6 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
-std::string baseMethod(std::string mname)
-{
-    if (endswith(mname, "__ENA"))
-        return mname.substr(0, mname.length() - 5);
-    else if (endswith(mname, "__VALID"))
-        return mname.substr(0, mname.length() - 7);
-    return mname;
-}
 /*
  * Generate element definitions for a class.
  */
@@ -154,7 +146,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
             Function *func = FI.second;
             if (!func)
                 continue;
-            std::string mname = baseMethod(pushSeen[func]);
+            std::string mname = FI.first;
             fprintf(OHdr, "extern %s;\n", printFunctionSignature(func, name + "__" + mname, true).c_str());
         }
         }
@@ -167,7 +159,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         Function *func = FI.second;
         if (!func)
             continue;
-        std::string mname = baseMethod(pushSeen[func]);
+        std::string mname = FI.first;
         if (!cancelList[mname])
         fprintf(OHdr, "  %s { %s; }\n", printFunctionSignature(func, mname, false).c_str(),
             printFunctionInstance(func, name + "__" + mname, "this").c_str());
@@ -181,7 +173,7 @@ void generateClassDef(const StructType *STy, FILE *OStr, FILE *OHdr)
         Function *func = FI.second;
         if (!func)
             continue;
-        std::string mname = baseMethod(pushSeen[func]);
+        std::string mname = FI.first;
 printf("[%s:%d] generate %s\n", __FUNCTION__, __LINE__, mname.c_str());
 func->dump();
         fprintf(OStr, "%s {\n", printFunctionSignature(func, name + "__" + mname, true).c_str());

@@ -65,7 +65,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
     for (auto FI : table->method) {
         Function *func = FI.second;
         std::string temp = table->guard[func];
-        std::string mname = baseMethod(pushSeen[func]);
+        std::string mname = FI.first;
         if (endswith(mname, "__RDY"))
             table->metaList.push_back("//METAGUARD; " + mname.substr(0, mname.length()-5) + "; " + temp + ";");
         else if (endswith(mname, "__READY"))
@@ -81,7 +81,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
             std::map<std::string,std::string> metaConflict;
             for (auto innerFI : table->method) {
                 Function *innerfunc = innerFI.second;
-                std::string innermname = baseMethod(pushSeen[innerfunc]);
+                std::string innermname = pushSeen[innerfunc];
                 MetaData *innerbm = &funcMetaMap[innerfunc];
                 std::string tempConflict;
                 if (innerfunc == func)
@@ -147,7 +147,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
                 for (unsigned i = 0; i < sname.length(); i++)
                     if (sname[i] == '.')
                         sname[i] = '$';
-                table->metaList.push_back("//METACONNECT; " + tname + "$" + fname + "; " + sname + "$" + fname);
+                table->metaList.push_back("//METACONNECT; " + tname + MODULE_SEPARATOR + fname + "; " + sname + MODULE_SEPARATOR + fname);
             }
         }
     }

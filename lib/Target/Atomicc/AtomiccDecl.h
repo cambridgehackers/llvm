@@ -156,7 +156,6 @@ void dumpMemoryRegions(int arg);
 void pushPair(Function *enaFunc, std::string enaName, std::string enaSuffix, Function *rdyFunc, std::string rdyName);
 void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH, bool force);
 void metaGenerate(const StructType *STy, FILE *OStr);
-std::string baseMethod(std::string mname);
 bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);
 void buildPrefix(ClassMethodTable *table);

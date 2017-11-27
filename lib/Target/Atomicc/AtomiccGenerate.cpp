@@ -563,22 +563,22 @@ return "";
     }
     if (generateRegion == ProcessVerilog)
         prefix = pcalledFunction + prefix;
-    std::string mname = prefix + fname;
     if (trace_call)
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s missing\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
-func->dump();
         //return "caller_error";
-        exit(-1);
+        fname = "[ERROR_" + calledName + "_ERROR]";
+        //exit(-1);
     }
+    std::string mname = prefix + fname;
     if (calledName == "printf") {
         //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ", ";
     }
     else if (generateRegion == ProcessCPP)
-        vout += pcalledFunction + baseMethod(mname) + "(";
+        vout += pcalledFunction + mname + "(";
     else {
         if (isActionMethod(func)) {
             if (globalClassTable)
@@ -586,7 +586,7 @@ func->dump();
         }
         else
             vout += mname;
-        appendList(MetaInvoke, I->getParent(), baseMethod(mname));
+        appendList(MetaInvoke, I->getParent(), mname);
     }
     for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
         bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
@@ -601,7 +601,7 @@ func->dump();
             vout += sep + parg;
         else {
             if (globalClassTable)
-            globalClassTable->muxValueList[baseMethod(mname) + "_" + FAI->getName().str()]
+            globalClassTable->muxValueList[prefix + FAI->getName().str()]
                .push_back(MuxValueEntry{I->getParent(), parg});
         }
         sep = ", ";

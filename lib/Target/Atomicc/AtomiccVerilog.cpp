@@ -18,7 +18,7 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
-static int dontInlineValues;//=1;
+static int dontInlineValues=1;
 
 static uint64_t sizeType(Type *Ty)
 {
@@ -125,17 +125,20 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
             const Function *func = FI.second;
             if (!func)
                 continue;
-            std::string mname = pushSeen[func];
+            std::string mname = FI.first;
             Type *retType = func->getReturnType();
             auto AI = func->arg_begin(), AE = func->arg_end();
             std::string arrRange;
             std::string wparam = inp + mname;
             if (!isActionMethod(func))
                 arrRange = verilogArrRange(retType);
+//printf("[%s:%d] func %p FI.first %s mname %s wparam %s\n", __FUNCTION__, __LINE__, func, FI.first.c_str(), mname.c_str(), wparam.c_str());
+func->dump();
             if (inlineValue(wparam, false) == "")
                 fprintf(OStr, "    wire %s%s;\n", arrRange.c_str(), wparam.c_str());
             for (AI++; AI != AE; ++AI) {
                 wparam = instPrefix + AI->getName().str();
+//printf("[%s:%d] mname %s jjjjjjjjjjjjjjjjjjjiiiiparam pref %s name %s wparam %s\n", __FUNCTION__, __LINE__, mname.c_str(), instPrefix.c_str(), AI->getName().str().c_str(), wparam.c_str());
                 if (inlineValue(wparam, false) == "")
                     fprintf(OStr, "    wire %s%s;\n", verilogArrRange(AI->getType()).c_str(), wparam.c_str());
             }
@@ -147,7 +150,7 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
         Function *func = FI.second;
         if (!func)
             continue;
-        std::string mname = pushSeen[func];
+        std::string mname = FI.first;
         if (table->ruleFunctions[mname.substr(0, mname.length()-5)])
             continue;
         Type *retType = func->getReturnType();
@@ -159,6 +162,7 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
             wparam = outp + verilogArrRange(retType) + mname;
         paramList.push_back(wparam);
         for (AI++; AI != AE; ++AI) {
+//printf("[%s:%d] mname %s iiiiiiiiiiiiiiiiiiiiiiiiiparam pref %s name %s\n", __FUNCTION__, __LINE__, mname.c_str(), instPrefix.c_str(), AI->getName().str().c_str());
             if (instance != "")
                 wparam = inlineValue(instPrefix + AI->getName().str(), true);
             else
@@ -176,13 +180,21 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
         if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
             element = PTy->getElementType();
             if (const StructType *iSTy = dyn_cast<StructType>(element)) { // calling indications from this module
-                if (ClassMethodTable *itable = classCreate[iSTy]) {
 //printf("[%s:%d] indication interface topname %s sname %s fname %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), fname.c_str());
+    int Idx = 0;
+    for (auto I = iSTy->element_begin(), E = iSTy->element_end(); I != E; ++I, Idx++) {
+        std::string fname = fieldName(iSTy, Idx);
+        Type *element = *I;
+        if (auto interfaceSTy = dyn_cast<StructType>(element))
+        if (isInterface(interfaceSTy)) {
+                if (ClassMethodTable *itable = classCreate[interfaceSTy]) {
+//printf("[%s:%d] indication interface topname %s sname %s fname %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), interfaceSTy->getName().str().c_str(), fname.c_str());
                 for (auto FI : itable->method) {
                     Function *func = FI.second;
+                    std::string wparam, mname = fname + MODULE_SEPARATOR + FI.first;
+//printf("[%s:%d] mname %s func %p\n", __FUNCTION__, __LINE__, mname.c_str(), func);
                     if (!func)
                         continue;
-                    std::string wparam, mname = fname + MODULE_SEPARATOR + pushSeen[func];
 //printf("[%s:%d] mname %s\n", __FUNCTION__, __LINE__, mname.c_str());
                     Type *retType = func->getReturnType();
                     auto AI = func->arg_begin(), AE = func->arg_end();
@@ -192,11 +204,13 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
                         wparam = inp + (instance == "" ? verilogArrRange(retType):"") + mname;
                     paramList.push_back(wparam);
                     for (AI++; AI != AE; ++AI) {
-                        wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + baseMethod(mname) + "_" + AI->getName().str();
+                        wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + AI->getName().str();
                         paramList.push_back(wparam);
                     }
                 }
                 }
+        }
+    }
             }
             else
                 paramList.push_back(outp + printType(element, false, fname, "  ", "", false));
@@ -238,7 +252,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         Function *func = FI.second;
         if (!func)
              continue;
-        std::string mname = pushSeen[func];
+        std::string mname = FI.first;
         std::string rdyName = mname.substr(0, mname.length()-5) + "__RDY";
         if (endswith(mname, "__VALID"))
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
