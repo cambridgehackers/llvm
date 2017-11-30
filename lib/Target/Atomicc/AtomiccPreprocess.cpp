@@ -332,7 +332,7 @@ void preprocessModule(Module *Mod)
             last_subs = subs;
         }
         for (auto item: funcMap) {
-printf("[%s:%d] sname %s first %s callingconv %x\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second->getCallingConv() == CallingConv::X86_VectorCall);
+printf("[%s:%d] sname %s first %s second %p name %s callingconv %x\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, item.second->getName().str().c_str(), item.second->getCallingConv() == CallingConv::X86_VectorCall);
             if (item.second->getCallingConv() == CallingConv::X86_VectorCall)
             if (endswith(item.first, "__RDY") || endswith(item.first, "__READY")) {
                 std::string enaName = item.first.substr(0, item.first.length() - 5);
