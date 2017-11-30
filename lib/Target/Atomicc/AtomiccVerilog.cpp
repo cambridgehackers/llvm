@@ -18,7 +18,7 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
-static int dontInlineValues=1;
+static int dontInlineValues;//=1;
 
 static uint64_t sizeType(Type *Ty)
 {
