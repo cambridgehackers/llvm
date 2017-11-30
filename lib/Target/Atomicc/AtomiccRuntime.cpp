@@ -483,4 +483,7 @@ printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFun
     pushSeen[enaFunc] = "";
     pushSeen[rdyFunc] = "";
     pushPair(enaFunc, enaName, enaSuffix, rdyFunc, enaName + rdyString);
+printf("[%s:%d] DDUMMMMMMMMMMMMP\n", __FUNCTION__, __LINE__);
+enaFunc->dump();
+rdyFunc->dump();
 }
