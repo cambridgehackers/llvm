@@ -43,11 +43,6 @@ static void generateClassElements(const StructType *STy, const StructType *ActST
                     vecDim = utostr(dimIndex++);
                 std::string tname = fname + vecDim;
                 std::string iname = tname;
-                if (sname.substr(0,12) != "l_struct_OC_")
-                if (!dyn_cast<StructType>(element) && !dyn_cast<PointerType>(element)) {
-                    if (table)
-                        table->shadow[tname] = 1;
-                }
                 if (!isInterface(dyn_cast<StructType>(element)))
                 fprintf(OStr, "%s", printType(element, false, iname, "  ", ";\n", false).c_str());
             } while(vecCount-- > 0);

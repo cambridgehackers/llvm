@@ -157,8 +157,6 @@ static void checkClass(const StructType *STy, const StructType *ActSTy)
         if (const StructType *iSTy = dyn_cast<StructType>(element)) {
             if (fname == "")
                 checkClass(iSTy, ActSTy);
-            else if (isInterface(iSTy))
-                atable->interfaceList.push_back(InterfaceListType{fname, iSTy});
         }
     }
 }
@@ -167,7 +165,6 @@ void getClass(const StructType *STy)
 {
     if (!classCreate[STy]) {
         classCreate[STy] = new ClassMethodTable;
-        classCreate[STy]->mappedInterface = false;
         classCreate[STy]->STy = STy;
         checkClass(STy, STy);
     }
@@ -907,21 +904,19 @@ void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *O
          */
         generateRegion = ProcessVerilog;
         processClass(table);
-        if (STy->getName() != "class.Module") {
-            std::string temp;
-            getClass(STy);
-            if (!STy->isLiteral() && !STy->getName().empty())
-                temp = STy->getName();
-            if (temp.substr(0, 6) == "module") {
-                // now generate the verilog header file '.vh'
-                metaGenerate(STy, OStrVH);
-                // Only generate verilog for modules derived from Module
-                generateModuleDef(STy, OStrV);
-            }
-            // Generate cpp for all modules except class.ModuleExternal
-            generateRegion = ProcessCPP;
-            if (temp.substr(0, 7) != "emodule")
-                generateClassDef(STy, OStrC, OStrCH);
+        std::string temp;
+        getClass(STy);
+        if (!STy->isLiteral() && !STy->getName().empty())
+            temp = STy->getName();
+        if (temp.substr(0, 6) == "module") {
+            // now generate the verilog header file '.vh'
+            metaGenerate(STy, OStrVH);
+            // Only generate verilog for modules derived from Module
+            generateModuleDef(STy, OStrV);
         }
+        // Generate cpp for all modules
+        generateRegion = ProcessCPP;
+        if (temp.substr(0, 7) != "emodule")
+            generateClassDef(STy, OStrC, OStrCH);
     }
 }

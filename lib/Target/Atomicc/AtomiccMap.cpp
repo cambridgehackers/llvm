@@ -268,23 +268,10 @@ parentRDYName->dump();
 copyt = false;
 }
 
-// Preprocess the body rules, creating shadow variables and moving items to RDY() and ENA()
+// Preprocess the body rules, moving items to RDY() and ENA()
 static void processPromote(Function *currentFunction)
 {
     ClassMethodTable *table = classCreate[findThisArgument(currentFunction)];
-    if (!table->mappedInterface)
-    for (auto item: table->interfaceList) {
-        ClassMethodTable *itable = classCreate[item.STy];
-        for (auto iitem: itable->method) {
-            //Function *func = iitem.second;
-            std::string mname = iitem.first;
-            Function *afunc = table->method[iitem.first];
-            if (afunc)
-                pushSeen[afunc] = item.name + MODULE_SEPARATOR + pushSeen[afunc];
-//printf("[%s:%d] class %s name %s prefix %s iifirst %s afunc %p\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), getMethodName(func->getName()).c_str(), item.name.c_str(), iitem.first.c_str(), afunc);
-        }
-    }
-    table->mappedInterface = true;
 restart:
     for (auto BI = currentFunction->begin(), BE = currentFunction->end(); BI != BE; BI++) {
         for (auto II = BI->begin(), IE = BI->end(); II != IE;) {
@@ -484,86 +471,6 @@ static void inlineReferences(Module *Mod, const StructType *STy, uint64_t Idx, T
     }
 }
 
-typedef struct {
-    std::string name;
-    std::string suffix;
-} STRINGPAIR;
-static void registerInterface(char *addr, StructType *STy, const char *name)
-{
-    const DataLayout *TD = EE->getDataLayout();
-    const StructLayout *SLO = TD->getStructLayout(STy);
-    std::map<std::string, Function *> callMap;
-    MethodMapType methodMap;
-    std::map<Function *, STRINGPAIR> methodNameMap;
-    int Idx = 0;
-    if (trace_pair)
-        printf("[%s:%d] addr %p struct %s name %s map %s\n", __FUNCTION__, __LINE__, addr, STy->getName().str().c_str(), name, STy->structFieldMap.c_str());
-    if (addr)
-    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++)
-        if (PointerType *PTy = dyn_cast<PointerType>(*I))
-        if (PTy->getElementType()->getTypeID() == Type::FunctionTyID) {
-            char *eaddr = addr + SLO->getElementOffset(Idx);
-            std::string fname = fieldName(STy, Idx);
-            Function *func = *(Function **)eaddr;
-            callMap[fname] = func;
-            if (trace_pair)
-                printf("[%s:%d] addr %p callMap[%s] = %p [%p = %s]\n", __FUNCTION__, __LINE__, addr, fname.c_str(), eaddr, func, func ? func->getName().str().c_str() : "none");
-        }
-    int len = STy->structFieldMap.length();
-    int subs = 0, last_subs = 0;
-    while (subs < len) {
-        while (subs < len && STy->structFieldMap[subs] != ',') {
-            subs++;
-        }
-        subs++;
-        if (STy->structFieldMap[last_subs] == '/')
-            last_subs++;
-        std::string ret = STy->structFieldMap.substr(last_subs);
-        int idx = ret.find(',');
-        if (idx >= 0)
-            ret = ret.substr(0,idx);
-        idx = ret.find(':');
-        if (idx >= 0) {
-            Function *func = globalMod->getFunction(ret.substr(0, idx));
-            if (!func) {
-                printf("[%s:%d] name not found %s func %p\n", __FUNCTION__, __LINE__, ret.substr(0, idx).c_str(), func);
-                continue;
-            }
-            std::string mName = ret.substr(idx+1);
-            std::string enaSuffix;
-        Function *rdyFunc = ruleRDYFunction[func];
-        if (isActionMethod(func)) {
-            std::string rdyName = pushSeen[rdyFunc];
-            if (endswith(rdyName, "__RDY"))
-                enaSuffix = "__ENA";
-            if (endswith(rdyName, "__READY"))
-                enaSuffix = "__VALID";
-        }
-        setSeen(func, mName + enaSuffix);
-        for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB)
-            for (auto II = BB->begin(), IE = BB->end(); II != IE; II++)
-                if (CallInst *ICL = dyn_cast<CallInst>(II)) {
-                    std::string sname = printOperand(ICL->getCalledValue(), false);
-                    if (sname.substr(0,6) == "this->")
-                        sname = sname.substr(6);
-                    else if (sname.substr(0,7) == "thisp->")
-                        sname = sname.substr(7);
-                    Function *calledFunc = callMap[sname];
-                    if (trace_pair)
-                        printf("[%s:%d] set methodMap [%s] = %p [%s]\n", __FUNCTION__, __LINE__, (name + std::string(MODULE_SEPARATOR) + mName).c_str(), calledFunc, sname.c_str());
-                    if (calledFunc) {
-                        methodMap[mName] = calledFunc;
-                        methodNameMap[calledFunc] = STRINGPAIR{mName, enaSuffix};
-                    }
-                }
-        }
-        last_subs = subs;
-    }
-    for (auto item: methodMap)
-        if (Function *enaFunc = ruleENAFunction[item.second])
-            pushPair(enaFunc, methodNameMap[enaFunc].name, methodNameMap[enaFunc].suffix, item.second, item.first);
-}
-
 /*
  * Check if one StructType inherits another one.
  */
@@ -646,19 +553,11 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                     }
                 }
                 once = 1;
-                if (setInterface)
-                if (StructType *iSTy = dyn_cast<StructType>(PTy->getElementType())) {
-                    printf("%s: setInterface for %s\n", __FUNCTION__, fname.c_str());
-                    table->interfaces[fname] = element;  // add called interfaces from this module
-                    //registerInterface((char *)p, iSTy, fname.c_str());
-                }
             }
             if (fname != "") {
                 if (trace_map)
                     printf("%s: recurse mapType for %s\n", __FUNCTION__, (aname + "$$" + fname).c_str());
                 mapType(Mod, eaddr, element, aname + "$$" + fname);
-                //if (StructType *iSTy = dyn_cast<StructType>(element))
-                    //registerInterface(eaddr, iSTy, fname.c_str());
             }
             else if (dyn_cast<StructType>(element))
                 mapType(Mod, eaddr, element, aname);

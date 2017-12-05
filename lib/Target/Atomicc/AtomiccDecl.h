@@ -55,11 +55,6 @@ typedef struct {
 } InterfaceConnectType;
 
 typedef struct {
-    std::string       name;
-    const StructType *STy;
-} InterfaceListType;
-
-typedef struct {
     BasicBlock *bb;
     std::string value;
 } MuxValueEntry;
@@ -78,15 +73,12 @@ class ClassMethodTable {
 public:
     const StructType                  *STy;
     std::map<std::string, Function *> method;
-    std::map<std::string, int>        shadow;
     std::map<int, Type *>             replaceType;
     std::map<int, uint64_t>           replaceCount;
     std::map<int, bool>               allocateLocally;
     std::map<std::string, Function *> ruleFunctions;
     std::list<InterfaceConnectType>   interfaceConnect;
     std::string                       instance;
-    std::map<std::string, Type *>     interfaces;
-    std::list<InterfaceListType>      interfaceList;
     std::list<std::string>            metaList;
     std::map<const Function *, std::string> guard;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
@@ -94,7 +86,6 @@ public:
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
-    bool                              mappedInterface;
     ClassMethodTable() {}
 };
 
