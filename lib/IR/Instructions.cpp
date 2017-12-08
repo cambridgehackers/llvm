@@ -992,7 +992,7 @@ void StoreInst::AssertOK() {
          "Ptr must have pointer type!");
 #if 1
   if(getOperand(0)->getType() != cast<PointerType>(getOperand(1)->getType())->getElementType()) {
-printf("[%s:%d]Ptr must be a pointer to Val type!ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n", __FUNCTION__, __LINE__);
+printf("[StoreInst::%s:%d]Ptr must be a pointer to Val type!ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n", __FUNCTION__, __LINE__);
 this->dump();
 getOperand(0)->getType()->dump();
 getOperand(1)->getType()->dump();

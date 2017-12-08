@@ -184,6 +184,9 @@ static void processMethodInlining(Function *thisFunc, Function *parentFunc)
                     processAlloca(func);
                     processMethodInlining(func, parentFunc);
                     InlineFunctionInfo IFI;
+//printf("[%s:%d] beforeInline\n", __FUNCTION__, __LINE__);
+//thisFunc->dump();
+//func->dump();
                     InlineFunction(ICL, IFI, false);
                 }
             };
