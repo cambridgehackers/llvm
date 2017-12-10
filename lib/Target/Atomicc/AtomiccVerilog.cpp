@@ -256,7 +256,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         std::string rdyName = mname.substr(0, mname.length()-5) + "__RDY";
         if (endswith(mname, "__VALID"))
             rdyName = mname.substr(0, mname.length()-7) + "__READY";
-        std::string globalCondition = mname + "_internal";
+        std::string globalCondition = mname;
         int count = 0;
         for (auto info: storeList[func]) {
             bool vassign = isAlloca(info->getPointerOperand());
@@ -271,17 +271,14 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         }
         if (!isActionMethod(func)) {
             if (ruleENAFunction[func])
-                assignList[globalCondition] = table->guard[func];  // collect the text of the return value into a single 'assign'
+                assignList[globalCondition + "_internal"] = table->guard[func];  // collect the text of the return value into a single 'assign'
             else if (table->guard[func] != "")
                 setAssign(mname, table->guard[func]);  // collect the text of the return value into a single 'assign'
         }
         else {
             // generate RDY_internal wire so that we can reference RDY expression inside module
-            // generate ENA_internal wire that is and'ed with RDY_internal, so that we can
-            // never be enabled unless we were actually ready.
             if (!table->ruleFunctions[mname.substr(0, mname.length()-5)]) {
                 fprintf(OStr, "    wire %s_internal;\n", rdyName.c_str());
-                fprintf(OStr, "    wire %s_internal = %s && %s_internal;\n", mname.c_str(), mname.c_str(), rdyName.c_str());
                 assignList[rdyName] = rdyName + "_internal";
             }
             if (count > 0) {
