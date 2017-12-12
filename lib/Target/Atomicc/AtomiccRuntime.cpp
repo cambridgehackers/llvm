@@ -472,7 +472,7 @@ printf("[%s:%d] functions: target %s / %s  source %s / %s\n", __FUNCTION__, __LI
     funcMap[source].fname.c_str(), funcMap[source + rdyString].fname.c_str());
 printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFunc, srdyFunc);
     if (!enaFunc || !rdyFunc || !senaFunc) {
-        printf("[%s:%d] %s function NULL %p rdy %p\n", __FUNCTION__, __LINE__, enaName.c_str(), enaFunc, rdyFunc);
+        printf("[%s:%d] %s function NULL %p rdy %p BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB \n", __FUNCTION__, __LINE__, enaName.c_str(), enaFunc, rdyFunc);
         return;
     }
     replaceFunc(enaFunc, senaFunc);

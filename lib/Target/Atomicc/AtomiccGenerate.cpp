@@ -28,6 +28,7 @@ using namespace llvm;
 static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
+static int trace_operand;//=1;
 std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
 static int generateRegion = ProcessNone;
@@ -558,6 +559,10 @@ return "";
         pcalledFunction = pcalledFunction.substr(1);
         prefix = MODULE_DOT;
     }
+    if (pcalledFunction == "this") {
+        pcalledFunction = "";
+        prefix = "";
+    }
     if (generateRegion == ProcessVerilog)
         prefix = pcalledFunction + prefix;
     if (trace_call)
@@ -622,9 +627,11 @@ std::string parenOperand(Value *Operand)
  */
 std::string printOperand(Value *Operand, bool Indirect)
 {
+    static int depth;
     std::string cbuffer;
     if (!Operand)
         return "";
+    depth++;
     if (Instruction *I = dyn_cast<Instruction>(Operand)) {
         std::string prefix;
         bool isAddressImplicit = isAddressExposed(Operand);
@@ -638,7 +645,8 @@ std::string printOperand(Value *Operand, bool Indirect)
             prefix = "&";  // Global variables are referenced as their addresses by llvm
         std::string vout;
         int opcode = I->getOpcode();
-//printf("[%s:%d] op %s\n", __FUNCTION__, __LINE__, I.getOpcodeName());
+        if (trace_operand)
+            printf("[%s:%d] before depth %d op %s\n", __FUNCTION__, __LINE__, depth, I->getOpcodeName());
         switch(opcode) {
         case Instruction::Call:
             vout += printCall(I);
@@ -752,10 +760,14 @@ std::string printOperand(Value *Operand, bool Indirect)
             cbuffer += vout;
         else
             cbuffer += prefix + "(" + vout + ")";
+        if (trace_operand)
+             printf("[%s:%d] after depth %d op %s\n", __FUNCTION__, __LINE__, depth, I->getOpcodeName());
     }
     else {
         //we need pointer to pass struct params (PipeIn)
         Constant* CPV = dyn_cast<Constant>(Operand);
+        if (trace_operand)
+            printf("[%s:%d] before depth %d noninst %p CPV %p\n", __FUNCTION__, __LINE__, depth, Operand, CPV);
         if (!CPV || isa<GlobalValue>(CPV))
             cbuffer += GetValueName(Operand);
         else {
@@ -786,6 +798,9 @@ std::string printOperand(Value *Operand, bool Indirect)
                 ERRORIF(1); /* handle structured types */
         }
     }
+if (trace_operand)
+printf("[%s:%d] depth %d return %s\n", __FUNCTION__, __LINE__, depth, cbuffer.c_str());
+    depth--;
     return cbuffer;
 }
 
