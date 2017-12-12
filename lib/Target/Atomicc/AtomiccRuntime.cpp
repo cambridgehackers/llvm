@@ -150,6 +150,7 @@ II->dump();
  */
 static void processMethodInlining(Function *thisFunc, Function *parentFunc)
 {
+restart: // restart here after inlining function.... basic block structure might change
     for (auto BB = thisFunc->begin(), BE = thisFunc->end(); BB != BE; ++BB) {
         for (auto II = BB->begin(), IE = BB->end(); II != IE;) {
             auto PI = std::next(BasicBlock::iterator(II));
@@ -176,8 +177,7 @@ static void processMethodInlining(Function *thisFunc, Function *parentFunc)
                 }
                 std::string calledName = func->getName();
                 const StructType *STy = findThisArgument(func);
-                //int ind = calledName.find("EEaSERKS0_");
-                //printf("%s: %s CALLS %s cSTy %p STy %p ind %d\n", __FUNCTION__, callingName.c_str(), calledName.c_str(), callingSTy, STy, ind);
+                //printf("%s: %s CALLS %s cSTy %p STy %p\n", __FUNCTION__, callingName.c_str(), calledName.c_str(), callingSTy, STy);
                 if (parentFunc != func && thisFunc != func)
                 if (callingSTy == STy || endswith(calledName, "C2Ev") || endswith(calledName, "D2Ev")) {
                     //fprintf(stdout,"callProcess: %s cName %s single!!!!\n", callingName.c_str(), calledName.c_str());
@@ -188,6 +188,7 @@ static void processMethodInlining(Function *thisFunc, Function *parentFunc)
 //thisFunc->dump();
 //func->dump();
                     InlineFunction(ICL, IFI, false);
+                    goto restart;
                 }
             };
             II = PI;
