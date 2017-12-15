@@ -39,6 +39,54 @@ namespace {
   };
 } // end anonymous namespace.
 char AtomiccWriter::ID = 0;
+static std::list<const StructType *> structSeq;
+
+static void getDepend(const Type *Ty, bool force)
+{
+std::map<std::string, const StructType *> structSeq;
+    if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty))
+        getDepend(dyn_cast<StructType>(PTy->getElementType()), false);
+    const StructType *STy = dyn_cast_or_null<StructType>(Ty);
+    if (!STy || !STy->hasName() || (!force && 
+            STy->getName().substr(0, 7) == "emodule"))
+        return;
+    //if (structMap[Ty])
+        //return;
+    //structMap[Ty] = 1;
+
+    if (!isInterface(STy))
+    if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
+     && strncmp(STy->getName().str().c_str(), "struct.std::", 12)) {
+        ClassMethodTable *table = classCreate[STy];
+        int Idx = 0;
+        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+            Type *element = *I;
+            if (table)
+            if (Type *newType = table->replaceType[Idx])
+                element = newType;
+            getDepend(element, fieldName(STy, Idx) == "");
+        }
+        for (auto FI : table->method) {
+            Function *func = FI.second;
+            if (!func) {
+                printf("[%s:%d] missing function in table method %s\n", __FUNCTION__, __LINE__, FI.first.c_str());
+                continue;
+                //exit(-1);
+            }
+            auto AI = func->arg_begin(), AE = func->arg_end();
+            if (const StructType *iSTy = dyn_cast<StructType>(func->getReturnType()))
+                getDepend(iSTy, false);
+            AI++;
+            for (; AI != AE; ++AI) {
+                Type *element = AI->getType();
+                if (auto PTy = dyn_cast<PointerType>(element))
+                    element = PTy->getElementType();
+                if (const StructType *iSTy = dyn_cast<StructType>(element))
+                    getDepend(iSTy, false);
+            }
+        }
+    }
+}
 
 bool AtomiccWriter::runOnModule(Module &M)
 {

@@ -348,16 +348,15 @@ void preprocessModule(Module *Mod)
                 }
                 if (!isActionMethod(enaFunc))
                     enaSuffix = "";
-//printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, (enaName+enaSuffix).c_str(), enaFunc);
-                table->method[enaName + enaSuffix] = enaFunc;
+                enaName += enaSuffix;
+//printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, enaName.c_str(), enaFunc);
+                table->method[enaName] = enaFunc;
                 table->method[item.first] = item.second;
                 ruleRDYFunction[enaFunc] = item.second; // must be before pushWork() calls
                 ruleENAFunction[item.second] = enaFunc;
                 // could be hoisted interface functions
-                if (enaFunc)
-                    setSeen(enaFunc, enaName + enaSuffix);
-                if (item.second)
-                    setSeen(item.second, item.first);
+                setSeen(enaFunc, enaName);
+                setSeen(item.second, item.first);
             }
         }
     }

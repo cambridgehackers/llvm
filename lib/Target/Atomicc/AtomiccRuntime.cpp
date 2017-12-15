@@ -206,15 +206,16 @@ void setSeen(Function *func, std::string mName)
 /*
  * Add a function to the processing list for generation of cpp and verilog.
  */
-static void pushWork(std::string mName, std::string suffix, Function *func)
+static void pushWork(std::string mName, Function *func)
 {
-    mName += suffix;
     if (!func)
         return;
     const StructType *STy = findThisArgument(func);
     ClassMethodTable *table = classCreate[STy];
-    if (pushSeen[func] != "")
+    if (pushSeen[func] != "") {
+        printf("[%s:%d] SSSSSSSS mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
         return;
+    }
     setSeen(func, mName);
     //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
     table->method[mName] = func;
@@ -228,10 +229,10 @@ static void pushWork(std::string mName, std::string suffix, Function *func)
  * is processed after processing for base method (so that guards promoted during
  * the method processing are later handled)
  */
-void pushPair(Function *enaFunc, std::string enaName, std::string enaSuffix, Function *rdyFunc, std::string rdyName)
+static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName)
 {
-    pushWork(enaName, enaSuffix, enaFunc);
-    pushWork(rdyName, "", rdyFunc); // must be after 'ENA', since hoisting copies guards
+    pushWork(enaName, enaFunc);
+    pushWork(rdyName, rdyFunc); // must be after 'ENA', since hoisting copies guards
 }
 
 /*
@@ -388,7 +389,7 @@ extern "C" void addBaseRule(void *thisp, const char *name, Function **RDY, Funct
         printf("[%s:%d] name %s ena %s rdy %s\n", __FUNCTION__, __LINE__, name, enaFunc->getName().str().c_str(), rdyFunc->getName().str().c_str());
     ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
     ruleENAFunction[rdyFunc] = enaFunc;
-    pushPair(enaFunc, name, "__ENA", rdyFunc, getMethodName(rdyFunc->getName()));
+    pushPair(enaFunc, enaName, rdyFunc, getMethodName(rdyFunc->getName()));
 }
 
 /*
@@ -486,8 +487,8 @@ printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFun
     ruleENAFunction[rdyFunc] = enaFunc;
     pushSeen[enaFunc] = "";
     pushSeen[rdyFunc] = "";
-    pushPair(enaFunc, enaName, enaSuffix, rdyFunc, enaName + rdyString);
-printf("[%s:%d] DDUMMMMMMMMMMMMP\n", __FUNCTION__, __LINE__);
-enaFunc->dump();
-rdyFunc->dump();
+    pushPair(enaFunc, enaName + enaSuffix, rdyFunc, enaName + rdyString);
+//printf("[%s:%d] DDUMMMMMMMMMMMMP\n", __FUNCTION__, __LINE__);
+//enaFunc->dump();
+//rdyFunc->dump();
 }
