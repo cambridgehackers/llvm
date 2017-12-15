@@ -40,19 +40,18 @@ namespace {
 } // end anonymous namespace.
 char AtomiccWriter::ID = 0;
 static std::list<const StructType *> structSeq;
+static std::map<std::string, const StructType *> structAlpha;
 
-static void getDepend(const Type *Ty, bool force)
+static void getDepend(const Type *Ty)
 {
-std::map<std::string, const StructType *> structSeq;
+std::map<std::string, const StructType *> structTemp;
     if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty))
-        getDepend(dyn_cast<StructType>(PTy->getElementType()), false);
+        if (auto STy = dyn_cast<StructType>(PTy->getElementType()))
+            structTemp[getStructName(STy)] = STy;
     const StructType *STy = dyn_cast_or_null<StructType>(Ty);
-    if (!STy || !STy->hasName() || (!force && 
-            STy->getName().substr(0, 7) == "emodule"))
+    if (!STy || !STy->hasName() || STy->getName().substr(0, 7) == "emodule")
         return;
-    //if (structMap[Ty])
-        //return;
-    //structMap[Ty] = 1;
+    std::string name = getStructName(STy);
 
     if (!isInterface(STy))
     if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
@@ -64,7 +63,8 @@ std::map<std::string, const StructType *> structSeq;
             if (table)
             if (Type *newType = table->replaceType[Idx])
                 element = newType;
-            getDepend(element, fieldName(STy, Idx) == "");
+            if (auto iSTy = dyn_cast<StructType>(element))
+                structTemp[getStructName(iSTy)] = iSTy;
         }
         for (auto FI : table->method) {
             Function *func = FI.second;
@@ -75,16 +75,28 @@ std::map<std::string, const StructType *> structSeq;
             }
             auto AI = func->arg_begin(), AE = func->arg_end();
             if (const StructType *iSTy = dyn_cast<StructType>(func->getReturnType()))
-                getDepend(iSTy, false);
+                structTemp[getStructName(iSTy)] = iSTy;
             AI++;
             for (; AI != AE; ++AI) {
                 Type *element = AI->getType();
                 if (auto PTy = dyn_cast<PointerType>(element))
                     element = PTy->getElementType();
                 if (const StructType *iSTy = dyn_cast<StructType>(element))
-                    getDepend(iSTy, false);
+                    structTemp[getStructName(iSTy)] = iSTy;
             }
         }
+    }
+    for (auto element: structTemp) {
+         if (structAlpha[element.first])
+             getDepend(element.second);
+         if (structAlpha[element.first]) {
+             structSeq.push_back(element.second);
+             structAlpha[element.first] = NULL;
+         }
+    }
+    if (structAlpha[name]) {
+        structSeq.push_back(STy);
+        structAlpha[name] = NULL;
     }
 }
 
@@ -146,7 +158,11 @@ bool AtomiccWriter::runOnModule(Module &M)
     fprintf(OStrCH, "#ifndef __%s_H__\n#define __%s_H__\n", myName.c_str(), myName.c_str());
     for (auto current : classCreate)
         if (!isInterface(current.first))
-            generateContainedStructs(current.first, OStrV, OStrVH, OStrC, OStrCH, false);
+            structAlpha[getStructName(current.first)] = current.first;
+    for (auto item : structAlpha)
+        getDepend(item.second);
+    for (auto current : structSeq)
+        generateContainedStructs(current, OStrV, OStrVH, OStrC, OStrCH);
     fprintf(OStrCH, "#endif  // __%s_H__\n", myName.c_str());
     fprintf(OStrVH, "`endif\n");
     return false;

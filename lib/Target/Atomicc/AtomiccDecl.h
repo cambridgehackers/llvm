@@ -144,7 +144,7 @@ void setCondition(BasicBlock *bb, int invert, Value *val);
 void recursiveDelete(Value *V);
 void setSeen(Function *func, std::string mName);
 void dumpMemoryRegions(int arg);
-void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH, bool force);
+void generateContainedStructs(const StructType *STy, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH);
 void metaGenerate(const StructType *STy, FILE *OStr);
 bool isActionMethod(const Function *func);
 void getClass(const StructType *STy);

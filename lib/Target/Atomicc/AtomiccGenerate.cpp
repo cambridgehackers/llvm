@@ -33,7 +33,6 @@ std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
 static int generateRegion = ProcessNone;
 
-static std::map<const Type *, int> structMap;
 static std::map<const Value *, std::string> allocaMap;
 static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
@@ -870,68 +869,23 @@ static void processClass(ClassMethodTable *table)
 /*
  * Recursively generate output *.h,*.cpp,*.v,*.vh files.
  */
-void generateContainedStructs(const Type *Ty, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH, bool force)
+void generateContainedStructs(const StructType *STy, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
 {
-    if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty))
-        generateContainedStructs(dyn_cast<StructType>(PTy->getElementType()), OStrV, OStrVH, OStrC, OStrCH, false);
-    const StructType *STy = dyn_cast_or_null<StructType>(Ty);
-    if (!STy || !STy->hasName() || structMap[Ty] || (!force && 
-            STy->getName().substr(0, 7) == "emodule"))
-        return;
-    structMap[Ty] = 1;
-
-    if (!isInterface(STy))
-    if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
-     && strncmp(STy->getName().str().c_str(), "struct.std::", 12)) {
-        ClassMethodTable *table = classCreate[STy];
-        int Idx = 0;
-        // Recursively generate for all classes we use in our class
-        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-            Type *element = *I;
-            if (table)
-            if (Type *newType = table->replaceType[Idx])
-                element = newType;
-            std::string fname = fieldName(STy, Idx);
-            generateContainedStructs(element, OStrV, OStrVH, OStrC, OStrCH, fname == "");
-        }
-        for (auto FI : table->method) {
-            Function *func = FI.second;
-            if (!func) {
-                printf("[%s:%d] missing function in table method %s\n", __FUNCTION__, __LINE__, FI.first.c_str());
-                continue;
-                //exit(-1);
-            }
-            Type *retType = func->getReturnType();
-            auto AI = func->arg_begin(), AE = func->arg_end();
-            if (const StructType *iSTy = dyn_cast<StructType>(retType))
-                generateContainedStructs(iSTy, OStrV, OStrVH, OStrC, OStrCH, false);
-            AI++;
-            for (; AI != AE; ++AI) {
-                Type *element = AI->getType();
-                if (auto PTy = dyn_cast<PointerType>(element))
-                    element = PTy->getElementType();
-                if (const StructType *iSTy = dyn_cast<StructType>(element))
-                    generateContainedStructs(iSTy, OStrV, OStrVH, OStrC, OStrCH, false);
-            }
-        }
-        /*
-         * Actual generation of output files takes place here
-         */
-        generateRegion = ProcessVerilog;
-        processClass(table);
-        std::string temp;
-        getClass(STy);
-        if (!STy->isLiteral() && !STy->getName().empty())
-            temp = STy->getName();
-        if (temp.substr(0, 6) == "module") {
-            // now generate the verilog header file '.vh'
-            metaGenerate(STy, OStrVH);
-            // Only generate verilog for modules derived from Module
-            generateModuleDef(STy, OStrV);
-        }
-        // Generate cpp for all modules
-        generateRegion = ProcessCPP;
-        if (temp.substr(0, 7) != "emodule")
-            generateClassDef(STy, OStrC, OStrCH);
+    ClassMethodTable *table = classCreate[STy];
+    generateRegion = ProcessVerilog;
+    processClass(table);
+    std::string temp;
+    getClass(STy);
+    //if (!STy->isLiteral() && !STy->getName().empty())
+        temp = STy->getName();
+    if (temp.substr(0, 6) == "module") {
+        // now generate the verilog header file '.vh'
+        metaGenerate(STy, OStrVH);
+        // Only generate verilog for modules derived from Module
+        generateModuleDef(STy, OStrV);
     }
+    // Generate cpp for all modules
+    generateRegion = ProcessCPP;
+    if (temp.substr(0, 7) != "emodule")
+        generateClassDef(STy, OStrC, OStrCH);
 }
