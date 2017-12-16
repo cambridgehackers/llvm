@@ -90,14 +90,9 @@ bool AtomiccWriter::runOnModule(Module &M)
     myName += "_GENERATED_";
     FILE *OStrV = fopen((OutputDir + ".generated.v").c_str(), "w");
     FILE *OStrVH = fopen((OutputDir + ".generated.vh").c_str(), "w");
-    FILE *OStrC = fopen((OutputDir + ".generated.cpp").c_str(), "w");
-    FILE *OStrCH = fopen((OutputDir + ".generated.h").c_str(), "w");
     fprintf(OStrV, "`include \"%s.generated.vh\"\n\n", OutputDir.c_str());
     fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
-    fprintf(OStrC, "#include \"%s.generated.h\"\n", OutputDir.c_str());
-    fprintf(OStrCH, "#ifndef __%s_H__\n#define __%s_H__\n", myName.c_str(), myName.c_str());
-    generateClasses(OStrV, OStrVH, OStrC, OStrCH);
-    fprintf(OStrCH, "#endif  // __%s_H__\n", myName.c_str());
+    generateClasses(OStrV, OStrVH);
     fprintf(OStrVH, "`endif\n");
     return false;
 }

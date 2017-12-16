@@ -927,11 +927,11 @@ std::map<std::string, const StructType *> structTemp;
     }
 }
 
-void generateClasses(FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
+void generateClasses(FILE *OStrV, FILE *OStrVH)
 {
     for (auto current : classCreate)
-        if (!isInterface(current.first))
-            structAlpha[getStructName(current.first)] = current.first;
+        //if (!isInterface(current.first))
+        structAlpha[getStructName(current.first)] = current.first;
     for (auto item : structAlpha)
         getDepend(item.second);
     for (auto STy : structSeq) {
@@ -947,9 +947,5 @@ void generateClasses(FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
             // Only generate verilog for modules derived from Module
             generateModuleDef(STy, OStrV);
         }
-        // Generate cpp for all modules
-        generateRegion = ProcessCPP;
-        if (temp.substr(0, 7) != "emodule")
-            generateClassDef(STy, OStrC, OStrCH);
     }
 }
