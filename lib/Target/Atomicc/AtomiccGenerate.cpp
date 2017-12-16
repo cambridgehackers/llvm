@@ -866,26 +866,90 @@ static void processClass(ClassMethodTable *table)
     globalProcessFunction = NULL;
 }
 
-/*
- * Recursively generate output *.h,*.cpp,*.v,*.vh files.
- */
-void generateContainedStructs(const StructType *STy, FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
+static std::list<const StructType *> structSeq;
+static std::map<std::string, const StructType *> structAlpha;
+
+static void getDepend(const Type *Ty)
 {
-    ClassMethodTable *table = classCreate[STy];
-    generateRegion = ProcessVerilog;
-    processClass(table);
-    std::string temp;
-    getClass(STy);
-    //if (!STy->isLiteral() && !STy->getName().empty())
-        temp = STy->getName();
-    if (temp.substr(0, 6) == "module") {
-        // now generate the verilog header file '.vh'
-        metaGenerate(STy, OStrVH);
-        // Only generate verilog for modules derived from Module
-        generateModuleDef(STy, OStrV);
+std::map<std::string, const StructType *> structTemp;
+    if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty))
+        if (auto STy = dyn_cast<StructType>(PTy->getElementType()))
+            structTemp[getStructName(STy)] = STy;
+    const StructType *STy = dyn_cast_or_null<StructType>(Ty);
+    if (!STy || !STy->hasName() || STy->getName().substr(0, 7) == "emodule")
+        return;
+    std::string name = getStructName(STy);
+
+    if (!isInterface(STy))
+    if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
+     && strncmp(STy->getName().str().c_str(), "struct.std::", 12)) {
+        ClassMethodTable *table = classCreate[STy];
+        int Idx = 0;
+        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+            Type *element = *I;
+            if (table)
+            if (Type *newType = table->replaceType[Idx])
+                element = newType;
+            if (auto iSTy = dyn_cast<StructType>(element))
+                structTemp[getStructName(iSTy)] = iSTy;
+        }
+        for (auto FI : table->method) {
+            Function *func = FI.second;
+            if (!func) {
+                printf("[%s:%d] missing function in table method %s\n", __FUNCTION__, __LINE__, FI.first.c_str());
+                continue;
+                //exit(-1);
+            }
+            auto AI = func->arg_begin(), AE = func->arg_end();
+            if (const StructType *iSTy = dyn_cast<StructType>(func->getReturnType()))
+                structTemp[getStructName(iSTy)] = iSTy;
+            AI++;
+            for (; AI != AE; ++AI) {
+                Type *element = AI->getType();
+                if (auto PTy = dyn_cast<PointerType>(element))
+                    element = PTy->getElementType();
+                if (const StructType *iSTy = dyn_cast<StructType>(element))
+                    structTemp[getStructName(iSTy)] = iSTy;
+            }
+        }
     }
-    // Generate cpp for all modules
-    generateRegion = ProcessCPP;
-    if (temp.substr(0, 7) != "emodule")
-        generateClassDef(STy, OStrC, OStrCH);
+    for (auto element: structTemp) {
+         if (structAlpha[element.first])
+             getDepend(element.second);
+         if (structAlpha[element.first]) {
+             structSeq.push_back(element.second);
+             structAlpha[element.first] = NULL;
+         }
+    }
+    if (structAlpha[name]) {
+        structSeq.push_back(STy);
+        structAlpha[name] = NULL;
+    }
+}
+
+void generateClasses(FILE *OStrV, FILE *OStrVH, FILE *OStrC, FILE *OStrCH)
+{
+    for (auto current : classCreate)
+        if (!isInterface(current.first))
+            structAlpha[getStructName(current.first)] = current.first;
+    for (auto item : structAlpha)
+        getDepend(item.second);
+    for (auto STy : structSeq) {
+        ClassMethodTable *table = classCreate[STy];
+        generateRegion = ProcessVerilog;
+        processClass(table);
+        std::string temp;
+        getClass(STy);
+        temp = STy->getName();
+        if (temp.substr(0, 6) == "module") {
+            // now generate the verilog header file '.vh'
+            metaGenerate(STy, OStrVH);
+            // Only generate verilog for modules derived from Module
+            generateModuleDef(STy, OStrV);
+        }
+        // Generate cpp for all modules
+        generateRegion = ProcessCPP;
+        if (temp.substr(0, 7) != "emodule")
+            generateClassDef(STy, OStrC, OStrCH);
+    }
 }
