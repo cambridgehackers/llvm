@@ -134,12 +134,7 @@ bool isInterface(const StructType *STy)
 
 bool isActionMethod(const Function *func)
 {
-    if (!func) {
-printf("[%s:%d] null function pointer\n", __FUNCTION__, __LINE__);
-        exit(-1);
-    }
-    Type *retType = func->getReturnType();
-    return (retType == Type::getVoidTy(func->getContext()));
+    return (func->getReturnType() == Type::getVoidTy(func->getContext()));
 }
 
 static void checkClass(const StructType *STy, const StructType *ActSTy)
@@ -648,18 +643,6 @@ std::string printOperand(Value *Operand, bool Indirect)
             vout += printOperand(I->getOperand(0), false);
             break;
 
-        case Instruction::ExtractValue: {
-            const ExtractValueInst *EVI = dyn_cast<ExtractValueInst>(I);
-            //Vals.append(EVI->idx_begin(), EVI->idx_end());
-    //printf("[%s:%d] before %d\n", __FUNCTION__, __LINE__, (int)I->getNumOperands());
-    //I->dump();
-            uint64_t val = *EVI->idx_begin();
-    //printf("[%s:%d] val %d\n", __FUNCTION__, __LINE__, (int)val);
-            vout += printOperand(I->getOperand(0), false) + "." + fieldName(dyn_cast<StructType>(I->getOperand(0)->getType()), val);
-    //printf("[%s:%d] after\n", __FUNCTION__, __LINE__);
-            break;
-        }
-
         // Other instructions...
         case Instruction::ICmp: case Instruction::FCmp: {
             ICmpInst *CI = dyn_cast<ICmpInst>(I);
@@ -812,14 +795,10 @@ static void processClass(ClassMethodTable *table)
 static std::list<const StructType *> structSeq;
 static std::map<std::string, const StructType *> structAlpha;
 
-static void getDepend(const Type *Ty)
+static void getDepend(const StructType *STy)
 {
     std::map<std::string, const StructType *> structTemp;
-    if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty))
-        if (auto STy = dyn_cast<StructType>(PTy->getElementType()))
-            structTemp[getStructName(STy)] = STy;
-    const StructType *STy = dyn_cast_or_null<StructType>(Ty);
-    if (!STy || !STy->hasName() || STy->getName().substr(0, 7) == "emodule")
+    if (!STy->hasName() || STy->getName().substr(0, 7) == "emodule")
         return;
     std::string name = getStructName(STy);
 
@@ -871,7 +850,8 @@ void generateClasses(FILE *OStrV, FILE *OStrVH)
         //if (!isInterface(current.first))
         structAlpha[getStructName(current.first)] = current.first;
     for (auto item : structAlpha)
-        getDepend(item.second);
+        if (item.second)
+            getDepend(item.second);
     for (auto STy : structSeq) {
         ClassMethodTable *table = classCreate[STy];
         processClass(table);

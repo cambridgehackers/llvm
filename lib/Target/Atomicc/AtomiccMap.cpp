@@ -110,7 +110,7 @@ void dumpMemoryRegions(int arg)
 /*
  * Verify that an address lies within a valid user data area.
  */
-int validateAddress(int arg, void *p)
+static int validateAddress(int arg, void *p)
 {
     static int once;
     for (MEMORY_REGION info : memoryRegion) {
