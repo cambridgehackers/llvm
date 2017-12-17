@@ -54,11 +54,13 @@ typedef struct {
 } InterfaceConnectType;
 
 typedef struct {
+    std::string fname;
     BasicBlock *bb;
     std::string value;
 } MuxValueEntry;
 
 typedef struct {
+    std::string fname;
     BasicBlock *bb;
     std::string signal;
 } MuxEnableEntry;

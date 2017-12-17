@@ -277,8 +277,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         }
     }
     for (auto item: table->muxEnableList) {
-        Function *func = item.bb->getParent();
-        std::string tempCond = pushSeen[func] + "_internal";
+        std::string tempCond = item.fname;
         if (Value *cond = getCondition(item.bb, 0))
             tempCond += " & " + printOperand(cond, false);
         if (assignList[item.signal] != "")
@@ -291,8 +290,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         int remain = item.second.size();
         std::string temp;
         for (auto element: item.second) {
-            Function *func = element.bb->getParent();
-            std::string tempCond = pushSeen[func] + "_internal";
+            std::string tempCond = element.fname;
             if (Value *cond = getCondition(element.bb, 0))
                 tempCond += " & " + printOperand(cond, false);
             if (--remain)

@@ -521,6 +521,7 @@ return "";
         //exit(-1);
     }
     std::string mname = prefix + fname;
+    std::string muxName = pushSeen[I->getParent()->getParent()] + "_internal";
     if (calledName == "printf") {
         //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
@@ -529,7 +530,7 @@ return "";
     else {
         if (isActionMethod(func)) {
             if (globalClassTable)
-            globalClassTable->muxEnableList.push_back(MuxEnableEntry{I->getParent(), mname});
+            globalClassTable->muxEnableList.push_back(MuxEnableEntry{muxName, I->getParent(), mname});
         }
         else
             vout += mname;
@@ -546,7 +547,7 @@ return "";
         std::string parg = printOperand(*AI, indirect);
         if (globalClassTable)
             globalClassTable->muxValueList[prefix + FAI->getName().str()]
-               .push_back(MuxValueEntry{I->getParent(), parg});
+               .push_back(MuxValueEntry{muxName, I->getParent(), parg});
         sep = ", ";
     }
     return vout;
