@@ -813,8 +813,6 @@ static void processClass(ClassMethodTable *table)
     for (auto FI : table->method) {
         Function *func = FI.second;
         globalProcessFunction = func;
-        if (!func)
-            continue;
         NextAnonValueNumber = 0;
         if (trace_function || trace_call)
             printf("PROCESSING %s\n", func->getName().str().c_str());
@@ -871,7 +869,7 @@ static std::map<std::string, const StructType *> structAlpha;
 
 static void getDepend(const Type *Ty)
 {
-std::map<std::string, const StructType *> structTemp;
+    std::map<std::string, const StructType *> structTemp;
     if (const PointerType *PTy = dyn_cast_or_null<PointerType>(Ty))
         if (auto STy = dyn_cast<StructType>(PTy->getElementType()))
             structTemp[getStructName(STy)] = STy;
@@ -895,11 +893,6 @@ std::map<std::string, const StructType *> structTemp;
         }
         for (auto FI : table->method) {
             Function *func = FI.second;
-            if (!func) {
-                printf("[%s:%d] missing function in table method %s\n", __FUNCTION__, __LINE__, FI.first.c_str());
-                continue;
-                //exit(-1);
-            }
             auto AI = func->arg_begin(), AE = func->arg_end();
             if (const StructType *iSTy = dyn_cast<StructType>(func->getReturnType()))
                 structTemp[getStructName(iSTy)] = iSTy;

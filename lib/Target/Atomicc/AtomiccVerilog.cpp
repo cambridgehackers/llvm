@@ -123,8 +123,6 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
         inpClk = "";
         for (auto FI : table->method) {
             const Function *func = FI.second;
-            if (!func)
-                continue;
             std::string mname = FI.first;
             Type *retType = func->getReturnType();
             auto AI = func->arg_begin(), AE = func->arg_end();
@@ -148,8 +146,6 @@ func->dump();
     paramList.push_back(inpClk + "nRST");
     for (auto FI : table->method) {
         Function *func = FI.second;
-        if (!func)
-            continue;
         std::string mname = FI.first;
         if (table->ruleFunctions[mname.substr(0, mname.length()-5)])
             continue;
@@ -193,12 +189,6 @@ func->dump();
                     Function *func = FI.second;
                     std::string wparam, mname = ename + MODULE_SEPARATOR + FI.first;
 //printf("[%s:%d] mname %s func %p\n", __FUNCTION__, __LINE__, mname.c_str(), func);
-                    if (!func) {
-printf("[%s:%d] LLLLLLLLLLLLLLLL\n", __FUNCTION__, __LINE__);
-exit(-1);
-                        continue;
-}
-//printf("[%s:%d] mname %s\n", __FUNCTION__, __LINE__, mname.c_str());
                     Type *retType = func->getReturnType();
                     auto AI = func->arg_begin(), AE = func->arg_end();
                     if (isActionMethod(func))
@@ -253,12 +243,6 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     // from each method
     for (auto FI : table->method) {
         Function *func = FI.second;
-        if (!func)
-{
-printf("[%s:%d] LLLLLLLLLLLLLLLLLo\n", __FUNCTION__, __LINE__);
-exit(-1);
-             continue;
-}
         std::string mname = FI.first;
         std::string rdyName = mname.substr(0, mname.length()-5) + "__RDY";
         if (endswith(mname, "__VALID"))
