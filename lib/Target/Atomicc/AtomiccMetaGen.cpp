@@ -79,9 +79,12 @@ void metaGenerate(const StructType *STy, FILE *OStr)
                 table->metaList.push_back("//METAINVOKE; " + mname + "; " + temp);
             std::map<std::string,std::string> metaBefore;
             std::map<std::string,std::string> metaConflict;
+            std::map<const Function *, std::string> methodArray;
+            for (auto innerFI : table->method)
+                methodArray[innerFI.second] = innerFI.first;
             for (auto innerFI : table->method) {
                 Function *innerfunc = innerFI.second;
-                std::string innermname = pushSeen[innerfunc];
+                std::string innermname = methodArray[innerfunc];
                 MetaData *innerbm = &funcMetaMap[innerfunc];
                 std::string tempConflict;
                 if (innerfunc == func)
