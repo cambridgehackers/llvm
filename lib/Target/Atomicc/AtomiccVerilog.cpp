@@ -183,18 +183,21 @@ func->dump();
 //printf("[%s:%d] indication interface topname %s sname %s fname %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), fname.c_str());
     int Idx = 0;
     for (auto I = iSTy->element_begin(), E = iSTy->element_end(); I != E; ++I, Idx++) {
-        std::string fname = fieldName(iSTy, Idx);
+        std::string ename = fname + MODULE_SEPARATOR + fieldName(iSTy, Idx);
         Type *element = *I;
         if (auto interfaceSTy = dyn_cast<StructType>(element))
         if (isInterface(interfaceSTy)) {
                 if (ClassMethodTable *itable = classCreate[interfaceSTy]) {
-//printf("[%s:%d] indication interface topname %s sname %s fname %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), interfaceSTy->getName().str().c_str(), fname.c_str());
+//printf("[%s:%d] indication interface topname %s sname %s ename %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), interfaceSTy->getName().str().c_str(), ename.c_str());
                 for (auto FI : itable->method) {
                     Function *func = FI.second;
-                    std::string wparam, mname = fname + MODULE_SEPARATOR + FI.first;
+                    std::string wparam, mname = ename + MODULE_SEPARATOR + FI.first;
 //printf("[%s:%d] mname %s func %p\n", __FUNCTION__, __LINE__, mname.c_str(), func);
-                    if (!func)
+                    if (!func) {
+printf("[%s:%d] LLLLLLLLLLLLLLLL\n", __FUNCTION__, __LINE__);
+exit(-1);
                         continue;
+}
 //printf("[%s:%d] mname %s\n", __FUNCTION__, __LINE__, mname.c_str());
                     Type *retType = func->getReturnType();
                     auto AI = func->arg_begin(), AE = func->arg_end();
@@ -204,7 +207,7 @@ func->dump();
                         wparam = inp + (instance == "" ? verilogArrRange(retType):"") + mname;
                     paramList.push_back(wparam);
                     for (AI++; AI != AE; ++AI) {
-                        wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + AI->getName().str();
+                        wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + ename + MODULE_SEPARATOR + AI->getName().str();
                         paramList.push_back(wparam);
                     }
                 }
@@ -251,7 +254,11 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     for (auto FI : table->method) {
         Function *func = FI.second;
         if (!func)
+{
+printf("[%s:%d] LLLLLLLLLLLLLLLLLo\n", __FUNCTION__, __LINE__);
+exit(-1);
              continue;
+}
         std::string mname = FI.first;
         std::string rdyName = mname.substr(0, mname.length()-5) + "__RDY";
         if (endswith(mname, "__VALID"))
