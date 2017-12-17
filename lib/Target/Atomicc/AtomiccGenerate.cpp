@@ -22,8 +22,8 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
-#define MODULE_ARROW (generateRegion == ProcessVerilog ? MODULE_SEPARATOR : "->")
-#define MODULE_DOT   (generateRegion == ProcessVerilog ? MODULE_SEPARATOR : ".")
+#define MODULE_ARROW MODULE_SEPARATOR
+#define MODULE_DOT   MODULE_SEPARATOR
 
 static int trace_function;//=1;
 static int trace_call;//=1;
@@ -31,7 +31,6 @@ static int trace_gep;//=1;
 static int trace_operand;//=1;
 std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
-static int generateRegion = ProcessNone;
 
 static std::map<const Value *, std::string> allocaMap;
 static DenseMap<const Value*, unsigned> AnonValueNumbers;
@@ -203,9 +202,7 @@ std::string GetValueName(const Value *Operand)
             No = ++NextAnonValueNumber;
         Name = "tmp__" + utostr(No);
     }
-    std::string VarName;
-    if (generateRegion == ProcessVerilog)
-        VarName = allocaMap[Operand];
+    std::string VarName = allocaMap[Operand];
     if (VarName == "")
     for (auto charp = Name.begin(), E = Name.end(); charp != E; ++charp) {
         char ch = *charp;
@@ -247,10 +244,7 @@ std::string printType(Type *Ty, bool isSigned, std::string NameSoFar, std::strin
     int thisId = Ty->getTypeID();
     switch (thisId) {
     case Type::VoidTyID:
-        if (generateRegion == ProcessVerilog)
-            cbuffer += "VERILOG_void " + NameSoFar;
-        else
-            cbuffer += "void " + NameSoFar;
+        cbuffer += "VERILOG_void " + NameSoFar;
         break;
     case Type::IntegerTyID: {
         unsigned NumBits = cast<IntegerType>(Ty)->getBitWidth();
@@ -258,7 +252,6 @@ if (NumBits != 1 && NumBits != 8 && NumBits != 32 && NumBits != 64) {
 printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
 }
         assert(NumBits <= 128 && "Bit widths > 128 not implemented yet");
-        if (generateRegion == ProcessVerilog) {
         if (NumBits == 1)
             cbuffer += "VERILOG_bool";
         else if (NumBits <= 8) {
@@ -274,27 +267,6 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
             cbuffer += "reg" + verilogArrRange(Ty);
         else if (NumBits <= 64)
             cbuffer += sp + " VERILOG_long long";
-        }
-        else {
-        if (NumBits == 1)
-            cbuffer += "bool";
-        else if (NumBits <= 8) {
-            if (ptr) {
-                if (sp == "unsigned")
-                    cbuffer += "void";
-                else
-                    cbuffer += sp + " char";
-            }
-            else
-                cbuffer += "bool";
-        }
-        else if (NumBits <= 16)
-            cbuffer += sp + " short";
-        else if (NumBits <= 32)
-            cbuffer += sp + " int";
-        else if (NumBits <= 64)
-            cbuffer += sp + " long long";
-        }
         cbuffer += " " + NameSoFar;
         break;
         }
@@ -320,22 +292,12 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
             tstr += printType(element, /*isSigned=*/false, "", sep, "", false);
             sep = ", ";
         }
-        if (generateRegion == ProcessVerilog) {
         if (FTy->isVarArg()) {
             if (!FTy->getNumParams())
                 tstr += " VERILOG_int"; //dummy argument for empty vaarg functs
             tstr += ", ...";
         } else if (!FTy->getNumParams())
             tstr += "VERILOG_void";
-        }
-        else {
-        if (FTy->isVarArg()) {
-            if (!FTy->getNumParams())
-                tstr += " int"; //dummy argument for empty vaarg functs
-            tstr += ", ...";
-        } else if (!FTy->getNumParams())
-            tstr += "void";
-        }
         cbuffer += printType(retType, /*isSigned=*/false, tstr + ')', "", "", false);
         break;
         }
@@ -348,8 +310,6 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
         ArrayType *ATy = cast<ArrayType>(Ty);
         unsigned len = ATy->getNumElements();
         if (len == 0) len = 1;
-        if (generateRegion == ProcessVerilog) {
-        }
         cbuffer += printType(ATy->getElementType(), false, "", "", "", false) + NameSoFar + "[" + utostr(len) + "]";
         break;
         }
@@ -359,8 +319,6 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
         if (PTy->getElementType()->isArrayTy() || PTy->getElementType()->isVectorTy())
             ptrName = "(" + ptrName + ")";
         cbuffer += printType(PTy->getElementType(), false, ptrName, "", "", true);
-        if (generateRegion == ProcessVerilog) {
-        }
         break;
         }
     default:
@@ -457,11 +415,7 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
             }
             if (expose)
                 referstr += dot;
-            else if (referstr == "this"
-#if 1  // turn on to generate "this->" in cpp code
-                   && generateRegion == ProcessVerilog
-#endif
-                )
+            else if (referstr == "this")
                 referstr = "";
             else {
                 std::string arrow = MODULE_ARROW;
@@ -562,8 +516,7 @@ return "";
         pcalledFunction = "";
         prefix = "";
     }
-    if (generateRegion == ProcessVerilog)
-        prefix = pcalledFunction + prefix;
+    prefix = pcalledFunction + prefix;
     if (trace_call)
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
@@ -578,8 +531,6 @@ return "";
         vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ", ";
     }
-    else if (generateRegion == ProcessCPP)
-        vout += pcalledFunction + mname + "(";
     else {
         if (isActionMethod(func)) {
             if (globalClassTable)
@@ -598,17 +549,11 @@ return "";
         if (dyn_cast<Argument>(*AI))
             indirect = false;
         std::string parg = printOperand(*AI, indirect);
-        if (generateRegion == ProcessCPP)
-            vout += sep + parg;
-        else {
-            if (globalClassTable)
+        if (globalClassTable)
             globalClassTable->muxValueList[prefix + FAI->getName().str()]
                .push_back(MuxValueEntry{I->getParent(), parg});
-        }
         sep = ", ";
     }
-    if (generateRegion != ProcessVerilog)
-        vout += ")";
     return vout;
 }
 
@@ -929,7 +874,6 @@ void generateClasses(FILE *OStrV, FILE *OStrVH)
         getDepend(item.second);
     for (auto STy : structSeq) {
         ClassMethodTable *table = classCreate[STy];
-        generateRegion = ProcessVerilog;
         processClass(table);
         std::string temp;
         getClass(STy);

@@ -40,7 +40,6 @@
 
 #define GIANT_SIZE 1024
 
-enum {ProcessNone=0, ProcessVerilog, ProcessCPP};
 enum {MetaNone, MetaRead, MetaWrite, MetaInvoke, MetaMax};
 
 typedef struct {
