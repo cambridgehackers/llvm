@@ -112,113 +112,118 @@ void setAssign(std::string target, std::string value)
 static void generateModuleSignature(FILE *OStr, const StructType *STy, std::string instance)
 {
     ClassMethodTable *table = classCreate[STy];
-    std::string name = getStructName(STy);
+    std::string topClassName = getStructName(STy);
     std::string inp = "input ", outp = "output ", instPrefix, inpClk = "input ";
-    std::list<std::string> paramList;
-//printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, name.c_str(), instance.c_str());
+    std::list<std::string> modulePortList;
+
+//printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, topClassName.c_str(), instance.c_str());
     if (instance != "") {
+        // if we are an instance, define 'wire' elements before instantiating instance
         instPrefix = instance + MODULE_SEPARATOR;
         inp = instPrefix;
         outp = instPrefix;
         inpClk = "";
+    }
+    modulePortList.push_back(inpClk + "CLK");
+    modulePortList.push_back(inpClk + "nRST");
+    if (instance != "") {
         for (auto FI : table->method) {
             const Function *func = FI.second;
-            std::string mname = FI.first;
+            std::string methodName = FI.first;
             Type *retType = func->getReturnType();
             auto AI = func->arg_begin(), AE = func->arg_end();
             std::string arrRange;
-            std::string wparam = inp + mname;
+            std::string wparam = inp + methodName;
             if (!isActionMethod(func))
                 arrRange = verilogArrRange(retType);
-//printf("[%s:%d] func %p FI.first %s mname %s wparam %s\n", __FUNCTION__, __LINE__, func, FI.first.c_str(), mname.c_str(), wparam.c_str());
-func->dump();
+//printf("[%s:%d] func %p FI.first %s methodName %s wparam %s\n", __FUNCTION__, __LINE__, func, FI.first.c_str(), methodName.c_str(), wparam.c_str());
+//func->dump();
             if (inlineValue(wparam, false) == "")
                 fprintf(OStr, "    wire %s%s;\n", arrRange.c_str(), wparam.c_str());
             for (AI++; AI != AE; ++AI) {
                 wparam = instPrefix + AI->getName().str();
-//printf("[%s:%d] mname %s jjjjjjjjjjjjjjjjjjjiiiiparam pref %s name %s wparam %s\n", __FUNCTION__, __LINE__, mname.c_str(), instPrefix.c_str(), AI->getName().str().c_str(), wparam.c_str());
+//printf("[%s:%d] methodName %s jjjjjjjjjjjjjjjjjjjiiiiparam pref %s name %s wparam %s\n", __FUNCTION__, __LINE__, methodName.c_str(), instPrefix.c_str(), AI->getName().str().c_str(), wparam.c_str());
                 if (inlineValue(wparam, false) == "")
                     fprintf(OStr, "    wire %s%s;\n", verilogArrRange(AI->getType()).c_str(), wparam.c_str());
             }
         }
     }
-    paramList.push_back(inpClk + "CLK");
-    paramList.push_back(inpClk + "nRST");
     for (auto FI : table->method) {
         Function *func = FI.second;
-        std::string mname = FI.first;
-        if (table->ruleFunctions[mname.substr(0, mname.length()-5)])
+        std::string methodName = FI.first;
+        if (table->ruleFunctions[methodName.substr(0, methodName.length()-5)])
             continue;
         Type *retType = func->getReturnType();
         auto AI = func->arg_begin(), AE = func->arg_end();
-        std::string wparam = inp + mname;
+        std::string wparam = inp + methodName;
         if (instance != "")
             wparam = inlineValue(wparam, true);
         else if (!isActionMethod(func))
-            wparam = outp + verilogArrRange(retType) + mname;
-        paramList.push_back(wparam);
+            wparam = outp + verilogArrRange(retType) + methodName;
+        modulePortList.push_back(wparam);
         for (AI++; AI != AE; ++AI) {
-//printf("[%s:%d] mname %s iiiiiiiiiiiiiiiiiiiiiiiiiparam pref %s name %s\n", __FUNCTION__, __LINE__, mname.c_str(), instPrefix.c_str(), AI->getName().str().c_str());
+//printf("[%s:%d] methodName %s iiiiiiiiiiiiiiiiiiiiiiiiiparam pref %s name %s\n", __FUNCTION__, __LINE__, methodName.c_str(), instPrefix.c_str(), AI->getName().str().c_str());
             if (instance != "")
                 wparam = inlineValue(instPrefix + AI->getName().str(), true);
             else
                 wparam = inp + verilogArrRange(AI->getType()) + AI->getName().str();
-            paramList.push_back(wparam);
+            modulePortList.push_back(wparam);
         }
     }
+    // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         Type *element = *I;
         if (Type *newType = table->replaceType[Idx])
             element = newType;
-        std::string fname = fieldName(STy, Idx);
-        if (fname != "")
+        std::string fldName = fieldName(STy, Idx);
+        if (fldName != "")
         if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
             element = PTy->getElementType();
             if (const StructType *iSTy = dyn_cast<StructType>(element)) { // calling indications from this module
-//printf("[%s:%d] indication interface topname %s sname %s fname %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), fname.c_str());
-    int Idx = 0;
-    for (auto I = iSTy->element_begin(), E = iSTy->element_end(); I != E; ++I, Idx++) {
-        std::string ename = fname + MODULE_SEPARATOR + fieldName(iSTy, Idx);
-        Type *element = *I;
-        if (auto interfaceSTy = dyn_cast<StructType>(element))
-        if (isInterface(interfaceSTy)) {
-                if (ClassMethodTable *itable = classCreate[interfaceSTy]) {
-//printf("[%s:%d] indication interface topname %s sname %s ename %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), interfaceSTy->getName().str().c_str(), ename.c_str());
-                for (auto FI : itable->method) {
-                    Function *func = FI.second;
-                    std::string wparam, mname = ename + MODULE_SEPARATOR + FI.first;
-//printf("[%s:%d] mname %s func %p\n", __FUNCTION__, __LINE__, mname.c_str(), func);
-                    Type *retType = func->getReturnType();
-                    auto AI = func->arg_begin(), AE = func->arg_end();
-                    if (isActionMethod(func))
-                        wparam = outp + mname;
-                    else
-                        wparam = inp + (instance == "" ? verilogArrRange(retType):"") + mname;
-                    paramList.push_back(wparam);
-                    for (AI++; AI != AE; ++AI) {
-                        wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + ename + MODULE_SEPARATOR + AI->getName().str();
-                        paramList.push_back(wparam);
+//printf("[%s:%d] indication interface topname %s sname %s fldName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), fldName.c_str());
+                int Idx = 0;
+                for (auto I = iSTy->element_begin(), E = iSTy->element_end(); I != E; ++I, Idx++) {
+                    std::string elementName = fldName + MODULE_SEPARATOR + fieldName(iSTy, Idx);
+                    Type *element = *I;
+                    if (auto interfaceSTy = dyn_cast<StructType>(element))
+                    if (ClassMethodTable *itable = classCreate[interfaceSTy]) {
+                    if (isInterface(interfaceSTy)) {
+//printf("[%s:%d] indication interface topname %s sname %s elementName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), interfaceSTy->getName().str().c_str(), elementName.c_str());
+                    for (auto FI : itable->method) {
+                        Function *func = FI.second;
+                        std::string wparam, methodName = elementName + MODULE_SEPARATOR + FI.first;
+//printf("[%s:%d] methodName %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), func);
+                        Type *retType = func->getReturnType();
+                        auto AI = func->arg_begin(), AE = func->arg_end();
+                        if (isActionMethod(func))
+                            wparam = outp + methodName;
+                        else
+                            wparam = inp + (instance == "" ? verilogArrRange(retType):"") + methodName;
+                        modulePortList.push_back(wparam);
+                        for (AI++; AI != AE; ++AI) {
+                            wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + elementName + MODULE_SEPARATOR + AI->getName().str();
+                            modulePortList.push_back(wparam);
+                        }
+                    }
+                    }
                     }
                 }
-                }
-        }
-    }
             }
             else
-                paramList.push_back(outp + printType(element, false, fname, "  ", "", false));
+                modulePortList.push_back(outp + printType(element, false, fldName, "  ", "", false));
         }
     }
     if (instance != "")
-        fprintf(OStr, "    %s %s (\n", name.c_str(), instance.c_str());
+        fprintf(OStr, "    %s %s (\n", topClassName.c_str(), instance.c_str());
     else
-        fprintf(OStr, "module %s (\n", name.c_str());
-    for (auto PI = paramList.begin(); PI != paramList.end();) {
+        fprintf(OStr, "module %s (\n", topClassName.c_str());
+    for (auto PI = modulePortList.begin(); PI != modulePortList.end();) {
         if (instance != "")
             fprintf(OStr, "    ");
         fprintf(OStr, "    %s", PI->c_str());
         PI++;
-        if (PI != paramList.end())
+        if (PI != modulePortList.end())
             fprintf(OStr, ",\n");
     }
     fprintf(OStr, ");\n");
@@ -244,11 +249,11 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     // from each method
     for (auto FI : table->method) {
         Function *func = FI.second;
-        std::string mname = FI.first;
-        std::string rdyName = mname.substr(0, mname.length()-5) + "__RDY";
-        if (endswith(mname, "__VALID"))
-            rdyName = mname.substr(0, mname.length()-7) + "__READY";
-        std::string globalCondition = mname;
+        std::string methodName = FI.first;
+        std::string rdyName = methodName.substr(0, methodName.length()-5) + "__RDY";
+        if (endswith(methodName, "__VALID"))
+            rdyName = methodName.substr(0, methodName.length()-7) + "__READY";
+        std::string globalCondition = methodName;
         int count = 0;
         for (auto info: storeList[func]) {
             bool vassign = isAlloca(info->getPointerOperand());
@@ -265,11 +270,11 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             if (ruleENAFunction[func])
                 assignList[globalCondition + "_internal"] = table->guard[func];  // collect the text of the return value into a single 'assign'
             else if (table->guard[func] != "")
-                setAssign(mname, table->guard[func]);  // collect the text of the return value into a single 'assign'
+                setAssign(methodName, table->guard[func]);  // collect the text of the return value into a single 'assign'
         }
         else {
             // generate RDY_internal wire so that we can reference RDY expression inside module
-            if (!table->ruleFunctions[mname.substr(0, mname.length()-5)]) {
+            if (!table->ruleFunctions[methodName.substr(0, methodName.length()-5)]) {
                 fprintf(OStr, "    wire %s_internal;\n", rdyName.c_str());
                 lateAssignList[rdyName] = rdyName + "_internal";
             }
@@ -286,7 +291,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                     alwaysLines.push_back("    " + pdest + " <= " + printOperand(info->getOperand(0), false) + ";");
                     }
                 }
-                alwaysLines.push_back("end; // End of " + mname);
+                alwaysLines.push_back("end; // End of " + methodName);
             }
         }
     }
@@ -329,22 +334,22 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             vecCount = table->replaceCount[Idx];
         }
         do {
-        std::string fname = fieldName(STy, Idx);
-        if (fname != "") {
+        std::string fldName = fieldName(STy, Idx);
+        if (fldName != "") {
             if (vecCount != -1)
-                fname += utostr(dimIndex++);
+                fldName += utostr(dimIndex++);
             if (const StructType *STy = dyn_cast<StructType>(element)) {
-                std::string sname = getStructName(STy);
-                if (sname.substr(0,12) == "l_struct_OC_") {
-                    fprintf(OStr, "    reg%s %s;\n", verilogArrRange(element).c_str(), fname.c_str());
-                    resetList.push_back(fname);
+                std::string structName = getStructName(STy);
+                if (structName.substr(0,12) == "l_struct_OC_") {
+                    fprintf(OStr, "    reg%s %s;\n", verilogArrRange(element).c_str(), fldName.c_str());
+                    resetList.push_back(fldName);
                 }
                 else if (!isInterface(STy))
-                    generateModuleSignature(OStr, STy, fname);
+                    generateModuleSignature(OStr, STy, fldName);
             }
             else if (!dyn_cast<PointerType>(element)) {
-                fprintf(OStr, "    %s;\n", printType(element, false, fname, "", "", false).c_str());
-                resetList.push_back(fname);
+                fprintf(OStr, "    %s;\n", printType(element, false, fldName, "", "", false).c_str());
+                resetList.push_back(fldName);
             }
         }
         } while(vecCount-- > 0);
