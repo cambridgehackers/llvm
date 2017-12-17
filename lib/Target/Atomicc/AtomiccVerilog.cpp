@@ -74,7 +74,7 @@ static bool findExact(std::string haystack, std::string needle)
 /*
  * lookup/replace values for class variables that are assigned only 1 time.
  */
-std::map<std::string, std::string> assignList;
+std::map<std::string, std::string> assignList, lateAssignList;
 static std::string inlineValue(std::string wname, bool clear)
 {
     std::string temp, exactMatch;
@@ -236,6 +236,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     std::list<std::string> resetList;
 
     assignList.clear();
+    lateAssignList.clear();
     // first generate the verilog module file '.v'
     generateModuleSignature(OStr, STy, "");
     // generate local state element declarations
@@ -270,7 +271,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             // generate RDY_internal wire so that we can reference RDY expression inside module
             if (!table->ruleFunctions[mname.substr(0, mname.length()-5)]) {
                 fprintf(OStr, "    wire %s_internal;\n", rdyName.c_str());
-                assignList[rdyName] = rdyName + "_internal";
+                lateAssignList[rdyName] = rdyName + "_internal";
             }
             if (count > 0) {
                 alwaysLines.push_back("if (" + globalCondition + ") begin");
@@ -350,6 +351,9 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     }
     // generate 'assign' items
     for (auto item: assignList)
+        if (item.second != "")
+            fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.c_str());
+    for (auto item: lateAssignList)
         if (item.second != "")
             fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.c_str());
     // generate clocked updates to state elements
