@@ -46,6 +46,7 @@ static uint64_t sizeType(Type *Ty)
     case Type::PointerTyID:
         return sizeType(cast<PointerType>(Ty)->getElementType());
     case Type::VoidTyID:
+        return 0;
     case Type::FunctionTyID:
     default:
         llvm_unreachable("Unhandled case in sizeType!");
@@ -111,10 +112,10 @@ void setAssign(std::string target, std::string value)
  */
 static void generateModuleSignature(FILE *OStr, const StructType *STy, std::string instance)
 {
+    std::list<std::string> modulePortList, wireList;
     ClassMethodTable *table = classCreate[STy];
     std::string topClassName = getStructName(STy);
     std::string inp = "input ", outp = "output ", instPrefix, inpClk = "input ";
-    std::list<std::string> modulePortList;
 
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, topClassName.c_str(), instance.c_str());
     if (instance != "") {
@@ -127,21 +128,18 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
     modulePortList.push_back(inpClk + "nRST");
     // First handle all 'incoming' interface methods
     for (auto FI : table->method) {
-        const Function *func = FI.second;
         std::string methodName = FI.first;
-        Type *retType = func->getReturnType();
-        std::string wparam = inp + methodName;
-        std::string arrRange;
-        if (!isActionMethod(func))
-            arrRange = verilogArrRange(retType);
-        auto AI = func->arg_begin(), AE = func->arg_end();
         if (table->ruleFunctions[methodName.substr(0, methodName.length()-5)])
             continue;
-
+        const Function *func = FI.second;
+        Type *retType = func->getReturnType();
+        std::string wparam = inp + methodName;
+        std::string arrRange = verilogArrRange(retType);
+        auto AI = func->arg_begin(), AE = func->arg_end();
         if (instance != "") {
             // define 'wire' elements before instantiating instance
             if (inlineValue(wparam, false) == "")
-                fprintf(OStr, "    wire %s;\n", (arrRange + wparam).c_str());
+                wireList.push_back(arrRange + wparam);
             wparam = inlineValue(wparam, true);
         }
         else if (!isActionMethod(func))
@@ -153,7 +151,7 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
                 // define 'wire' elements before instantiating instance
                 wparam = inp + AI->getName().str();
                 if (inlineValue(wparam, false) == "")
-                    fprintf(OStr, "    wire %s;\n", (arrRange + wparam).c_str());
+                    wireList.push_back(arrRange + wparam);
                 wparam = inlineValue(wparam, true);
             }
             else
@@ -165,49 +163,52 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
     // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+        std::string fldName = fieldName(STy, Idx);
         Type *element = *I;
         if (Type *newType = table->replaceType[Idx])
             element = newType;
-        std::string fldName = fieldName(STy, Idx);
-        if (fldName != "")
-        if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
-            element = PTy->getElementType();
-            if (const StructType *iSTy = dyn_cast<StructType>(element)) { // calling indications from this module
+        const PointerType *PTy = dyn_cast<PointerType>(element);
+        if (fldName == "" || !PTy)
+            continue;
+        element = PTy->getElementType();
+        const StructType *iSTy = dyn_cast<StructType>(element);
+        if (!iSTy) { // not calling indications from this module
+            modulePortList.push_back(outp + printType(element, false, fldName, "  ", "", false));
+printf("[%s:%d]WHYWHYWHY????\n", __FUNCTION__, __LINE__);
+element->dump();
+STy->dump();
+exit(-1);
+            continue;
+        }
 //printf("[%s:%d] indication interface topname %s sname %s fldName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), fldName.c_str());
-                int Idx = 0;
-                for (auto I = iSTy->element_begin(), E = iSTy->element_end(); I != E; ++I, Idx++) {
-                    std::string elementName = fldName + MODULE_SEPARATOR + fieldName(iSTy, Idx);
-                    Type *element = *I;
-                    if (auto interfaceSTy = dyn_cast<StructType>(element))
-                    if (ClassMethodTable *itable = classCreate[interfaceSTy]) {
-                    if (isInterface(interfaceSTy)) {
+        int Idx = 0;
+        for (auto I = iSTy->element_begin(), E = iSTy->element_end(); I != E; ++I, Idx++) {
+            std::string elementName = fldName + MODULE_SEPARATOR + fieldName(iSTy, Idx) + MODULE_SEPARATOR;
+            auto interfaceSTy = dyn_cast<StructType>(*I);
+            if (!interfaceSTy || !isInterface(interfaceSTy))
+                continue;
+            ClassMethodTable *itable = classCreate[interfaceSTy];
 //printf("[%s:%d] indication interface topname %s sname %s elementName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), interfaceSTy->getName().str().c_str(), elementName.c_str());
-                    for (auto FI : itable->method) {
-                        Function *func = FI.second;
-                        std::string wparam, methodName = elementName + MODULE_SEPARATOR + FI.first;
-//printf("[%s:%d] methodName %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), func);
-                        Type *retType = func->getReturnType();
-                        auto AI = func->arg_begin(), AE = func->arg_end();
-                        if (isActionMethod(func))
-                            wparam = outp + methodName;
-                        else
-                            wparam = inp + (instance == "" ? verilogArrRange(retType):"") + methodName;
-                        modulePortList.push_back(wparam);
-                        for (AI++; AI != AE; ++AI) {
-                            wparam = outp + (instance == "" ? verilogArrRange(AI->getType()):"") + elementName + MODULE_SEPARATOR + AI->getName().str();
-                            modulePortList.push_back(wparam);
-                        }
-                    }
-                    }
-                    }
+            for (auto FI : itable->method) {
+                std::string wparam = outp;
+                Function *func = FI.second;
+                auto AI = func->arg_begin(), AE = func->arg_end();
+//printf("[%s:%d] methodName %s func %p\n", __FUNCTION__, __LINE__, FI.first.c_str(), func);
+                if (!isActionMethod(func))
+                    wparam = inp + (instance == "" ? verilogArrRange(func->getReturnType()):"");
+                modulePortList.push_back(wparam + elementName + FI.first);
+                for (AI++; AI != AE; ++AI) {
+                    modulePortList.push_back(outp
+                       + (instance == "" ? verilogArrRange(AI->getType()):"")
+                       + elementName + AI->getName().str());
                 }
             }
-            else
-                modulePortList.push_back(outp + printType(element, false, fldName, "  ", "", false));
         }
     }
 
     // now write actual module signature to output file
+    for (auto wname: wireList)
+        fprintf(OStr, "    wire %s;\n", wname.c_str());
     if (instance != "")
         fprintf(OStr, "    %s %s (\n", topClassName.c_str(), instance.c_str());
     else
@@ -228,15 +229,12 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
  */
 void generateModuleDef(const StructType *STy, FILE *OStr)
 {
-    ClassMethodTable *table = classCreate[STy];
+    std::list<std::string> alwaysLines, resetList;
     std::string name = getStructName(STy);
-    std::list<std::string> alwaysLines;
-    std::string extraRules = utostr(table->ruleFunctions.size());
-    std::list<std::string> resetList;
+    ClassMethodTable *table = classCreate[STy];
 
     assignList.clear();
     lateAssignList.clear();
-    // first generate the verilog module file '.v'
     generateModuleSignature(OStr, STy, "");
     // generate local state element declarations
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
@@ -247,46 +245,35 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         std::string rdyName = methodName.substr(0, methodName.length()-5) + "__RDY";
         if (endswith(methodName, "__VALID"))
             rdyName = methodName.substr(0, methodName.length()-7) + "__READY";
-        std::string globalCondition = methodName;
-        int count = 0;
+        std::list<std::string> localStore;
         for (auto info: storeList[func]) {
-            bool vassign = isAlloca(info->getPointerOperand());
-            if (!vassign)
-                count++;
+            std::string pdest = printOperand(info->getPointerOperand(), true);
+            std::string pvalue = printOperand(info->getOperand(0), false);
+            if (pdest[0] == '&')
+                pdest = pdest.substr(1);
+            if (isAlloca(info->getPointerOperand()))
+                setAssign(pdest, pvalue);
             else {
-                std::string pdest = printOperand(info->getPointerOperand(), true);
-                if (pdest[0] == '&')
-                    pdest = pdest.substr(1);
-                setAssign(pdest, printOperand(info->getOperand(0), false));
+                if (Value *cond = getCondition(info->getParent(), 0))
+                    localStore.push_back("    if (" + printOperand(cond, false) + ")");
+                localStore.push_back("    " + pdest + " <= " + pvalue + ";");
             }
         }
         if (!isActionMethod(func)) {
             if (ruleENAFunction[func])
-                assignList[globalCondition + "_internal"] = table->guard[func];  // collect the text of the return value into a single 'assign'
+                assignList[methodName + "_internal"] = table->guard[func];  // collect the text of the return value into a single 'assign'
             else if (table->guard[func] != "")
                 setAssign(methodName, table->guard[func]);  // collect the text of the return value into a single 'assign'
         }
-        else {
+        else if (!table->ruleFunctions[methodName.substr(0, methodName.length()-5)]) {
             // generate RDY_internal wire so that we can reference RDY expression inside module
-            if (!table->ruleFunctions[methodName.substr(0, methodName.length()-5)]) {
-                fprintf(OStr, "    wire %s_internal;\n", rdyName.c_str());
-                lateAssignList[rdyName] = rdyName + "_internal";
-            }
-            if (count > 0) {
-                alwaysLines.push_back("if (" + globalCondition + ") begin");
-                for (auto info: storeList[func]) {
-                    bool vassign = isAlloca(info->getPointerOperand());
-                    if (!vassign) {
-                    std::string pdest = printOperand(info->getPointerOperand(), true);
-                    if (pdest[0] == '&')
-                        pdest = pdest.substr(1);
-                    if (Value *cond = getCondition(info->getParent(), 0))
-                        alwaysLines.push_back("    if (" + printOperand(cond, false) + ")");
-                    alwaysLines.push_back("    " + pdest + " <= " + printOperand(info->getOperand(0), false) + ";");
-                    }
-                }
-                alwaysLines.push_back("end; // End of " + methodName);
-            }
+            fprintf(OStr, "    wire %s_internal;\n", rdyName.c_str());
+            lateAssignList[rdyName] = rdyName + "_internal";
+        }
+        if (localStore.size()) {
+            alwaysLines.push_back("if (" + methodName + ") begin");
+            alwaysLines.splice(alwaysLines.end(), localStore);
+            alwaysLines.push_back("end; // End of " + methodName);
         }
     }
     for (auto item: table->muxEnableList) {
