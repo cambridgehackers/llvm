@@ -177,17 +177,18 @@ restart: // restart here after inlining function.... basic block structure might
                 }
                 std::string calledName = func->getName();
                 const StructType *STy = findThisArgument(func);
-                //printf("%s: %s CALLS %s cSTy %p STy %p\n", __FUNCTION__, callingName.c_str(), calledName.c_str(), callingSTy, STy);
+                //printf("%s: %s CALLS %s cSTy %p STy %p parentFunc %p func %p thisFunc %p\n", __FUNCTION__, callingName.c_str(), calledName.c_str(), callingSTy, STy, parentFunc, func, thisFunc);
                 if (parentFunc != func && thisFunc != func)
                 if (callingSTy == STy || endswith(calledName, "C2Ev") || endswith(calledName, "D2Ev")) {
                     //fprintf(stdout,"callProcess: %s cName %s single!!!!\n", callingName.c_str(), calledName.c_str());
                     processAlloca(func);
                     processMethodInlining(func, parentFunc);
                     InlineFunctionInfo IFI;
-//printf("[%s:%d] beforeInline\n", __FUNCTION__, __LINE__);
+//printf("[%s:%d] beforeInline thisFunc %p func %p\n", __FUNCTION__, __LINE__, thisFunc, func);
 //thisFunc->dump();
 //func->dump();
-                    InlineFunction(ICL, IFI, false);
+                    if (thisFunc != func)
+                        InlineFunction(ICL, IFI, false);
                     goto restart;
                 }
             };
@@ -198,6 +199,7 @@ restart: // restart here after inlining function.... basic block structure might
 
 void setSeen(Function *func, std::string mName)
 {
+    //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
     pushSeen[func] = mName;
     processAlloca(func);
     // inline intra-class method call bodies
@@ -217,7 +219,7 @@ static void pushWork(std::string mName, Function *func)
         return;
     }
     setSeen(func, mName);
-    //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
+    //printf("[%s:%d] setmethodddd %s = %p %s\n", __FUNCTION__, __LINE__, mName.c_str(), func, func->getName().str().c_str());
     table->method[mName] = func;
     // inline intra-class method call bodies
     processMethodInlining(func, func);
@@ -425,8 +427,11 @@ static void replaceFunc(Function *target, Function *source)
         IRBuilder<> builder(bb);
         builder.SetInsertPoint(TI);
         Value *oldI = TI->getOperand(0);
-        oldI->replaceAllUsesWith(builder.getInt1(1));
-        recursiveDelete(oldI);
+        Value *newI = builder.getInt1(1);
+        if (oldI != newI) {
+            oldI->replaceAllUsesWith(newI);
+            recursiveDelete(oldI);
+        }
     }
 }
 extern "C" void atomiccInterfaceName(const char *target, const char *source, const StructType *STy)
@@ -481,13 +486,15 @@ printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFun
     replaceFunc(rdyFunc, srdyFunc);
     if (!isActionMethod(enaFunc))
         enaSuffix = "";
-    table->method[enaName + enaSuffix] = enaFunc;
-    table->method[enaName + rdyString] = rdyFunc;
+    std::string rdyName = enaName + rdyString;
+    enaName += enaSuffix;
+    table->method[enaName] = enaFunc;
+    table->method[rdyName] = rdyFunc;
     ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
     ruleENAFunction[rdyFunc] = enaFunc;
     pushSeen[enaFunc] = "";
     pushSeen[rdyFunc] = "";
-    pushPair(enaFunc, enaName + enaSuffix, rdyFunc, enaName + rdyString);
+    pushPair(enaFunc, enaName, rdyFunc, rdyName);
 //printf("[%s:%d] DDUMMMMMMMMMMMMP\n", __FUNCTION__, __LINE__);
 //enaFunc->dump();
 //rdyFunc->dump();

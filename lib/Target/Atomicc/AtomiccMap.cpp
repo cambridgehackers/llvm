@@ -303,7 +303,7 @@ restart:
                     suffix = "";
                 addGuard(II, calledFunctionGuard, currentFunction);
                 if (ClassMethodTable *table = classCreate[findThisArgument(func)])
-                    table->method[mName] = func;  // keep track of all functions that were called, not just ones that were defined
+                    table->method[mName + suffix] = func;  // keep track of all functions that were called, not just ones that were defined
                 break;
                 }
             case Instruction::Br: {
