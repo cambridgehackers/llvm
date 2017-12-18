@@ -279,31 +279,11 @@ restart:
             switch (II->getOpcode()) {
             case Instruction::Call: {
                 Function *func = dyn_cast<Function>(dyn_cast<CallInst>(II)->getCalledValue());
-                std::string mName = getMethodName(func->getName());
                 Function *calledFunctionGuard = ruleRDYFunction[func];
                 if (trace_hoist)
-                    printf("HOIST: CALLER %s calling '%s'[%s]\n", currentFunction->getName().str().c_str(), func->getName().str().c_str(), mName.c_str());
-                if (trace_hoist)
-                    printf("HOIST: act %s req %s\n", calledFunctionGuard ? getMethodName(calledFunctionGuard->getName()).c_str() : " ", mName.c_str());
-                if (!func) {
-                    printf("[%s:%d] func NULL\n", __FUNCTION__, __LINE__);
-                    break;
-                }
-                if (!calledFunctionGuard) {
-                    //printf("[%s:%d] guard not found %s %p\n", __FUNCTION__, __LINE__, func->getName().str().c_str(), func);
-                    break;
-                }
-                std::string methName = getMethodName(calledFunctionGuard->getName());
-                std::string suffix = "__VALID";
-                if (methName == mName + "__RDY")
-                    suffix = "__ENA";
-                else if (methName != mName + "__READY")
-                    break;
-                if (!isActionMethod(func))
-                    suffix = "";
-                addGuard(II, calledFunctionGuard, currentFunction);
-                if (ClassMethodTable *table = classCreate[findThisArgument(func)])
-                    table->method[mName + suffix] = func;  // keep track of all functions that were called, not just ones that were defined
+                    printf("HOIST: CALLER %s calling '%s' guard %p\n", currentFunction->getName().str().c_str(), func->getName().str().c_str(), calledFunctionGuard);
+                if (calledFunctionGuard)
+                    addGuard(II, calledFunctionGuard, currentFunction);
                 break;
                 }
             case Instruction::Br: {
