@@ -41,6 +41,7 @@ std::map<const Function *,std::list<StoreInst *>> storeList;
 std::map<const Function *,std::list<Instruction *>> functionList;
 std::map<const Function *,std::list<Instruction *>> callList;
 std::map<const Function *,std::list<Instruction *>> declareList;
+static std::string globalMethodName;
 
 static INTMAP_TYPE predText[] = {
     {FCmpInst::FCMP_FALSE, "false"}, {FCmpInst::FCMP_OEQ, "oeq"},
@@ -478,6 +479,16 @@ static void appendList(int listIndex, BasicBlock *cond, std::string item)
     }
 }
 
+static std::string getMethodName(Function *func)
+{
+    if (const StructType *targetSTy = findThisArgument(func))
+    if (ClassMethodTable *targetTable = classCreate[targetSTy])
+        for (auto item: targetTable->method)
+            if (item.second == func)
+                return item.first;
+    return "";
+}
+
 /*
  * Generate a string for a function/method call
  */
@@ -488,6 +499,7 @@ std::string printCall(Instruction *I)
     std::string vout, sep;
     CallInst *ICL = dyn_cast<CallInst>(I);
     Function *func = ICL->getCalledFunction();
+    std::string fname = getMethodName(func);
     std::string prefix = MODULE_ARROW;
     CallSite CS(I);
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
@@ -501,8 +513,6 @@ return "";
     }
     auto FAI = func->arg_begin();
     std::string pcalledFunction = printOperand(*AI++, false); // skips 'this' param
-    std::string calledName = func->getName();
-    std::string fname = pushSeen[func];
     if (pcalledFunction[0] == '&') {
         pcalledFunction = pcalledFunction.substr(1);
         prefix = MODULE_DOT;
@@ -512,6 +522,7 @@ return "";
         prefix = "";
     }
     prefix = pcalledFunction + prefix;
+    std::string calledName = func->getName();
     if (trace_call)
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
@@ -521,17 +532,14 @@ return "";
         //exit(-1);
     }
     std::string mname = prefix + fname;
-    std::string muxName = pushSeen[I->getParent()->getParent()] + "_internal";
     if (calledName == "printf") {
         //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ", ";
     }
     else {
-        if (isActionMethod(func)) {
-            if (globalClassTable)
-            globalClassTable->muxEnableList.push_back(MuxEnableEntry{muxName, I->getParent(), mname});
-        }
+        if (isActionMethod(func))
+            globalClassTable->muxEnableList.push_back(MuxEnableEntry{globalMethodName + "_internal", I->getParent(), mname});
         else
             vout += mname;
         appendList(MetaInvoke, I->getParent(), mname);
@@ -545,9 +553,8 @@ return "";
         if (dyn_cast<Argument>(*AI))
             indirect = false;
         std::string parg = printOperand(*AI, indirect);
-        if (globalClassTable)
-            globalClassTable->muxValueList[prefix + FAI->getName().str()]
-               .push_back(MuxValueEntry{muxName, I->getParent(), parg});
+        globalClassTable->muxValueList[prefix + FAI->getName().str()]
+            .push_back(MuxValueEntry{globalMethodName + "_internal", I->getParent(), parg});
         sep = ", ";
     }
     return vout;
@@ -740,6 +747,7 @@ static void processClass(ClassMethodTable *table)
 {
     globalClassTable = table;
     for (auto FI : table->method) {
+        globalMethodName = FI.first;
         Function *func = FI.second;
         globalProcessFunction = func;
         NextAnonValueNumber = 0;

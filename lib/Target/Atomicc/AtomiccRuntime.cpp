@@ -27,7 +27,7 @@ static int trace_malloc;//= 1;
 static int trace_fixup;//= 1;
 int trace_pair;//= 1;
 
-std::map<const Function *, std::string> pushSeen;
+static std::map<const Function *, std::string> pushSeen;
 std::list<MEMORY_REGION> memoryRegion;
 
 /*
@@ -200,7 +200,7 @@ restart: // restart here after inlining function.... basic block structure might
 void setSeen(Function *func, std::string mName)
 {
     //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
-    pushSeen[func] = mName;
+    pushSeen[func] = "ZZZZZ"; //mName;
     processAlloca(func);
     // inline intra-class method call bodies
     processMethodInlining(func, func);
@@ -216,6 +216,7 @@ static void pushWork(std::string mName, Function *func)
     ClassMethodTable *table = classCreate[STy];
     if (pushSeen[func] != "") {
         printf("[%s:%d] SSSSSSSS mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
+exit(-1);
         return;
     }
     setSeen(func, mName);
