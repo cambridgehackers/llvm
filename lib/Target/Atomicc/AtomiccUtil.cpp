@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 #include <stdio.h>
 #include <list>
-#include <cxxabi.h> // abi::__cxa_demangle
 #include "llvm/ADT/STLExtras.h"
 
 #define MAGIC_VTABLE_OFFSET 2
@@ -73,23 +72,6 @@ std::string ucName(std::string inname)
     if (inname.length() && inname[0] >= 'a' && inname[0] <= 'z')
         return ((char)(inname[0] - 'a' + 'A')) + inname.substr(1, inname.length() - 1);
     return inname;
-}
-
-std::string getMethodName(std::string name)
-{
-    int status;
-    const char *demang = abi::__cxa_demangle(name.c_str(), 0, 0, &status);
-    if (!demang)
-        return "";
-    char temp[1000];
-    char *pmethod = temp;
-    strcpy(temp, demang);
-    while (*pmethod && pmethod[0] != '(')
-        pmethod++;
-    *pmethod = 0;
-    while (pmethod > temp && pmethod[0] != ':')
-        pmethod--;
-    return pmethod+1;
 }
 
 std::string printString(std::string arg)
