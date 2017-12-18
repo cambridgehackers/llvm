@@ -27,7 +27,6 @@ static int trace_malloc;//= 1;
 static int trace_fixup;//= 1;
 int trace_pair;//= 1;
 
-static std::map<const Function *, std::string> pushSeen;
 std::list<MEMORY_REGION> memoryRegion;
 
 /*
@@ -200,7 +199,6 @@ restart: // restart here after inlining function.... basic block structure might
 void setSeen(Function *func, std::string mName)
 {
     //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
-    pushSeen[func] = "ZZZZZ"; //mName;
     processAlloca(func);
     // inline intra-class method call bodies
     processMethodInlining(func, func);
@@ -214,11 +212,6 @@ static void pushWork(std::string mName, Function *func)
         return;
     const StructType *STy = findThisArgument(func);
     ClassMethodTable *table = classCreate[STy];
-    if (pushSeen[func] != "") {
-        printf("[%s:%d] SSSSSSSS mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
-exit(-1);
-        return;
-    }
     setSeen(func, mName);
     //printf("[%s:%d] setmethodddd %s = %p %s\n", __FUNCTION__, __LINE__, mName.c_str(), func, func->getName().str().c_str());
     table->method[mName] = func;
@@ -383,16 +376,18 @@ extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType
  */
 extern "C" void addBaseRule(void *thisp, const char *name, Function **RDY, Function **ENA)
 {
-    std::string enaName = name + std::string("__ENA");
+    std::string enaName = name;
+    std::string rdyName = enaName + "__RDY";
+    enaName += "__ENA";
     Function *enaFunc = fixupFunction(enaName, ENA[2], (uint8_t *)ENA);
-    Function *rdyFunc = fixupFunction(std::string(name) + "__RDY", RDY[2], (uint8_t *)RDY);
+    Function *rdyFunc = fixupFunction(rdyName, RDY[2], (uint8_t *)RDY);
     ClassMethodTable *table = classCreate[findThisArgument(rdyFunc)];
     table->ruleFunctions[name] = enaFunc;
     if (trace_pair)
         printf("[%s:%d] name %s ena %s rdy %s\n", __FUNCTION__, __LINE__, name, enaFunc->getName().str().c_str(), rdyFunc->getName().str().c_str());
     ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
     ruleENAFunction[rdyFunc] = enaFunc;
-    pushPair(enaFunc, enaName, rdyFunc, getMethodName(rdyFunc->getName()));
+    pushPair(enaFunc, enaName, rdyFunc, rdyName);
 }
 
 /*
@@ -493,8 +488,6 @@ printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFun
     table->method[rdyName] = rdyFunc;
     ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
     ruleENAFunction[rdyFunc] = enaFunc;
-    pushSeen[enaFunc] = "";
-    pushSeen[rdyFunc] = "";
     pushPair(enaFunc, enaName, rdyFunc, rdyName);
 //printf("[%s:%d] DDUMMMMMMMMMMMMP\n", __FUNCTION__, __LINE__);
 //enaFunc->dump();

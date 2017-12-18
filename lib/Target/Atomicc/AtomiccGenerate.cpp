@@ -479,13 +479,16 @@ static void appendList(int listIndex, BasicBlock *cond, std::string item)
     }
 }
 
-static std::string getMethodName(Function *func)
+std::string getMethodName(Function *func)
 {
+    std::string fname = func->getName();
     if (const StructType *targetSTy = findThisArgument(func))
     if (ClassMethodTable *targetTable = classCreate[targetSTy])
         for (auto item: targetTable->method)
             if (item.second == func)
                 return item.first;
+    if (fname == "printf")
+        return "";
     return "";
 }
 
