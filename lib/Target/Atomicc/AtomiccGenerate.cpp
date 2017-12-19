@@ -497,55 +497,53 @@ std::string getMethodName(Function *func)
  */
 std::string printCall(Instruction *I)
 {
-    Function *callingFunction = I->getParent()->getParent();
-    std::string callingName = callingFunction->getName();
     std::string vout, sep;
     CallInst *ICL = dyn_cast<CallInst>(I);
     Function *func = ICL->getCalledFunction();
     std::string fname = getMethodName(func);
-    std::string prefix = MODULE_ARROW;
     CallSite CS(I);
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
     if (!func) {
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI, false).c_str());
         I->dump();
-        callingFunction->dump();
+        I->getParent()->getParent()->dump();
         parseError();
 return "";
         exit(-1);
     }
     auto FAI = func->arg_begin();
     std::string pcalledFunction = printOperand(*AI++, false); // skips 'this' param
+    std::string prefix = MODULE_ARROW;
     if (pcalledFunction[0] == '&') {
         pcalledFunction = pcalledFunction.substr(1);
         prefix = MODULE_DOT;
     }
+    prefix = pcalledFunction + prefix;
     if (pcalledFunction == "this") {
         pcalledFunction = "";
         prefix = "";
     }
-    prefix = pcalledFunction + prefix;
     std::string calledName = func->getName();
     if (trace_call)
-        printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+        printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
-        printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s missing\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+        printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s missing\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         //return "caller_error";
         fname = "[ERROR_" + calledName + "_ERROR]";
         //exit(-1);
     }
-    std::string mname = prefix + fname;
     if (calledName == "printf") {
-        //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", callingName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+        //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ", ";
     }
     else {
+        std::string methodName = prefix + fname;
         if (isActionMethod(func))
-            globalClassTable->muxEnableList.push_back(MuxEnableEntry{globalMethodName + "_internal", I->getParent(), mname});
+            globalClassTable->muxEnableList.push_back(MuxEnableEntry{globalMethodName + "_internal", I->getParent(), methodName});
         else
-            vout += mname;
-        appendList(MetaInvoke, I->getParent(), mname);
+            vout += methodName;
+        appendList(MetaInvoke, I->getParent(), methodName);
     }
     for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
         bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
@@ -736,8 +734,8 @@ std::string printOperand(Value *Operand, bool Indirect)
                 ERRORIF(1); /* handle structured types */
         }
     }
-if (trace_operand)
-printf("[%s:%d] depth %d return %s\n", __FUNCTION__, __LINE__, depth, cbuffer.c_str());
+    if (trace_operand)
+        printf("[%s:%d] depth %d return %s\n", __FUNCTION__, __LINE__, depth, cbuffer.c_str());
     depth--;
     return cbuffer;
 }

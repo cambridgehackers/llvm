@@ -208,8 +208,7 @@ void setSeen(Function *func, std::string mName)
  */
 static void pushWork(std::string mName, Function *func)
 {
-    if (!func)
-        return;
+    assert (func);
     const StructType *STy = findThisArgument(func);
     ClassMethodTable *table = classCreate[STy];
     setSeen(func, mName);
@@ -227,6 +226,8 @@ static void pushWork(std::string mName, Function *func)
  */
 static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName)
 {
+    ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
+    ruleENAFunction[rdyFunc] = enaFunc;
     pushWork(enaName, enaFunc);
     pushWork(rdyName, rdyFunc); // must be after 'ENA', since hoisting copies guards
 }
@@ -236,8 +237,10 @@ static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, 
  * The blocks context is removed; the functions are transformed into
  * a method (and its associated RDY method), attached to the containing class.
  */
-static Function *fixupFunction(std::string methodName, Function *argFunc, uint8_t *blockData)
+extern "C" Function *fixupFunction(const char *aname, Function *argFunc, uint8_t *blockData)
 {
+std::string methodName = aname;
+printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, argFunc, blockData);
     Function *fnew = NULL;
     ValueToValueMapTy VMap;
     SmallVector<ReturnInst*, 8> Returns;  // Ignore returns cloned.
@@ -374,20 +377,14 @@ extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType
  * Called from user constructors to process Blocks functions generated for a rule
  * Rules only support RDY/ENA signalling.
  */
-extern "C" void addBaseRule(void *thisp, const char *name, Function **RDY, Function **ENA)
+extern "C" void addBaseRule(void *thisp, const char *name, Function *rdyFunc, Function *enaFunc)
 {
     std::string enaName = name;
-    std::string rdyName = enaName + "__RDY";
-    enaName += "__ENA";
-    Function *enaFunc = fixupFunction(enaName, ENA[2], (uint8_t *)ENA);
-    Function *rdyFunc = fixupFunction(rdyName, RDY[2], (uint8_t *)RDY);
     ClassMethodTable *table = classCreate[findThisArgument(rdyFunc)];
     table->ruleFunctions[name] = enaFunc;
     if (trace_pair)
         printf("[%s:%d] name %s ena %s rdy %s\n", __FUNCTION__, __LINE__, name, enaFunc->getName().str().c_str(), rdyFunc->getName().str().c_str());
-    ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
-    ruleENAFunction[rdyFunc] = enaFunc;
-    pushPair(enaFunc, enaName, rdyFunc, rdyName);
+    pushPair(enaFunc, enaName + "__ENA", rdyFunc, enaName + "__RDY");
 }
 
 /*
@@ -486,8 +483,6 @@ printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFun
     enaName += enaSuffix;
     table->method[enaName] = enaFunc;
     table->method[rdyName] = rdyFunc;
-    ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
-    ruleENAFunction[rdyFunc] = enaFunc;
     pushPair(enaFunc, enaName, rdyFunc, rdyName);
 //printf("[%s:%d] DDUMMMMMMMMMMMMP\n", __FUNCTION__, __LINE__);
 //enaFunc->dump();
