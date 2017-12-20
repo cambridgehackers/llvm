@@ -141,7 +141,7 @@ bool isActionMethod(const Function *func)
 static void checkClass(const StructType *STy, const StructType *ActSTy)
 {
     ClassMethodTable *table = classCreate[STy];
-    ClassMethodTable *atable = classCreate[ActSTy];
+    //ClassMethodTable *atable = classCreate[ActSTy];
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         Type *element = *I;
@@ -330,16 +330,17 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
 int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_type_iterator E)
 {
     uint64_t Total = 0;
-    const DataLayout *TD = EE->getDataLayout();
+    const DataLayout TD = EE->getDataLayout();
 
     for (auto TmpI = I; TmpI != E; ++TmpI) {
-        *LastIndexIsVector = dyn_cast<VectorType>(*TmpI);
+        Type *Ty = TmpI.getIndexedType();
+        *LastIndexIsVector = dyn_cast<VectorType>(Ty);
         if (const ConstantInt *CI = dyn_cast<ConstantInt>(TmpI.getOperand())) {
-            if (StructType *STy = dyn_cast<StructType>(*TmpI))
-                Total += TD->getStructLayout(STy)->getElementOffset(CI->getZExtValue());
+            if (StructType *STy = dyn_cast<StructType>(Ty))
+                Total += TD.getStructLayout(STy)->getElementOffset(CI->getZExtValue());
             else {
                 ERRORIF(isa<GlobalValue>(TmpI.getOperand()));
-                Total += TD->getTypeAllocSize(cast<SequentialType>(*TmpI)->getElementType()) * CI->getZExtValue();
+                Total += TD.getTypeAllocSize(cast<SequentialType>(Ty)->getElementType()) * CI->getZExtValue();
             }
         }
         else
@@ -376,11 +377,11 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
         if (I == E) {
             // HACK HACK HACK HACK for 'fifo0'
             printf("[%s:%d] amper %s expose %d referstr %s\n", __FUNCTION__, __LINE__, amper.c_str(), expose, referstr.c_str());
-            (*I)->dump();
+            (I.getIndexedType())->dump();
             amper = "";
             referstr += "0";
         } else
-        if (I != E && (*I)->isArrayTy())
+        if (I != E && (I.getIndexedType())->isArrayTy())
             if (const ConstantInt *CI = dyn_cast<ConstantInt>(I.getOperand())) {
                 uint64_t val = CI->getZExtValue();
                 if (GlobalVariable *globalVar = dyn_cast<GlobalVariable>(Ptr))
@@ -399,7 +400,8 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
     }
     cbuffer += amper;
     for (; I != E; ++I) {
-        if (StructType *STy = dyn_cast<StructType>(*I)) {
+        Type *Ty = I.getIndexedType();
+        if (StructType *STy = dyn_cast<StructType>(Ty)) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
             std::string dot = MODULE_DOT;
             std::string fname = fieldName(STy, foffset);
@@ -431,21 +433,21 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
         }
         else {
             if (trace_gep)
-                printf("[%s:%d] expose %d referstr %s cbuffer %s array %d vector %d\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), (*I)->isArrayTy(), (*I)->isVectorTy());
-            if ((*I)->isArrayTy()) {
+                printf("[%s:%d] expose %d referstr %s cbuffer %s array %d vector %d\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), (Ty)->isArrayTy(), (Ty)->isVectorTy());
+            if ((Ty)->isArrayTy()) {
                 if (referstr[0] == '&')
                     referstr = referstr.substr(1);
                 cbuffer += referstr;
                 //cbuffer += "[" + printOperand(I.getOperand(), false) + "]";
                 cbuffer += printOperand(I.getOperand(), false);
             }
-            else if (!(*I)->isVectorTy()) {
+            else if (!(Ty)->isVectorTy()) {
                 if (referstr[0] == '&')
                     referstr = referstr.substr(1);
                 cbuffer += referstr;
                 //cbuffer += "[" + printOperand(I.getOperand(), false) + "]";
                 // HACK HACK HACK HACK: we append the offset for ivector.  lpm and precision tests have an i8* here.
-                if (*I !=  Type::getInt8PtrTy(globalMod->getContext()))
+                if (Ty !=  Type::getInt8PtrTy(globalMod->getContext()))
                     cbuffer += printOperand(I.getOperand(), false);
             }
             else {
@@ -757,7 +759,8 @@ static void processClass(ClassMethodTable *table)
         /* Gather data for top level instructions in each basic block. */
         std::string temp, valsep;
         for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
-            for (auto II = BI->begin(), IE = BI->end(); II != IE;II++) {
+            for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
+                Instruction *II = &*IIb;
                 switch(II->getOpcode()) {
                 case Instruction::Load:
                     ERRORIF(dyn_cast<LoadInst>(II)->isVolatile());

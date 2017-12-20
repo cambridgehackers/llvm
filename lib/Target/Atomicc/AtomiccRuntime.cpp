@@ -41,8 +41,9 @@ static void processAlloca(Function *func)
 restart:
     remapValue.clear();
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
-        for (auto II = BB->begin(), IE = BB->end(); II != IE;) {
-            auto PI = std::next(BasicBlock::iterator(II));
+        for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE;) {
+            auto PI = std::next(BasicBlock::iterator(IIb));
+            Instruction *II = &*IIb;
             switch (II->getOpcode()) {
             case Instruction::Store:
                 if (Instruction *target = dyn_cast<Instruction>(II->getOperand(1))) {
@@ -119,7 +120,7 @@ II->dump();
                         if (classname == fname) {
                             processAlloca(cfunc);
                             InlineFunctionInfo IFI;
-                            InlineFunction(ICL, IFI, false);
+                            InlineFunction(ICL, IFI);//, false);
                             goto restart;
                         }
                     }
@@ -127,7 +128,7 @@ II->dump();
                 break;
                 }
             };
-            II = PI;
+            IIb = PI;
         }
     }
     for (auto item: remapValue) {
@@ -187,7 +188,7 @@ restart: // restart here after inlining function.... basic block structure might
 //thisFunc->dump();
 //func->dump();
                     if (thisFunc != func)
-                        InlineFunction(ICL, IFI, false);
+                        InlineFunction(ICL, IFI);//, false);
                     goto restart;
                 }
             };
@@ -261,8 +262,9 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
         func->dump();
     }
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
-        for (auto II = BB->begin(), IE = BB->end(); II != IE; ) {
-            BasicBlock::iterator PI = std::next(BasicBlock::iterator(II));
+        for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE; ) {
+            BasicBlock::iterator PI = std::next(BasicBlock::iterator(IIb));
+            Instruction *II = &*IIb;
             switch (II->getOpcode()) {
             case Instruction::Load:
                 if (II->getName() == "this") {
@@ -339,12 +341,14 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
                 break;
                 }
             }
-            II = PI;
+            IIb = PI;
         }
     }
-    if (trace_fixup)
+    //if (trace_fixup)
         printf("[%s:%d] before popArgument\n", __FUNCTION__, __LINE__);
-    func->getArgumentList().pop_front(); // remove original argument
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+exit(-1);
+    //func->getArgumentList().pop_front(); // remove original argument
     CloneFunctionInto(fnew, func, VMap, false, Returns, "", nullptr);
     if (trace_fixup) {
         printf("[%s:%d] AFTER method %s\n", __FUNCTION__, __LINE__, methodName.c_str());
@@ -412,12 +416,12 @@ static void replaceFunc(Function *target, Function *source)
     if (source) {
         for (auto II = bb->begin(), IE = bb->end(); II != IE;II++)
             if (II->getOpcode() == Instruction::Call) {
-                cast<CallInst>(II)->setCalledFunction(source);
+                cast<CallInst>(&*II)->setCalledFunction(source);
                 return;
             }
     }
     else if (TI->getOpcode() == Instruction::Ret) {
-        IRBuilder<> builder(bb);
+        IRBuilder<> builder(&*bb);
         builder.SetInsertPoint(TI);
         Value *oldI = TI->getOperand(0);
         Value *newI = builder.getInt1(1);

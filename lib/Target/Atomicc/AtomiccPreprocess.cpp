@@ -26,7 +26,8 @@ using namespace llvm;
 static void processSelect(Function *thisFunc)
 {
     for (auto BB = thisFunc->begin(), BE = thisFunc->end(); BB != BE; ++BB) {
-        for (auto II = BB->begin(), IE = BB->end(); II != IE;) {
+        for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE;) {
+            Instruction *II = &*IIb;
             auto PI = std::next(BasicBlock::iterator(II));
             switch (II->getOpcode()) {
             case Instruction::Select:
@@ -36,7 +37,7 @@ static void processSelect(Function *thisFunc)
                 recursiveDelete(II);
                 break;
             };
-            II = PI;
+            IIb = PI;
         }
     }
 }
@@ -155,7 +156,7 @@ static void processMalloc(CallInst *II)
         ArrayRef<Type*>(Params, 4), false);
     Function *F = dyn_cast<Function>(Mod->getOrInsertFunction("llvm_translate_malloc", fty));
     F->setCallingConv(CF->getCallingConv());
-    F->setDoesNotAlias(0);
+    //F->setDoesNotAlias(0);
     F->setAttributes(CF->getAttributes());
     IRBuilder<> builder(II->getParent());
     builder.SetInsertPoint(II);
@@ -272,7 +273,7 @@ void preprocessModule(Module *Mod)
 
     // remove Select statements; construct vtab tables
     for (auto FI = Mod->begin(), FE = Mod->end(); FI != FE; FI++)
-        processSelect(FI);
+        processSelect(&*FI);
 
     // process various function calls
     static struct {

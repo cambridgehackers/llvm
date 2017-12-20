@@ -177,7 +177,7 @@ static Instruction *expandTreeOptions(Instruction *insertPoint, const Instructio
         IRBuilder<> builder(insertPoint->getParent());
         builder.SetInsertPoint(insertPoint);
         CallInst *newCall = builder.CreateCall(func, ArrayRef<Value*>(Params, 1));
-        newCall->addAttribute(AttributeSet::ReturnIndex, Attribute::ZExt);
+        //newCall->addAttribute(AttributeSet::ReturnIndex, Attribute::ZExt);
         if (retItem)
             retItem = BinaryOperator::Create(Instruction::And, retItem, newCall, "newand", insertPoint);
         else
@@ -271,11 +271,12 @@ copyt = false;
 // Preprocess the body rules, moving items to RDY() and ENA()
 static void processPromote(Function *currentFunction)
 {
-    ClassMethodTable *table = classCreate[findThisArgument(currentFunction)];
+    //ClassMethodTable *table = classCreate[findThisArgument(currentFunction)];
 restart:
     for (auto BI = currentFunction->begin(), BE = currentFunction->end(); BI != BE; BI++) {
-        for (auto II = BI->begin(), IE = BI->end(); II != IE;) {
-            auto INEXT = std::next(BasicBlock::iterator(II));
+        for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;) {
+            auto INEXT = std::next(BasicBlock::iterator(IIb));
+            Instruction *II = &*IIb;
             switch (II->getOpcode()) {
             case Instruction::Call: {
                 Function *func = dyn_cast<Function>(dyn_cast<CallInst>(II)->getCalledValue());
@@ -312,8 +313,8 @@ restart:
                 Type  *swType = switchIndex->getType();
                 //BasicBlock *defaultBB = SI->getDefaultDest();
                 for (SwitchInst::CaseIt CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
-                    BasicBlock *caseBB = CI.getCaseSuccessor();
-                    int64_t val = CI.getCaseValue()->getZExtValue();
+                    BasicBlock *caseBB = CI->getCaseSuccessor();
+                    int64_t val = CI->getCaseValue()->getZExtValue();
                     printf("[%s:%d] [%ld] = %s\n", __FUNCTION__, __LINE__, val, caseBB?caseBB->getName().str().c_str():"NONE");
                     if (!getCondition(caseBB, 0)) { // 'true' condition
                         IRBuilder<> cbuilder(caseBB);
@@ -360,7 +361,7 @@ if (Values_size < 0 || Values_size > 100) Values_size = 2;
                     IRBuilder<> afterBuilder(afterswitchBB);
                     afterBuilder.SetInsertPoint(II);
                     // Build Switch instruction in starting block
-                    IRBuilder<> startBuilder(BI);
+                    IRBuilder<> startBuilder(&*BI);
                     startBuilder.SetInsertPoint(BI->getTerminator());
                     BasicBlock *lastCaseBB = BasicBlock::Create(BI->getContext(), "lastcase", currentFunction, afterswitchBB);
                     SwitchInst *switchInst = startBuilder.CreateSwitch(switchIndex, lastCaseBB, Values_size - 1);
@@ -388,7 +389,7 @@ if (Values_size < 0 || Values_size > 100) Values_size = 2;
                 }
                 break;
             }
-            II = INEXT;
+            IIb = INEXT;
         }
     }
 }
@@ -411,7 +412,7 @@ static void myReplaceAllUsesWith(Value *Old, Value *New)
     // constant because they are uniqued.
     if (auto *C = dyn_cast<Constant>(U.getUser())) {
       if (!isa<GlobalValue>(C)) {
-        C->handleOperandChange(Old, New, &U);
+        C->handleOperandChange(Old, New); //, &U);
         continue;
       }
     }
@@ -432,12 +433,12 @@ static void inlineReferences(Module *Mod, const StructType *STy, uint64_t Idx, T
         for (auto BB = FB->begin(), BE = FB->end(); BB != BE; ++BB)
             for (auto II = BB->begin(), IE = BB->end(); II != IE; ) {
                 BasicBlock::iterator PI = std::next(BasicBlock::iterator(II));
-                if (LoadInst *IL = dyn_cast<LoadInst>(II)) {
+                if (LoadInst *IL = dyn_cast<LoadInst>(&*II)) {
                 if (GetElementPtrInst *IG = dyn_cast<GetElementPtrInst>(IL->getOperand(0))) {
                     gep_type_iterator I = gep_type_begin(IG), E = gep_type_end(IG);
                     Constant *FirstOp = dyn_cast<Constant>(I.getOperand());
                     if (I++ != E && FirstOp && FirstOp->isNullValue()
-                     && I != E && STy == dyn_cast<StructType>(*I))
+                     && I != E && STy == dyn_cast<StructType>(I.getIndexedType()))
                         if (const ConstantInt *CI = dyn_cast<ConstantInt>(I.getOperand()))
                             if (CI->getZExtValue() == Idx) {
                                  IG->mutateType(newType);
@@ -479,7 +480,7 @@ static int checkDerived(const Type *A, const Type *B)
 
 static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
 {
-    const DataLayout *TD = EE->getDataLayout();
+    const DataLayout TD = EE->getDataLayout();
     if (!addr || addr == BOGUS_POINTER
      || addressTypeAlreadyProcessed[MAPSEEN_TYPE{addr, Ty}])
         return;
@@ -492,8 +493,8 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
     case Type::StructTyID: {
         StructType *STy = cast<StructType>(Ty);
         getClass(STy); // allocate classCreate
-        const StructLayout *SLO = TD->getStructLayout(STy);
-        ClassMethodTable *table = classCreate[STy];
+        const StructLayout *SLO = TD.getStructLayout(STy);
+        //ClassMethodTable *table = classCreate[STy];
         int Idx = 0;
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
             std::string fname = fieldName(STy, Idx);
@@ -563,10 +564,10 @@ void constructAddressMap(Module *Mod)
 {
 printf("[%s:%d] start\n", __FUNCTION__, __LINE__);
     for (auto MI = Mod->global_begin(), ME = Mod->global_end(); MI != ME; MI++) {
-        void *addr = EE->getPointerToGlobal(MI);
+        void *addr = EE->getPointerToGlobal(&*MI);
         Type *Ty = MI->getType()->getElementType();
         memoryRegion.push_back(MEMORY_REGION{addr,
-            EE->getDataLayout()->getTypeAllocSize(Ty), MI->getType(), NULL, 0});
+            EE->getDataLayout().getTypeAllocSize(Ty), MI->getType(), NULL, 0});
         mapType(Mod, (char *)addr, Ty, MI->getName());
     }
     // promote guards from contained calls to be guards for this function

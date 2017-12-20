@@ -1651,7 +1651,7 @@ Constant *ConstantExpr::getFPToSI(Constant *C, Type *Ty, bool OnlyIfReduced) {
 
 Constant *ConstantExpr::getPtrToInt(Constant *C, Type *DstTy,
                                     bool OnlyIfReduced) {
-+ #if 1
+#if 1
   if(!C->getType()->isPtrOrPtrVectorTy()) printf("[%s:%d]PtrToInt source must be pointer or pointer vector\n", __FUNCTION__, __LINE__);
 #else
   assert(C->getType()->isPtrOrPtrVectorTy() &&

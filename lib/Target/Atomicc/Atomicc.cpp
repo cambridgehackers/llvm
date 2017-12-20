@@ -34,7 +34,7 @@ namespace {
   public:
     static char ID;
     explicit AtomiccWriter(std::string _Filename): ModulePass(ID), Filename(_Filename) {}
-    const char *getPassName() const override { return "Atomicc backend"; }
+    StringRef getPassName() const override { return "Atomicc backend"; }
     bool runOnModule(Module &M) override;
   };
 } // end anonymous namespace.
@@ -100,9 +100,12 @@ bool AtomiccWriter::runOnModule(Module &M)
 bool AtomiccTargetMachine::addPassesToEmitFile(
     PassManagerBase &PM, raw_pwrite_stream &o, CodeGenFileType FileType,
     bool DisableVerify, AnalysisID StartBefore, AnalysisID StartAfter,
-    AnalysisID StopAfter, MachineFunctionInitializer *MFInitializer) {
+    AnalysisID StopBefore, AnalysisID StopAfter) {
     if (FileType != TargetMachine::CGFT_AssemblyFile)
       return true;
     PM.add(new AtomiccWriter(o.getFilename()));
     return false;
+}
+TargetPassConfig *AtomiccTargetMachine::createPassConfig(PassManagerBase &PM) {
+  return new TargetPassConfig(*this, PM);
 }
