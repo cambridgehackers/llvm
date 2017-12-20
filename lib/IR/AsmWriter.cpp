@@ -2655,6 +2655,8 @@ void AssemblyWriter::printTypeIdentities() {
     // Make sure we print out at least one level of the type structure, so
     // that we do not get %FILE = type %FILE
     TypePrinter.printStructBody(TypePrinter.NamedTypes[i], Out);
+    if (TypePrinter.NamedTypes[i]->structFieldMap != "")
+      Out << " = \"" << TypePrinter.NamedTypes[i]->structFieldMap << '\"';
     Out << '\n';
   }
 }

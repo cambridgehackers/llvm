@@ -1395,9 +1395,18 @@ void StoreInst::AssertOK() {
   assert(getOperand(0) && getOperand(1) && "Both operands must be non-null!");
   assert(getOperand(1)->getType()->isPointerTy() &&
          "Ptr must have pointer type!");
+#if 1
+  if(getOperand(0)->getType() != cast<PointerType>(getOperand(1)->getType())->getElementType()) {
+printf("[StoreInst::%s:%d]Ptr must be a pointer to Val type!ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n", __FUNCTION__, __LINE__);
+this->dump();
+getOperand(0)->getType()->dump();
+getOperand(1)->getType()->dump();
+  }
+#else
   assert(getOperand(0)->getType() ==
                  cast<PointerType>(getOperand(1)->getType())->getElementType()
          && "Ptr must be a pointer to Val type!");
+#endif
   assert(!(isAtomic() && getAlignment() == 0) &&
          "Alignment required for atomic store");
 }
@@ -3076,10 +3085,12 @@ CastInst::castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
     PointerType *SrcPtrTy = dyn_cast<PointerType>(SrcTy->getScalarType());
     PointerType *DstPtrTy = dyn_cast<PointerType>(DstTy->getScalarType());
 
+//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     // BitCast implies a no-op cast of type only. No bits change.
     // However, you can't cast pointers to anything but pointers.
     if (!SrcPtrTy != !DstPtrTy)
       return false;
+//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 
     // For non-pointer cases, the cast is okay if the source and destination bit
     // widths are identical.
@@ -3102,10 +3113,12 @@ CastInst::castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
   }
   case Instruction::AddrSpaceCast: {
     PointerType *SrcPtrTy = dyn_cast<PointerType>(SrcTy->getScalarType());
+//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     if (!SrcPtrTy)
       return false;
 
     PointerType *DstPtrTy = dyn_cast<PointerType>(DstTy->getScalarType());
+//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     if (!DstPtrTy)
       return false;
 

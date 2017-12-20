@@ -1,0 +1,31 @@
+;===- ./lib/Target/Atomicc/LLVMBuild.txt --------------------*- Conf -*--===;
+;
+;                     The LLVM Compiler Infrastructure
+;
+; This file is distributed under the University of Illinois Open Source
+; License. See LICENSE.TXT for details.
+;
+;===------------------------------------------------------------------------===;
+;
+; This is an LLVMBuild description file for the components in this subdirectory.
+;
+; For more information on the LLVMBuild system, please see:
+;
+;   http://llvm.org/docs/LLVMBuild.html
+;
+;===------------------------------------------------------------------------===;
+
+[common]
+subdirectories = TargetInfo
+
+[component_0]
+type = TargetGroup
+name = Atomicc
+parent = Target
+
+[component_1]
+type = Library
+name = AtomiccCodeGen
+parent = Atomicc
+required_libraries = AsmPrinter MC CodeGen Core AtomiccInfo SelectionDAG Support Target Interpreter ExecutionEngine RuntimeDyld Support
+add_to_library_groups = Atomicc

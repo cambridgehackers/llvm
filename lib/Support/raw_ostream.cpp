@@ -502,7 +502,7 @@ static int getFD(StringRef Filename, std::error_code &EC,
 
 raw_fd_ostream::raw_fd_ostream(StringRef Filename, std::error_code &EC,
                                sys::fs::OpenFlags Flags)
-    : raw_fd_ostream(getFD(Filename, EC, Flags), true) {}
+    : raw_fd_ostream(getFD(Filename, EC, Flags), true) { setFilename(Filename); }
 
 /// FD is the file descriptor that this writes to.  If ShouldClose is true, this
 /// closes the file when the stream is destroyed.

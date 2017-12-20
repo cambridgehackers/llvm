@@ -536,6 +536,10 @@ Constant *llvm::ConstantFoldCastInstruction(unsigned opc, Constant *V,
   // do to try to simplify it.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(V)) {
     if (CE->isCast()) {
+printf("[%s:%d] disable foldconscastpair\n", __FUNCTION__, __LINE__);
+CE->dump();
+CE->getType()->dump();
+if (0)
       // Try hard to fold cast of cast because they are often eliminable.
       if (unsigned newOpc = foldConstantCastPair(opc, CE, DestTy))
         return ConstantExpr::getCast(newOpc, CE->getOperand(0), DestTy);
@@ -566,6 +570,7 @@ Constant *llvm::ConstantFoldCastInstruction(unsigned opc, Constant *V,
   if ((isa<ConstantVector>(V) || isa<ConstantDataVector>(V)) &&
       DestTy->isVectorTy() &&
       DestTy->getVectorNumElements() == V->getType()->getVectorNumElements()) {
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     SmallVector<Constant*, 16> res;
     VectorType *DestVecTy = cast<VectorType>(DestTy);
     Type *DstEltTy = DestVecTy->getElementType();
@@ -626,7 +631,12 @@ Constant *llvm::ConstantFoldCastInstruction(unsigned opc, Constant *V,
     // If this is a sizeof-like expression, pull out multiplications by
     // known factors to expose them to subsequent folding. If it's an
     // alignof-like expression, factor out known factors.
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+V->dump();
     if (ConstantExpr *CE = dyn_cast<ConstantExpr>(V))
+{
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+CE->dump();
       if (CE->getOpcode() == Instruction::GetElementPtr &&
           CE->getOperand(0)->isNullValue()) {
         GEPOperator *GEPO = cast<GEPOperator>(CE);
@@ -661,6 +671,7 @@ Constant *llvm::ConstantFoldCastInstruction(unsigned opc, Constant *V,
           }
         }
       }
+}
     // Other pointer types cannot be casted
     return nullptr;
   case Instruction::UIToFP:

@@ -333,6 +333,8 @@ private:
 class raw_pwrite_stream : public raw_ostream {
   virtual void pwrite_impl(const char *Ptr, size_t Size, uint64_t Offset) = 0;
 
+  std::string savedFilename;
+
 public:
   explicit raw_pwrite_stream(bool Unbuffered = false)
       : raw_ostream(Unbuffered) {}
@@ -345,6 +347,13 @@ public:
       assert(Size + Offset <= Pos && "We don't support extending the stream");
 #endif
     pwrite_impl(Ptr, Size, Offset);
+  }
+
+  void setFilename(std::string fname) {
+    savedFilename = fname;
+  }
+  std::string getFilename() {
+    return savedFilename;
   }
 };
 

@@ -320,6 +320,7 @@ public:
   static bool classof(const Type *T) {
     return T->getTypeID() == StructTyID;
   }
+  std::string structFieldMap;
 };
 
 StringRef Type::getStructName() const {

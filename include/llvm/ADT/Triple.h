@@ -48,6 +48,7 @@ public:
 
     arm,            // ARM (little endian): arm, armv.*, xscale
     armeb,          // ARM (big endian): armeb
+    atomicc,    // AtomicC (verilog generation for hardware): atomicc
     aarch64,        // AArch64 (little endian): aarch64
     aarch64_be,     // AArch64 (big endian): aarch64_be
     avr,            // AVR: Atmel AVR microcontroller
