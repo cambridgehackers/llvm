@@ -2920,13 +2920,14 @@ private:
                          NewEndOffset - NewBeginOffset);
     Value *Ptr = getNewAllocaSlicePtr(IRB, OldPtr->getType());
     Value *New;
-    if (II.getIntrinsicID() == Intrinsic::lifetime_start)
-      New = IRB.CreateLifetimeStart(Ptr, Size);
-    else
-      New = IRB.CreateLifetimeEnd(Ptr, Size);
+printf("[%s:%d] LIFESTART/END\n", __FUNCTION__, __LINE__);
+    //if (II.getIntrinsicID() == Intrinsic::lifetime_start)
+      //New = IRB.CreateLifetimeStart(Ptr, Size);
+    //else
+      //New = IRB.CreateLifetimeEnd(Ptr, Size);
 
-    (void)New;
-    DEBUG(dbgs() << "          to: " << *New << "\n");
+    //(void)New;
+    //DEBUG(dbgs() << "          to: " << *New << "\n");
 
     return true;
   }

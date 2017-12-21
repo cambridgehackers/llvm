@@ -1855,7 +1855,8 @@ bool llvm::InlineFunction(CallSite CS, InlineFunctionInfo &IFI,
         }
       }
 
-      builder.CreateLifetimeStart(AI, AllocaSize);
+printf("[%s:%d]LIFESTART\n", __FUNCTION__, __LINE__);
+      //builder.CreateLifetimeStart(AI, AllocaSize);
       for (ReturnInst *RI : Returns) {
         // Don't insert llvm.lifetime.end calls between a musttail or deoptimize
         // call and a return.  The return kills all local allocas.
@@ -1865,7 +1866,8 @@ bool llvm::InlineFunction(CallSite CS, InlineFunctionInfo &IFI,
         if (InlinedDeoptimizeCalls &&
             RI->getParent()->getTerminatingDeoptimizeCall())
           continue;
-        IRBuilder<>(RI).CreateLifetimeEnd(AI, AllocaSize);
+printf("[%s:%d]LIFEEND\n", __FUNCTION__, __LINE__);
+        //IRBuilder<>(RI).CreateLifetimeEnd(AI, AllocaSize);
       }
     }
   }

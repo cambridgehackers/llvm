@@ -251,8 +251,9 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
         printf("[%s:%d] BEFORECLONE method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), argFunc);
         argFunc->dump();
     }
+    ArrayRef<llvm::Type *> origArgs = argFunc->getFunctionType()->params();
     Function *func = Function::Create(FunctionType::get(argFunc->getReturnType(),
-                        argFunc->getFunctionType()->params(), false), GlobalValue::LinkOnceODRLinkage,
+                        origArgs, false), GlobalValue::LinkOnceODRLinkage,
                         "TEMPFUNC", argFunc->getParent());
     VMapfunc[argFunc->arg_begin()] = func->arg_begin();
     CloneFunctionInto(func, argFunc, VMapfunc, false, Returnsfunc, "", nullptr);
@@ -344,11 +345,10 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
             IIb = PI;
         }
     }
-    //if (trace_fixup)
+    if (trace_fixup)
         printf("[%s:%d] before popArgument\n", __FUNCTION__, __LINE__);
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-exit(-1);
-    //func->getArgumentList().pop_front(); // remove original argument
+    //func->arg_begin().pop_front(); // remove original argument
+    VMap[func->arg_begin()] = fnew->arg_begin();
     CloneFunctionInto(fnew, func, VMap, false, Returns, "", nullptr);
     if (trace_fixup) {
         printf("[%s:%d] AFTER method %s\n", __FUNCTION__, __LINE__, methodName.c_str());

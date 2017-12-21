@@ -333,14 +333,18 @@ int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_ty
     const DataLayout TD = EE->getDataLayout();
 
     for (auto TmpI = I; TmpI != E; ++TmpI) {
-        Type *Ty = TmpI.getIndexedType();
-        *LastIndexIsVector = dyn_cast<VectorType>(Ty);
+        StructType *STy = TmpI.getStructTypeOrNull();
+        *LastIndexIsVector = NULL;
+        if (!STy)
+            *LastIndexIsVector = dyn_cast<VectorType>(TmpI.getIndexedType());
         if (const ConstantInt *CI = dyn_cast<ConstantInt>(TmpI.getOperand())) {
-            if (StructType *STy = dyn_cast<StructType>(Ty))
-                Total += TD.getStructLayout(STy)->getElementOffset(CI->getZExtValue());
+            unsigned ElementIdx = CI->getZExtValue();
+            if (STy)
+                Total += TD.getStructLayout(STy)->getElementOffset(ElementIdx);
             else {
                 ERRORIF(isa<GlobalValue>(TmpI.getOperand()));
-                Total += TD.getTypeAllocSize(cast<SequentialType>(Ty)->getElementType()) * CI->getZExtValue();
+                //Total += TD.getTypeAllocSize(cast<SequentialType>(Ty)->getElementType()) * ElementIdx;
+                Total += TD.getTypeAllocSize(TmpI.getIndexedType()) * ElementIdx;
             }
         }
         else
@@ -400,8 +404,7 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
     }
     cbuffer += amper;
     for (; I != E; ++I) {
-        Type *Ty = I.getIndexedType();
-        if (StructType *STy = dyn_cast<StructType>(Ty)) {
+        if (StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
             std::string dot = MODULE_DOT;
             std::string fname = fieldName(STy, foffset);
@@ -432,16 +435,17 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
             cbuffer += referstr + fname;
         }
         else {
+            Type *Ty = I.getIndexedType();
             if (trace_gep)
-                printf("[%s:%d] expose %d referstr %s cbuffer %s array %d vector %d\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), (Ty)->isArrayTy(), (Ty)->isVectorTy());
-            if ((Ty)->isArrayTy()) {
+                printf("[%s:%d] expose %d referstr %s cbuffer %s array %d vector %d\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), Ty->isArrayTy(), Ty->isVectorTy());
+            if (Ty->isArrayTy()) {
                 if (referstr[0] == '&')
                     referstr = referstr.substr(1);
                 cbuffer += referstr;
                 //cbuffer += "[" + printOperand(I.getOperand(), false) + "]";
                 cbuffer += printOperand(I.getOperand(), false);
             }
-            else if (!(Ty)->isVectorTy()) {
+            else if (!Ty->isVectorTy()) {
                 if (referstr[0] == '&')
                     referstr = referstr.substr(1);
                 cbuffer += referstr;
@@ -530,6 +534,8 @@ return "";
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s missing\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+//I->dump();
+//I->getParent()->getParent()->dump();
         //return "caller_error";
         fname = "[ERROR_" + calledName + "_ERROR]";
         //exit(-1);
