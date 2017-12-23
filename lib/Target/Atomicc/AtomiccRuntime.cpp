@@ -24,7 +24,7 @@ using namespace llvm;
 #include "AtomiccDecl.h"
 
 static int trace_malloc;//= 1;
-static int trace_fixup;//= 1;
+static int trace_fixup= 1;
 int trace_pair;//= 1;
 
 std::list<MEMORY_REGION> memoryRegion;
@@ -240,6 +240,8 @@ static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, 
  */
 extern "C" Function *fixupFunction(const char *aname, Function *argFunc, uint8_t *blockData)
 {
+static int counter;
+std::string className = "missingClassName";
 std::string methodName = aname;
 printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, argFunc, blockData);
     Function *fnew = NULL;
@@ -275,13 +277,11 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
                      */
                     PointerType *PTy = dyn_cast<PointerType>(II->getType());
                     const StructType *STy = dyn_cast<StructType>(PTy->getElementType());
-                    std::string className = STy->getName().substr(6);
+                    className = STy->getName().substr(6);
                     Type *Params[] = {PTy};
                     fnew = Function::Create(FunctionType::get(func->getReturnType(),
                         ArrayRef<Type*>(Params, 1), false), GlobalValue::LinkOnceODRLinkage,
-                        "_ZN" + utostr(className.length()) + className
-                              + utostr(methodName.length()) + methodName + "Ev",
-                        func->getParent());
+                        "temporaryFunctionName", func->getParent());
                     fnew->arg_begin()->setName("this");
                     Argument *newArg = new Argument(PTy, "temporary_this", func);
                     II->replaceAllUsesWith(newArg);
@@ -319,7 +319,7 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
                             II->getType()->dump();
                             exit(-1);
                         }
-                        //printf("[%s:%d] Load %ld\n", __FUNCTION__, __LINE__, val);
+                        printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
                         II->replaceAllUsesWith(ConstantInt::get(II->getType(), val));
                         recursiveDelete(II);
                     }
@@ -335,7 +335,7 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
                     IRBuilder<> builder(II->getParent());
                     builder.SetInsertPoint(II);
                     int64_t val = CI->getZExtValue();
-                    //printf("%s: SExt %ld\n", __FUNCTION__, val);
+                    printf("%s: SExt %ld\n", __FUNCTION__, val);
                     II->replaceAllUsesWith(ConstantInt::get(II->getType(), val));
                     recursiveDelete(II);
                 }
@@ -348,6 +348,16 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
     if (trace_fixup)
         printf("[%s:%d] before popArgument\n", __FUNCTION__, __LINE__);
     //func->arg_begin().pop_front(); // remove original argument
+    std::string newName = "_ZN" + utostr(className.length()) + className
+                  + utostr(methodName.length()) + methodName + "Ev";
+printf("[%s:%d] new rule name %s\n", __FUNCTION__, __LINE__, newName.c_str());
+    if (globalMod->getNamedValue(newName)) {
+        newName += utostr(counter);
+        counter++;
+        printf("[%s:%d] new rule name already exists, changed to '%s'\n", __FUNCTION__, __LINE__, newName.c_str());
+        //exit(-1);
+    }
+    fnew->setName(newName);
     VMap[func->arg_begin()] = fnew->arg_begin();
     CloneFunctionInto(fnew, func, VMap, false, Returns, "", nullptr);
     if (trace_fixup) {
