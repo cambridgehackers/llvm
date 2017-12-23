@@ -24,7 +24,7 @@ using namespace llvm;
 #include "AtomiccDecl.h"
 
 static int trace_malloc;//= 1;
-static int trace_fixup= 1;
+static int trace_fixup;//= 1;
 int trace_pair;//= 1;
 
 std::list<MEMORY_REGION> memoryRegion;
