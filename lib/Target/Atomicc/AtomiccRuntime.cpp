@@ -238,8 +238,9 @@ static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, 
  * The blocks context is removed; the functions are transformed into
  * a method (and its associated RDY method), attached to the containing class.
  */
-extern "C" Function *fixupFunction(const char *aname, Function *argFunc, uint8_t *blockData)
+extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
 {
+Function *argFunc = *(Function **)blockData;
 static int counter;
 std::string className = "missingClassName";
 std::string methodName = aname;
