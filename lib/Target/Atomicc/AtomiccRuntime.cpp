@@ -242,14 +242,13 @@ extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
 {
 Function *argFunc = *(Function **)blockData;
 static int counter;
-std::string className = "missingClassName";
-std::string methodName = aname;
-printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, argFunc, blockData);
-    Function *fnew = NULL;
+    std::string className = "missingClassName";
+    std::string methodName = aname;
     ValueToValueMapTy VMap;
     SmallVector<ReturnInst*, 8> Returns;  // Ignore returns cloned.
     ValueToValueMapTy VMapfunc;
     SmallVector<ReturnInst*, 8> Returnsfunc;  // Ignore returns cloned.
+    PointerType *thisType = nullptr;
     if (trace_fixup) {
         printf("[%s:%d] BEFORECLONE method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), argFunc);
         argFunc->dump();
@@ -258,7 +257,22 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
     Function *func = Function::Create(FunctionType::get(argFunc->getReturnType(),
                         origArgs, false), GlobalValue::LinkOnceODRLinkage,
                         "TEMPFUNC", argFunc->getParent());
-    VMapfunc[argFunc->arg_begin()] = func->arg_begin();
+    int argCount = 0;
+    for (auto AI = argFunc->arg_begin(), AE = argFunc->arg_end(); AI != AE; AI++, argCount++) {
+        Argument *arg = AI;
+        VMapfunc[arg] = func->arg_begin();
+        if (argCount == 1)
+            thisType = dyn_cast<PointerType>(arg->getType());
+    }
+    if (StructType *STy = dyn_cast<StructType>(thisType->getElementType()))
+        className = STy->getName().substr(7);
+    Type *Params[] = {thisType};
+    Function *fnew = Function::Create(FunctionType::get(func->getReturnType(),
+        ArrayRef<Type*>(Params, 1), false), GlobalValue::LinkOnceODRLinkage,
+        "temporaryFunctionName", func->getParent());
+    fnew->arg_begin()->setName("this");
+    Argument *newThis = new Argument(thisType, "temporary_this", func);
+    VMap[newThis] = fnew->arg_begin();
     CloneFunctionInto(func, argFunc, VMapfunc, false, Returnsfunc, "", nullptr);
     processAlloca(func);
     if (trace_fixup) {
@@ -272,22 +286,7 @@ printf("[%s:%d] name %s func %p blockdata %p\n", __FUNCTION__, __LINE__, aname, 
             switch (II->getOpcode()) {
             case Instruction::Load:
                 if (II->getName() == "this") {
-                    /* reattach the 'this' pointer from the block descriptor to a method parameter.
-                     * Also, use the datatype of the 'this' pointer to extract the
-                     * StructType for the class that we will be a method for.
-                     */
-                    PointerType *PTy = dyn_cast<PointerType>(II->getType());
-                    const StructType *STy = dyn_cast<StructType>(PTy->getElementType());
-                    className = STy->getName().substr(6);
-                    Type *Params[] = {PTy};
-                    fnew = Function::Create(FunctionType::get(func->getReturnType(),
-                        ArrayRef<Type*>(Params, 1), false), GlobalValue::LinkOnceODRLinkage,
-                        "temporaryFunctionName", func->getParent());
-                    fnew->arg_begin()->setName("this");
-                    Argument *newArg = new Argument(PTy, "temporary_this", func);
-                    II->replaceAllUsesWith(newArg);
-                    VMap[newArg] = fnew->arg_begin();
-                    //printf("[%s:%d] LoadMAP\n", __FUNCTION__, __LINE__);
+                    II->replaceAllUsesWith(newThis);
                     recursiveDelete(II);
                 }
                 else if (II->use_empty())
@@ -356,10 +355,12 @@ printf("[%s:%d] new rule name %s\n", __FUNCTION__, __LINE__, newName.c_str());
         newName += utostr(counter);
         counter++;
         printf("[%s:%d] new rule name already exists, changed to '%s'\n", __FUNCTION__, __LINE__, newName.c_str());
-        //exit(-1);
     }
     fnew->setName(newName);
-    VMap[func->arg_begin()] = fnew->arg_begin();
+    for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++) {
+        Argument *arg = AI;
+        VMap[arg] = fnew->arg_begin();
+    }
     CloneFunctionInto(fnew, func, VMap, false, Returns, "", nullptr);
     if (trace_fixup) {
         printf("[%s:%d] AFTER method %s\n", __FUNCTION__, __LINE__, methodName.c_str());
