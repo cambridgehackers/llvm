@@ -285,11 +285,7 @@ static int counter;
             Instruction *II = &*IIb;
             switch (II->getOpcode()) {
             case Instruction::Load:
-                if (II->getName() == "this") {
-                    II->replaceAllUsesWith(newThis);
-                    recursiveDelete(II);
-                }
-                else if (II->use_empty())
+                if (II->use_empty())
                     recursiveDelete(II);
                 else if (Instruction *target = dyn_cast<Instruction>(II->getOperand(0)))
                     if (GetElementPtrInst *IG = dyn_cast<GetElementPtrInst>(target))
