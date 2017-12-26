@@ -240,8 +240,8 @@ static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, 
  */
 extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
 {
-Function *argFunc = *(Function **)blockData;
-static int counter;
+    Function *argFunc = *(Function **)blockData;
+    static int counter;
     std::string className = "missingClassName";
     std::string methodName = aname;
     ValueToValueMapTy VMap;
@@ -293,8 +293,6 @@ static int counter;
                     recursiveDelete(II);
                 else if (Argument *target = dyn_cast<Argument>(II->getOperand(0))) {
                     int ElementIdx = argMap[target];
-printf("[%s:%d] LOADARG %d\n", __FUNCTION__, __LINE__, ElementIdx);
-target->dump();
                     StructType *blockSTy = ((StructType **)blockData)[1];
                     uint64_t Total = EE->getDataLayout().getStructLayout(blockSTy)->getElementOffset(ElementIdx);
                     IRBuilder<> builder(II->getParent());
@@ -318,38 +316,6 @@ target->dump();
                     II->replaceAllUsesWith(ConstantInt::get(II->getType(), val));
                     recursiveDelete(II);
                 }
-                else if (Instruction *target = dyn_cast<Instruction>(II->getOperand(0)))
-                    if (GetElementPtrInst *IG = dyn_cast<GetElementPtrInst>(target))
-                    if (Instruction *ptr = dyn_cast<Instruction>(IG->getPointerOperand()))
-                    if (ptr->getOpcode() == Instruction::BitCast)
-                    if (dyn_cast<Argument>(ptr->getOperand(0))) {
-                        /* Inline substitute captured values from block descriptor.
-                         * Currently, we only handle integer types, but this can be 
-                         * extended if needed.
-                         */
-                        VectorType *LastIndexIsVector = NULL;
-                        uint64_t Total = getGEPOffset(&LastIndexIsVector, gep_type_begin(IG), gep_type_end(IG));
-                        IRBuilder<> builder(II->getParent());
-                        builder.SetInsertPoint(II);
-                        int64_t val = *(uint32_t *)(blockData + Total);
-                        if (II->getType() == builder.getInt1Ty())
-                            val = (*(unsigned char *)(blockData + Total)) & 1;
-                        else if (II->getType() == builder.getInt8Ty())
-                            val = *(uint8_t *)(blockData + Total);
-                        else if (II->getType() == builder.getInt32Ty())
-                            val = *(uint32_t *)(blockData + Total);
-                        else if (II->getType() == builder.getInt64Ty())
-                            val = *(uint64_t *)(blockData + Total);
-                        else {
-                            printf("%s: unrecognized Load data type\n", __FUNCTION__);
-                            II->dump();
-                            II->getType()->dump();
-                            exit(-1);
-                        }
-                        printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
-                        II->replaceAllUsesWith(ConstantInt::get(II->getType(), val));
-                        recursiveDelete(II);
-                    }
                 break;
             case Instruction::SExt: {
                 if (const ConstantInt *CI = dyn_cast<ConstantInt>(II->getOperand(0))) {
@@ -374,10 +340,8 @@ target->dump();
     }
     if (trace_fixup)
         printf("[%s:%d] before popArgument\n", __FUNCTION__, __LINE__);
-    //func->arg_begin().pop_front(); // remove original argument
     std::string newName = "_ZN" + utostr(className.length()) + className
                   + utostr(methodName.length()) + methodName + "Ev";
-printf("[%s:%d] new rule name %s\n", __FUNCTION__, __LINE__, newName.c_str());
     if (globalMod->getNamedValue(newName)) {
         newName += utostr(counter);
         counter++;
