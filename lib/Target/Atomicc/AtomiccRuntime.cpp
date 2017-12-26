@@ -253,14 +253,14 @@ static int counter;
         printf("[%s:%d] BEFORECLONE method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), argFunc);
         argFunc->dump();
     }
-    ArrayRef<llvm::Type *> origArgs = argFunc->getFunctionType()->params();
     Function *func = Function::Create(FunctionType::get(argFunc->getReturnType(),
-                        origArgs, false), GlobalValue::LinkOnceODRLinkage,
+                        argFunc->getFunctionType()->params(), false), GlobalValue::LinkOnceODRLinkage,
                         "TEMPFUNC", argFunc->getParent());
     int argCount = 0;
-    for (auto AI = argFunc->arg_begin(), AE = argFunc->arg_end(); AI != AE; AI++, argCount++) {
+    for (auto AI = argFunc->arg_begin(), AE = argFunc->arg_end(), newAI = func->arg_begin();
+         AI != AE; AI++, newAI++, argCount++) {
         Argument *arg = AI;
-        VMapfunc[arg] = func->arg_begin();
+        VMapfunc[arg] = newAI;
         if (argCount == 1)
             thisType = dyn_cast<PointerType>(arg->getType());
     }
@@ -279,6 +279,10 @@ static int counter;
         printf("[%s:%d] BEFORE method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), func);
         func->dump();
     }
+    std::map<Argument *, int> argMap;
+    int Idx = 0;
+    for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++, Idx++)
+         argMap[AI] = Idx;
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
         for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE; ) {
             BasicBlock::iterator PI = std::next(BasicBlock::iterator(IIb));
@@ -287,6 +291,33 @@ static int counter;
             case Instruction::Load:
                 if (II->use_empty())
                     recursiveDelete(II);
+                else if (Argument *target = dyn_cast<Argument>(II->getOperand(0))) {
+                    int ElementIdx = argMap[target];
+printf("[%s:%d] LOADARG %d\n", __FUNCTION__, __LINE__, ElementIdx);
+target->dump();
+                    StructType *blockSTy = ((StructType **)blockData)[1];
+                    uint64_t Total = EE->getDataLayout().getStructLayout(blockSTy)->getElementOffset(ElementIdx);
+                    IRBuilder<> builder(II->getParent());
+                    builder.SetInsertPoint(II);
+                    int64_t val = *(uint32_t *)(blockData + Total);
+                    if (II->getType() == builder.getInt1Ty())
+                        val = (*(unsigned char *)(blockData + Total)) & 1;
+                    else if (II->getType() == builder.getInt8Ty())
+                        val = *(uint8_t *)(blockData + Total);
+                    else if (II->getType() == builder.getInt32Ty())
+                        val = *(uint32_t *)(blockData + Total);
+                    else if (II->getType() == builder.getInt64Ty())
+                        val = *(uint64_t *)(blockData + Total);
+                    else {
+                        printf("%s: unrecognized Load data type\n", __FUNCTION__);
+                        II->dump();
+                        II->getType()->dump();
+                        exit(-1);
+                    }
+                    printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
+                    II->replaceAllUsesWith(ConstantInt::get(II->getType(), val));
+                    recursiveDelete(II);
+                }
                 else if (Instruction *target = dyn_cast<Instruction>(II->getOperand(0)))
                     if (GetElementPtrInst *IG = dyn_cast<GetElementPtrInst>(target))
                     if (Instruction *ptr = dyn_cast<Instruction>(IG->getPointerOperand()))
