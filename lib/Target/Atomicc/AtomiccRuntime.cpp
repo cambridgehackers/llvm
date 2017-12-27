@@ -238,24 +238,24 @@ static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, 
  * The blocks context is removed; the functions are transformed into
  * a method (and its associated RDY method), attached to the containing class.
  */
-extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
+extern "C" Function *fixupFunction(uint8_t *blockData)
 {
     Function *argFunc = *(Function **)blockData;
+    StructType *blockSTy = ((StructType **)blockData)[1];
     static int counter;
-    std::string className = "missingClassName";
-    std::string methodName = aname;
-    ValueToValueMapTy VMap;
-    SmallVector<ReturnInst*, 8> Returns;  // Ignore returns cloned.
     ValueToValueMapTy VMapfunc;
     SmallVector<ReturnInst*, 8> Returnsfunc;  // Ignore returns cloned.
     PointerType *thisType = nullptr;
+
+    // first clone template function into temp function, so that we can
+    // edit, filling in actual captured data values
     if (trace_fixup) {
-        printf("[%s:%d] BEFORECLONE method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), argFunc);
+        printf("[%s:%d] BEFORECLONE func %p\n", __FUNCTION__, __LINE__, argFunc);
         argFunc->dump();
     }
     Function *func = Function::Create(FunctionType::get(argFunc->getReturnType(),
-                        argFunc->getFunctionType()->params(), false), GlobalValue::LinkOnceODRLinkage,
-                        "TEMPFUNC", argFunc->getParent());
+        argFunc->getFunctionType()->params(), false), GlobalValue::LinkOnceODRLinkage,
+        "ModifiableTemporaryFunction", argFunc->getParent());
     int argCount = 0;
     for (auto AI = argFunc->arg_begin(), AE = argFunc->arg_end(), newAI = func->arg_begin();
          AI != AE; AI++, newAI++, argCount++) {
@@ -264,22 +264,11 @@ extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
         if (argCount == 1)
             thisType = dyn_cast<PointerType>(arg->getType());
     }
-    if (StructType *STy = dyn_cast<StructType>(thisType->getElementType()))
-        className = STy->getName().substr(7);
-    Type *Params[] = {thisType};
-    Function *fnew = Function::Create(FunctionType::get(func->getReturnType(),
-        ArrayRef<Type*>(Params, 1), false), GlobalValue::LinkOnceODRLinkage,
-        "temporaryFunctionName", func->getParent());
-    fnew->arg_begin()->setName("this");
-    Argument *newThis = new Argument(thisType, "temporary_this", func);
-    VMap[newThis] = fnew->arg_begin();
     CloneFunctionInto(func, argFunc, VMapfunc, false, Returnsfunc, "", nullptr);
     processAlloca(func);
-    if (trace_fixup) {
-        printf("[%s:%d] BEFORE method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), func);
-        func->dump();
-    }
-    StructType *blockSTy = ((StructType **)blockData)[1];
+
+    // now replace all captured values in temp function
+    StructType *STy = cast<StructType>(thisType->getElementType());
     const StructLayout *layout = EE->getDataLayout().getStructLayout(blockSTy);
     int ElementIdx = 0;
     for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++, ElementIdx++) {
@@ -331,24 +320,27 @@ extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
     }
     if (trace_fixup)
         printf("[%s:%d] before popArgument\n", __FUNCTION__, __LINE__);
-    std::string newName = "_ZN" + utostr(className.length()) + className
-                  + utostr(methodName.length()) + methodName + "Ev";
-    if (globalMod->getNamedValue(newName)) {
-        newName += utostr(counter);
-        counter++;
-        printf("[%s:%d] new rule name already exists, changed to '%s'\n", __FUNCTION__, __LINE__, newName.c_str());
+    // now clone edited function into target so that we can remove parameters
+    ValueToValueMapTy VMap;
+    SmallVector<ReturnInst*, 8> Returns;  // Ignore returns cloned.
+    Type *Params[] = {thisType};
+    Function *fnew = Function::Create(FunctionType::get(func->getReturnType(),
+        ArrayRef<Type*>(Params, 1), false), GlobalValue::LinkOnceODRLinkage,
+        "ActualTargetFunction", func->getParent());
+    fnew->arg_begin()->setName("this");
+    Argument *newThis = new Argument(thisType, "temporary_this", func);
+    VMap[newThis] = fnew->arg_begin();
+    if (trace_fixup) {
+        printf("[%s:%d] BEFORE func %p\n", __FUNCTION__, __LINE__, func);
+        func->dump();
     }
-    fnew->setName(newName);
-    for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++) {
-        Argument *arg = AI;
-        VMap[arg] = fnew->arg_begin();
-    }
+    for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++)
+        VMap[AI] = fnew->arg_begin();
     CloneFunctionInto(fnew, func, VMap, false, Returns, "", nullptr);
     if (trace_fixup) {
-        printf("[%s:%d] AFTER method %s\n", __FUNCTION__, __LINE__, methodName.c_str());
+        printf("[%s:%d] AFTER\n", __FUNCTION__, __LINE__);
         fnew->dump();
     }
-    func->setName("unused_block_function");
     return fnew;
 }
 
