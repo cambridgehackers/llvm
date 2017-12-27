@@ -280,14 +280,37 @@ extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
         func->dump();
     }
     std::map<Argument *, int> argMap;
-    int Idx = 0;
-    for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++, Idx++)
-         argMap[AI] = Idx;
+    StructType *blockSTy = ((StructType **)blockData)[1];
+    const StructLayout *layout = EE->getDataLayout().getStructLayout(blockSTy);
+    int ElementIdx = 0;
+    for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++, ElementIdx++) {
+         Argument *arg = AI;
+         argMap[AI] = ElementIdx;
+         if (ElementIdx >= 2) {
+            uint64_t Total = layout->getElementOffset(ElementIdx);
+            int64_t val = *(uint32_t *)(blockData + Total);
+            if (arg->getType() == Type::getInt1Ty(func->getContext()))
+                val = (*(unsigned char *)(blockData + Total)) & 1;
+            else if (arg->getType() == Type::getInt8Ty(func->getContext()))
+                val = *(uint8_t *)(blockData + Total);
+            else if (arg->getType() == Type::getInt32Ty(func->getContext()))
+                val = *(uint32_t *)(blockData + Total);
+            else if (arg->getType() == Type::getInt64Ty(func->getContext()))
+                val = *(uint64_t *)(blockData + Total);
+            else {
+                printf("%s: unrecognized Load data type\n", __FUNCTION__);
+                exit(-1);
+            }
+            printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
+            arg->replaceAllUsesWith(ConstantInt::get(arg->getType(), val));
+        }
+    }
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
         for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE; ) {
             BasicBlock::iterator PI = std::next(BasicBlock::iterator(IIb));
             Instruction *II = &*IIb;
             switch (II->getOpcode()) {
+#if 0
             case Instruction::Load:
                 if (II->use_empty())
                     recursiveDelete(II);
@@ -317,6 +340,7 @@ extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
                     recursiveDelete(II);
                 }
                 break;
+#endif
             case Instruction::SExt: {
                 if (const ConstantInt *CI = dyn_cast<ConstantInt>(II->getOperand(0))) {
                     /* After inlining integers, we have some SExt references to constants
