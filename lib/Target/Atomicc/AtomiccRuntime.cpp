@@ -279,13 +279,11 @@ extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
         printf("[%s:%d] BEFORE method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), func);
         func->dump();
     }
-    std::map<Argument *, int> argMap;
     StructType *blockSTy = ((StructType **)blockData)[1];
     const StructLayout *layout = EE->getDataLayout().getStructLayout(blockSTy);
     int ElementIdx = 0;
     for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++, ElementIdx++) {
          Argument *arg = AI;
-         argMap[AI] = ElementIdx;
          if (ElementIdx >= 2) {
             uint64_t Total = layout->getElementOffset(ElementIdx);
             int64_t val = *(uint32_t *)(blockData + Total);
@@ -310,37 +308,6 @@ extern "C" Function *fixupFunction(const char *aname, uint8_t *blockData)
             BasicBlock::iterator PI = std::next(BasicBlock::iterator(IIb));
             Instruction *II = &*IIb;
             switch (II->getOpcode()) {
-#if 0
-            case Instruction::Load:
-                if (II->use_empty())
-                    recursiveDelete(II);
-                else if (Argument *target = dyn_cast<Argument>(II->getOperand(0))) {
-                    int ElementIdx = argMap[target];
-                    StructType *blockSTy = ((StructType **)blockData)[1];
-                    uint64_t Total = EE->getDataLayout().getStructLayout(blockSTy)->getElementOffset(ElementIdx);
-                    IRBuilder<> builder(II->getParent());
-                    builder.SetInsertPoint(II);
-                    int64_t val = *(uint32_t *)(blockData + Total);
-                    if (II->getType() == builder.getInt1Ty())
-                        val = (*(unsigned char *)(blockData + Total)) & 1;
-                    else if (II->getType() == builder.getInt8Ty())
-                        val = *(uint8_t *)(blockData + Total);
-                    else if (II->getType() == builder.getInt32Ty())
-                        val = *(uint32_t *)(blockData + Total);
-                    else if (II->getType() == builder.getInt64Ty())
-                        val = *(uint64_t *)(blockData + Total);
-                    else {
-                        printf("%s: unrecognized Load data type\n", __FUNCTION__);
-                        II->dump();
-                        II->getType()->dump();
-                        exit(-1);
-                    }
-                    printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
-                    II->replaceAllUsesWith(ConstantInt::get(II->getType(), val));
-                    recursiveDelete(II);
-                }
-                break;
-#endif
             case Instruction::SExt: {
                 if (const ConstantInt *CI = dyn_cast<ConstantInt>(II->getOperand(0))) {
                     /* After inlining integers, we have some SExt references to constants
