@@ -755,7 +755,7 @@ public:
   /// available instruction, or NULL if there are multiple candidates.
   SUnit *pickOnlyChoice();
 
-#ifndef NDEBUG
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   void dumpScheduledState() const;
 #endif
 };
