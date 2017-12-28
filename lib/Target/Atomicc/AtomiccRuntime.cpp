@@ -245,53 +245,52 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
     static int counter;
     ValueToValueMapTy VMapfunc;
     SmallVector<ReturnInst*, 8> Returnsfunc;  // Ignore returns cloned.
-    PointerType *thisType = nullptr;
 
     // first clone template function into temp function, so that we can
     // edit, filling in actual captured data values
-    if (trace_fixup) {
+    if (1||trace_fixup) {
         printf("[%s:%d] BEFORECLONE func %p\n", __FUNCTION__, __LINE__, argFunc);
         argFunc->dump();
     }
-    Function *func = Function::Create(FunctionType::get(argFunc->getReturnType(),
-        argFunc->getFunctionType()->params(), false), GlobalValue::LinkOnceODRLinkage,
-        "ModifiableTemporaryFunction", argFunc->getParent());
-    int argCount = 0;
-    for (auto AI = argFunc->arg_begin(), AE = argFunc->arg_end(), newAI = func->arg_begin();
-         AI != AE; AI++, newAI++, argCount++) {
-        Argument *arg = AI;
-        VMapfunc[arg] = newAI;
-        if (argCount == 1)
-            thisType = dyn_cast<PointerType>(arg->getType());
-    }
-    CloneFunctionInto(func, argFunc, VMapfunc, false, Returnsfunc, "", nullptr);
-    processAlloca(func);
-
-    // now replace all captured values in temp function
+    auto AAI = argFunc->arg_begin();
+    AAI++;
+    PointerType *thisType = dyn_cast<PointerType>(AAI->getType());
     StructType *STy = cast<StructType>(thisType->getElementType());
     const StructLayout *layout = EE->getDataLayout().getStructLayout(blockSTy);
-    int ElementIdx = 0;
-    for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++, ElementIdx++) {
-         Argument *arg = AI;
-         if (ElementIdx >= 2) {
-            uint64_t Total = layout->getElementOffset(ElementIdx);
+
+    Type *FParams[] = {thisType};
+    Function *func = Function::Create(FunctionType::get(argFunc->getReturnType(),
+        ArrayRef<Type*>(FParams, 1), false), GlobalValue::LinkOnceODRLinkage,
+        "ActualTargetFunction", argFunc->getParent());
+    func->arg_begin()->setName("this");
+    int argCount = 0;
+    for (auto AI = argFunc->arg_begin(), AE = argFunc->arg_end();
+         AI != AE; AI++, argCount++) {
+        Argument *arg = AI;
+        if (argCount < 2)
+            VMapfunc[arg] = func->arg_begin();
+        else {
+            uint64_t Total = layout->getElementOffset(argCount);
             int64_t val = *(uint32_t *)(blockData + Total);
-            if (arg->getType() == Type::getInt1Ty(func->getContext()))
+            if (arg->getType() == Type::getInt1Ty(argFunc->getContext()))
                 val = (*(unsigned char *)(blockData + Total)) & 1;
-            else if (arg->getType() == Type::getInt8Ty(func->getContext()))
+            else if (arg->getType() == Type::getInt8Ty(argFunc->getContext()))
                 val = *(uint8_t *)(blockData + Total);
-            else if (arg->getType() == Type::getInt32Ty(func->getContext()))
+            else if (arg->getType() == Type::getInt32Ty(argFunc->getContext()))
                 val = *(uint32_t *)(blockData + Total);
-            else if (arg->getType() == Type::getInt64Ty(func->getContext()))
+            else if (arg->getType() == Type::getInt64Ty(argFunc->getContext()))
                 val = *(uint64_t *)(blockData + Total);
             else {
                 printf("%s: unrecognized Load data type\n", __FUNCTION__);
                 exit(-1);
             }
             printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
-            arg->replaceAllUsesWith(ConstantInt::get(arg->getType(), val));
+            VMapfunc[arg] = ConstantInt::get(arg->getType(), val);
         }
     }
+    CloneFunctionInto(func, argFunc, VMapfunc, false, Returnsfunc, "", nullptr);
+    processAlloca(func);
+
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
         for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE; ) {
             BasicBlock::iterator PI = std::next(BasicBlock::iterator(IIb));
@@ -318,30 +317,11 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
             IIb = PI;
         }
     }
-    if (trace_fixup)
-        printf("[%s:%d] before popArgument\n", __FUNCTION__, __LINE__);
-    // now clone edited function into target so that we can remove parameters
-    ValueToValueMapTy VMap;
-    SmallVector<ReturnInst*, 8> Returns;  // Ignore returns cloned.
-    Type *Params[] = {thisType};
-    Function *fnew = Function::Create(FunctionType::get(func->getReturnType(),
-        ArrayRef<Type*>(Params, 1), false), GlobalValue::LinkOnceODRLinkage,
-        "ActualTargetFunction", func->getParent());
-    fnew->arg_begin()->setName("this");
-    Argument *newThis = new Argument(thisType, "temporary_this", func);
-    VMap[newThis] = fnew->arg_begin();
-    if (trace_fixup) {
-        printf("[%s:%d] BEFORE func %p\n", __FUNCTION__, __LINE__, func);
-        func->dump();
-    }
-    for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++)
-        VMap[AI] = fnew->arg_begin();
-    CloneFunctionInto(fnew, func, VMap, false, Returns, "", nullptr);
     if (trace_fixup) {
         printf("[%s:%d] AFTER\n", __FUNCTION__, __LINE__);
-        fnew->dump();
+        func->dump();
     }
-    return fnew;
+    return func;
 }
 
 
