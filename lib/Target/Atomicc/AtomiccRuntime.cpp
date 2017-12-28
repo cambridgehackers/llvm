@@ -243,7 +243,7 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
     Function *argFunc = *(Function **)blockData;
     StructType *blockSTy = ((StructType **)blockData)[1];
     static int counter;
-    ValueToValueMapTy VMapfunc;
+    ValueToValueMapTy VMap;
     SmallVector<ReturnInst*, 8> Returnsfunc;  // Ignore returns cloned.
 
     // first clone template function into temp function, so that we can
@@ -252,29 +252,27 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
         printf("[%s:%d] BEFORECLONE func %p\n", __FUNCTION__, __LINE__, argFunc);
         argFunc->dump();
     }
-    auto AAI = argFunc->arg_begin();
-    AAI++;
-    PointerType *thisType = dyn_cast<PointerType>(AAI->getType());
-    StructType *STy = cast<StructType>(thisType->getElementType());
+    PointerType *thisType = dyn_cast<PointerType>(argFunc->arg_begin()->getType());
+    //StructType *STy = cast<StructType>(thisType->getElementType());
     const StructLayout *layout = EE->getDataLayout().getStructLayout(blockSTy);
 
-    Type *FParams[] = {thisType};
+    Type *Params[] = {thisType};
     Function *func = Function::Create(FunctionType::get(argFunc->getReturnType(),
-        ArrayRef<Type*>(FParams, 1), false), GlobalValue::LinkOnceODRLinkage,
+        ArrayRef<Type*>(Params, 1), false), GlobalValue::LinkOnceODRLinkage,
         "ActualTargetFunction", argFunc->getParent());
     func->arg_begin()->setName("this");
-    int argCount = 0;
-    auto SI = STy->element_begin();
+    auto SI = blockSTy->element_begin();
     SI++; // void *invoke;
-    SI++; // void *STy;
+    SI++; // i64 STy;
+    int argCount = 0;
     for (auto AI = argFunc->arg_begin(), AE = argFunc->arg_end();
          AI != AE; AI++, argCount++) {
         Argument *arg = AI;
-        if (argCount < 2)
-            VMapfunc[arg] = func->arg_begin();
+        if (argCount < 1)
+            VMap[arg] = func->arg_begin();
         else {
             Type *elementType = *SI++;
-            uint64_t Total = layout->getElementOffset(argCount);
+            uint64_t Total = layout->getElementOffset(argCount+1);
             int64_t val = *(uint32_t *)(blockData + Total);
             if (elementType == Type::getInt1Ty(argFunc->getContext()))
                 val = (*(unsigned char *)(blockData + Total)) & 1;
@@ -289,10 +287,10 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
                 exit(-1);
             }
             printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
-            VMapfunc[arg] = ConstantInt::get(arg->getType(), val);
+            VMap[arg] = ConstantInt::get(arg->getType(), val);
         }
     }
-    CloneFunctionInto(func, argFunc, VMapfunc, false, Returnsfunc, "", nullptr);
+    CloneFunctionInto(func, argFunc, VMap, false, Returnsfunc, "", nullptr);
     processAlloca(func);
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
         for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE; ) {
@@ -326,7 +324,6 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
     }
     return func;
 }
-
 
 /*
  * Functions called from user constructors during static initialization
