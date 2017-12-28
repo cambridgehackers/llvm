@@ -248,7 +248,7 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
 
     // first clone template function into temp function, so that we can
     // edit, filling in actual captured data values
-    if (1||trace_fixup) {
+    if (trace_fixup) {
         printf("[%s:%d] BEFORECLONE func %p\n", __FUNCTION__, __LINE__, argFunc);
         argFunc->dump();
     }
@@ -264,21 +264,25 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
         "ActualTargetFunction", argFunc->getParent());
     func->arg_begin()->setName("this");
     int argCount = 0;
+    auto SI = STy->element_begin();
+    SI++; // void *invoke;
+    SI++; // void *STy;
     for (auto AI = argFunc->arg_begin(), AE = argFunc->arg_end();
          AI != AE; AI++, argCount++) {
         Argument *arg = AI;
         if (argCount < 2)
             VMapfunc[arg] = func->arg_begin();
         else {
+            Type *elementType = *SI++;
             uint64_t Total = layout->getElementOffset(argCount);
             int64_t val = *(uint32_t *)(blockData + Total);
-            if (arg->getType() == Type::getInt1Ty(argFunc->getContext()))
+            if (elementType == Type::getInt1Ty(argFunc->getContext()))
                 val = (*(unsigned char *)(blockData + Total)) & 1;
-            else if (arg->getType() == Type::getInt8Ty(argFunc->getContext()))
+            else if (elementType == Type::getInt8Ty(argFunc->getContext()))
                 val = *(uint8_t *)(blockData + Total);
-            else if (arg->getType() == Type::getInt32Ty(argFunc->getContext()))
+            else if (elementType == Type::getInt32Ty(argFunc->getContext()))
                 val = *(uint32_t *)(blockData + Total);
-            else if (arg->getType() == Type::getInt64Ty(argFunc->getContext()))
+            else if (elementType == Type::getInt64Ty(argFunc->getContext()))
                 val = *(uint64_t *)(blockData + Total);
             else {
                 printf("%s: unrecognized Load data type\n", __FUNCTION__);
@@ -290,7 +294,6 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
     }
     CloneFunctionInto(func, argFunc, VMapfunc, false, Returnsfunc, "", nullptr);
     processAlloca(func);
-
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
         for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE; ) {
             BasicBlock::iterator PI = std::next(BasicBlock::iterator(IIb));
