@@ -274,13 +274,7 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
             Type *elementType = *SI++;
             uint64_t Total = layout->getElementOffset(argCount+1);
             int64_t val = *(uint32_t *)(blockData + Total);
-            if (elementType == Type::getInt1Ty(argFunc->getContext()))
-                val = (*(unsigned char *)(blockData + Total)) & 1;
-            else if (elementType == Type::getInt8Ty(argFunc->getContext()))
-                val = *(uint8_t *)(blockData + Total);
-            else if (elementType == Type::getInt32Ty(argFunc->getContext()))
-                val = *(uint32_t *)(blockData + Total);
-            else if (elementType == Type::getInt64Ty(argFunc->getContext()))
+            if (elementType == Type::getInt64Ty(argFunc->getContext()))
                 val = *(uint64_t *)(blockData + Total);
             else {
                 printf("%s: unrecognized Load data type\n", __FUNCTION__);
