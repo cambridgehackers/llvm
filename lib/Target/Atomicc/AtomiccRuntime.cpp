@@ -241,7 +241,7 @@ static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, 
 extern "C" Function *fixupFunction(uint8_t *blockData)
 {
     Function *argFunc = *(Function **)blockData;
-    StructType *blockSTy = ((StructType **)blockData)[1];
+    uint64_t *bcap = ((uint64_t *)blockData) + 1;
     static int counter;
     ValueToValueMapTy VMap;
     SmallVector<ReturnInst*, 8> Returnsfunc;  // Ignore returns cloned.
@@ -253,17 +253,12 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
         argFunc->dump();
     }
     PointerType *thisType = dyn_cast<PointerType>(argFunc->arg_begin()->getType());
-    //StructType *STy = cast<StructType>(thisType->getElementType());
-    const StructLayout *layout = EE->getDataLayout().getStructLayout(blockSTy);
 
     Type *Params[] = {thisType};
     Function *func = Function::Create(FunctionType::get(argFunc->getReturnType(),
         ArrayRef<Type*>(Params, 1), false), GlobalValue::LinkOnceODRLinkage,
         "ActualTargetFunction", argFunc->getParent());
     func->arg_begin()->setName("this");
-    auto SI = blockSTy->element_begin();
-    SI++; // void *invoke;
-    SI++; // i64 STy;
     int argCount = 0;
     for (auto AI = argFunc->arg_begin(), AE = argFunc->arg_end();
          AI != AE; AI++, argCount++) {
@@ -271,15 +266,7 @@ extern "C" Function *fixupFunction(uint8_t *blockData)
         if (argCount < 1)
             VMap[arg] = func->arg_begin();
         else {
-            Type *elementType = *SI++;
-            uint64_t Total = layout->getElementOffset(argCount+1);
-            int64_t val = *(uint32_t *)(blockData + Total);
-            if (elementType == Type::getInt64Ty(argFunc->getContext()))
-                val = *(uint64_t *)(blockData + Total);
-            else {
-                printf("%s: unrecognized Load data type\n", __FUNCTION__);
-                exit(-1);
-            }
+            int64_t val = bcap[argCount-1];
             printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
             VMap[arg] = ConstantInt::get(arg->getType(), val);
         }
