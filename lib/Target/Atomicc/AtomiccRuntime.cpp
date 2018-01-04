@@ -238,10 +238,8 @@ static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, 
  * The blocks context is removed; the functions are transformed into
  * a method (and its associated RDY method), attached to the containing class.
  */
-extern "C" Function *fixupFunction(uint64_t *blockData)
+extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
 {
-    Function *argFunc = *(Function **)blockData;
-    uint64_t *bcap = blockData + 1;
     static int counter;
     ValueToValueMapTy VMap;
     SmallVector<ReturnInst*, 8> Returnsfunc;  // Ignore returns cloned.
