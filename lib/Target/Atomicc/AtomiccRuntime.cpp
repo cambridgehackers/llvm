@@ -326,8 +326,10 @@ extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType
  * Called from user constructors to process Blocks functions generated for a rule
  * Rules only support RDY/ENA signalling.
  */
-extern "C" void addBaseRule(const char *name, Function *rdyFunc, Function *enaFunc)
+extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc, Function *aenaFunc)
 {
+    Function *rdyFunc = fixupFunction(bcap, ardyFunc);
+    Function *enaFunc = fixupFunction(bcap, aenaFunc);
     std::string enaName = name;
     ClassMethodTable *table = classCreate[findThisArgument(rdyFunc)];
     table->ruleFunctions[name] = enaFunc;
