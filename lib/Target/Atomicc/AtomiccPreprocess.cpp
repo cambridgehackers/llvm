@@ -297,6 +297,7 @@ void preprocessModule(Module *Mod)
         {"_ZL20atomiccNewArrayCountm", processMSize},
         {"atomiccSchedulePriority", processPriority},
         {"atomiccInterfaceName", processInterfaceName},
+        {"connectInterfaceNew", processInterfaceName},
         {NULL, NULL}};
 
     for (int i = 0; callProcess[i].name; i++) {

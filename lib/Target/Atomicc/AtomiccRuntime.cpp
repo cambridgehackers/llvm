@@ -439,3 +439,16 @@ printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFun
 //enaFunc->dump();
 //rdyFunc->dump();
 }
+extern "C" void connectInterfaceNew(const char *target, const char *source, const StructType *STy)
+{
+    ClassMethodTable *table = classCreate[STy];
+    std::string enaName = target;
+    std::string enaSuffix = "__ENA";
+    //if (endswith(item.first, "__READY")) {
+        //enaName = item.first.substr(0, item.first.length() - 7);
+        //enaSuffix = "__VALID";
+    //}
+std::string rdyString = "__RDY";
+printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
+STy->dump();
+}
