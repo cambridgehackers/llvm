@@ -54,15 +54,23 @@ static void processInterfaceName(CallInst *II)
 
 static void processConnectInterface(CallInst *II)
 {
-    if (Instruction *ins = dyn_cast<Instruction>(II->getOperand(0)))
-    if (ins->getOpcode() == Instruction::BitCast)
-    if (PointerType *PTy = dyn_cast<PointerType>(ins->getOperand(0)->getType()))
-    if (StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
+    Function *callingFunction = II->getParent()->getParent();
+    IRBuilder<> builder(II->getParent());
+    builder.SetInsertPoint(II);
+    const StructType *STy = findThisArgument(callingFunction);
+    Value *oldOp = II->getOperand(2);
+    II->setOperand(2, ConstantInt::get(Type::getInt64Ty(II->getContext()), (uint64_t)STy));
+    //if (Instruction *ins = dyn_cast<Instruction>(II->getOperand(2)))
+    //if (ins->getOpcode() == Instruction::BitCast)
+    //if (PointerType *PTy = dyn_cast<PointerType>(ins->getOperand(0)->getType()))
+    //if (StructType *STy = dyn_cast<StructType>(II->getOperand(2))) {
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+STy->dump();
         getClass(STy);  // make sure that classCreate is initialized
         ClassMethodTable *table = classCreate[STy];
         std::string sname = STy->getName();
-        std::string target = printOperand(II->getOperand(1), false);
-        std::string source = printOperand(II->getOperand(2), false);
+        std::string target = printOperand(II->getOperand(0), false);
+        std::string source = printOperand(II->getOperand(1), false);
         int ind = target.find(".");
         if (ind > 0)
             target = target.substr(ind+1);
@@ -71,7 +79,7 @@ static void processConnectInterface(CallInst *II)
             source = source.substr(ind+1);
         if (source[source.length() - 1] == '_') // weird postfix '_'!!
             source = source.substr(0, source.length()-1);
-        if (Instruction *sins = dyn_cast<Instruction>(II->getOperand(2)))
+        if (Instruction *sins = dyn_cast<Instruction>(II->getOperand(1)))
         if (sins->getOpcode() == Instruction::BitCast)
         if (PointerType *iPTy = dyn_cast<PointerType>(sins->getOperand(0)->getType()))
         if (StructType *iSTy = dyn_cast<StructType>(iPTy->getElementType())) {
@@ -81,7 +89,7 @@ printf("[%s:%d] sname %s table %p source %s target %s isname %s\n", __FUNCTION__
              printf("arg[%d] = %s\n", i, printOperand(II->getOperand(i), false).c_str());
         table->interfaceConnect.push_back(InterfaceConnectType{target, source, iSTy});
         }
-    }
+    //}
     recursiveDelete(II);      // No longer need to call connectInterface() !
 }
 
