@@ -54,16 +54,7 @@ static void processInterfaceName(CallInst *II)
 
 static void processConnectInterface(CallInst *II)
 {
-    Function *callingFunction = II->getParent()->getParent();
-    IRBuilder<> builder(II->getParent());
-    builder.SetInsertPoint(II);
-    const StructType *STy = findThisArgument(callingFunction);
-    Value *oldOp = II->getOperand(2);
-    II->setOperand(2, ConstantInt::get(Type::getInt64Ty(II->getContext()), (uint64_t)STy));
-    //if (Instruction *ins = dyn_cast<Instruction>(II->getOperand(2)))
-    //if (ins->getOpcode() == Instruction::BitCast)
-    //if (PointerType *PTy = dyn_cast<PointerType>(ins->getOperand(0)->getType()))
-    //if (StructType *STy = dyn_cast<StructType>(II->getOperand(2))) {
+    const StructType *STy = findThisArgument(II->getParent()->getParent());
 printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 STy->dump();
         getClass(STy);  // make sure that classCreate is initialized
@@ -85,11 +76,10 @@ STy->dump();
         if (StructType *iSTy = dyn_cast<StructType>(iPTy->getElementType())) {
             std::string isname = iSTy->getName();
 printf("[%s:%d] sname %s table %p source %s target %s isname %s\n", __FUNCTION__, __LINE__, sname.c_str(), table, source.c_str(), target.c_str(), isname.c_str());
-        for (unsigned i = 0; i < II->getNumOperands()-1; i++)
+        for (unsigned i = 0; i < 2; i++)
              printf("arg[%d] = %s\n", i, printOperand(II->getOperand(i), false).c_str());
         table->interfaceConnect.push_back(InterfaceConnectType{target, source, iSTy});
         }
-    //}
     recursiveDelete(II);      // No longer need to call connectInterface() !
 }
 
