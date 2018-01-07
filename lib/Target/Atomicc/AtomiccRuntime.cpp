@@ -352,10 +352,6 @@ extern "C" void atomiccSchedulePriority(const char *rule, const char *priority, 
 /*
  * Called from user constructors to set interface methods
  */
-typedef struct {
-    std::string fname;
-    Function   *func;
-} FuncInfo;
 static void replaceFunc(Function *target, Function *source)
 {
     auto bb = target->begin();
@@ -378,7 +374,7 @@ static void replaceFunc(Function *target, Function *source)
         }
     }
 }
-static void buildSMap(const StructType *STy, std::map<std::string, FuncInfo> &funcMap)
+void buildSMap(const StructType *STy, std::map<std::string, FuncInfo> &funcMap)
 {
     int len = STy->structFieldMap.length();
     int subs = 0, last_subs = 0;

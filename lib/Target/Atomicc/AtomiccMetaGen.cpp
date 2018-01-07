@@ -137,16 +137,17 @@ void metaGenerate(const StructType *STy, FILE *OStr)
     if (ruleNames != "")
         table->metaList.push_back("//METARULES" + ruleNames);
     for (auto item: table->interfaceConnect) {
+        std::string tname = item.target;
+        std::string sname = item.source;
+printf("[%s:%d] METACONNECT %s %s\n", __FUNCTION__, __LINE__, tname.c_str(), sname.c_str());
         int Idx = 0;
         for (auto I = item.STy->element_begin(), E = item.STy->element_end(); I != E; ++I, Idx++) {
             std::string fname = fieldName(item.STy, Idx);
             if (endswith(fname, "__RDYp")) {
                 fname = fname.substr(0, fname.length() - 6);
-                std::string tname = item.target;
                 for (unsigned i = 0; i < tname.length(); i++)
                     if (tname[i] == '.')
                         tname[i] = '$';
-                std::string sname = item.source;
                 for (unsigned i = 0; i < sname.length(); i++)
                     if (sname[i] == '.')
                         sname[i] = '$';

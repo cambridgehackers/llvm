@@ -98,6 +98,11 @@ typedef  struct {
     uint64_t   vecCount;
 } MEMORY_REGION;
 
+typedef struct {
+    std::string fname;
+    Function   *func;
+} FuncInfo;
+
 typedef std::map<std::string, int> StringMapType;
 
 extern ExecutionEngine *EE;
@@ -148,3 +153,4 @@ void getClass(const StructType *STy);
 std::string printCall(Instruction *I);
 bool isAlloca(Value *arg);
 bool isInterface(const StructType *STy);
+void buildSMap(const StructType *STy, std::map<std::string, FuncInfo> &funcMap);
