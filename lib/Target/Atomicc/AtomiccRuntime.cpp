@@ -378,18 +378,8 @@ static void replaceFunc(Function *target, Function *source)
         }
     }
 }
-extern "C" void atomiccInterfaceName(const char *target, const char *source, const StructType *STy)
+static void buildSMap(const StructType *STy, std::map<std::string, FuncInfo> &funcMap)
 {
-    ClassMethodTable *table = classCreate[STy];
-    std::string enaName = target;
-    std::string enaSuffix = "__ENA";
-    //if (endswith(item.first, "__READY")) {
-        //enaName = item.first.substr(0, item.first.length() - 7);
-        //enaSuffix = "__VALID";
-    //}
-std::string rdyString = "__RDY";
-printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
-    std::map<std::string, FuncInfo> funcMap;
     int len = STy->structFieldMap.length();
     int subs = 0, last_subs = 0;
     while (subs < len) {
@@ -414,6 +404,20 @@ printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, 
             }
         last_subs = subs;
     }
+}
+extern "C" void atomiccInterfaceName(const char *target, const char *source, const StructType *STy)
+{
+    ClassMethodTable *table = classCreate[STy];
+    std::string enaName = target;
+    std::string enaSuffix = "__ENA";
+    //if (endswith(item.first, "__READY")) {
+        //enaName = item.first.substr(0, item.first.length() - 7);
+        //enaSuffix = "__VALID";
+    //}
+std::string rdyString = "__RDY";
+printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
+    std::map<std::string, FuncInfo> funcMap;
+    buildSMap(STy, funcMap);
     Function *enaFunc = funcMap[target].func;
     Function *rdyFunc = funcMap[target + rdyString].func;
     Function *senaFunc = funcMap[source].func;
@@ -442,13 +446,20 @@ printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFun
 extern "C" void connectInterfaceNew(const char *target, const char *source, const StructType *STy)
 {
     ClassMethodTable *table = classCreate[STy];
-    std::string enaName = target;
-    std::string enaSuffix = "__ENA";
-    //if (endswith(item.first, "__READY")) {
-        //enaName = item.first.substr(0, item.first.length() - 7);
-        //enaSuffix = "__VALID";
-    //}
-std::string rdyString = "__RDY";
+    std::map<std::string, FuncInfo> funcMap;
 printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
-STy->dump();
+    buildSMap(STy, funcMap);
+    for (auto item: funcMap) {
+printf("[%s:%d] %s = %p %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.func, item.second.fname.c_str());
+    }
+    int Idx = 0;
+    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+        const StructType *STyE = dyn_cast<StructType>(*I);
+        std::string fname = fieldName(STy, Idx);
+        if (STyE) {
+printf("[%s:%d] fname %s\n", __FUNCTION__, __LINE__, fname.c_str());
+STyE->dump();
+        }
+    }
+//STy->dump();
 }
