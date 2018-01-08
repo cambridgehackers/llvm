@@ -378,10 +378,9 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
         return referstr;
     if (FirstOp && FirstOp->isNullValue()) {
         ++I;  // Skip the zero index.
-        if (I == E) {
+        if (I == E) { // off the end of parameters
             // HACK HACK HACK HACK for 'fifo0'
             printf("[%s:%d] amper %s expose %d referstr %s\n", __FUNCTION__, __LINE__, amper.c_str(), expose, referstr.c_str());
-            (I.getIndexedType())->dump();
             amper = "";
             referstr += "0";
         } else
@@ -866,7 +865,6 @@ static void getDepend(const StructType *STy)
 void generateClasses(FILE *OStrV, FILE *OStrVH)
 {
     for (auto current : classCreate)
-        //if (!isInterface(current.first))
         structAlpha[getStructName(current.first)] = current.first;
     for (auto item : structAlpha)
         if (item.second)

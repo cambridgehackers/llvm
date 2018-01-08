@@ -238,9 +238,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     generateModuleSignature(OStr, STy, "");
     for (auto IC : table->interfaceConnect) {
         ClassMethodTable *mtable = classCreate[IC.STy];
-//printf("[%s:%d] %s interfaceConnect %s %s %s mtable %p\n", __FUNCTION__, __LINE__, name.c_str(), IC.target.c_str(), IC.source.c_str(), getStructName(IC.STy).c_str(), mtable);
         for (auto FI : mtable->method) {
-printf("[%s:%d] meth %s = %s\n", __FUNCTION__, __LINE__, (IC.target + MODULE_SEPARATOR + FI.first).c_str(), (IC.source + MODULE_SEPARATOR + FI.first).c_str());
             setAssign(IC.target + MODULE_SEPARATOR + FI.first,
                       IC.source + MODULE_SEPARATOR + FI.first);
         }
