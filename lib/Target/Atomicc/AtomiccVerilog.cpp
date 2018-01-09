@@ -170,38 +170,26 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
         const PointerType *PTy = dyn_cast<PointerType>(element);
         if (fldName == "" || !PTy)
             continue;
-        element = PTy->getElementType();
-        const StructType *iSTy = dyn_cast<StructType>(element);
-        if (!iSTy) { // not calling indications from this module
-            modulePortList.push_back(outp + printType(element, false, fldName, "  ", "", false));
-printf("[%s:%d]WHYWHYWHY????\n", __FUNCTION__, __LINE__);
-element->dump();
-STy->dump();
-exit(-1);
+        const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType());
+        if (!isInterface(iSTy))
             continue;
-        }
 //printf("[%s:%d] indication interface topname %s sname %s fldName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), fldName.c_str());
-        int Idx = 0;
-        for (auto I = iSTy->element_begin(), E = iSTy->element_end(); I != E; ++I, Idx++) {
-            std::string elementName = fldName + MODULE_SEPARATOR + fieldName(iSTy, Idx) + MODULE_SEPARATOR;
-            auto interfaceSTy = dyn_cast<StructType>(*I);
-            if (!interfaceSTy || !isInterface(interfaceSTy))
-                continue;
-            ClassMethodTable *itable = classCreate[interfaceSTy];
-//printf("[%s:%d] indication interface topname %s sname %s elementName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), interfaceSTy->getName().str().c_str(), elementName.c_str());
-            for (auto FI : itable->method) {
-                std::string wparam = outp;
-                Function *func = FI.second;
-                auto AI = func->arg_begin(), AE = func->arg_end();
-//printf("[%s:%d] methodName %s func %p\n", __FUNCTION__, __LINE__, FI.first.c_str(), func);
-                if (!isActionMethod(func))
-                    wparam = inp + (instance == "" ? verilogArrRange(func->getReturnType()):"");
-                modulePortList.push_back(wparam + elementName + FI.first);
-                for (AI++; AI != AE; ++AI) {
-                    modulePortList.push_back(outp
-                       + (instance == "" ? verilogArrRange(AI->getType()):"")
-                       + elementName + AI->getName().str());
-                }
+iSTy->dump();
+        std::string elementName = fldName + MODULE_SEPARATOR;
+        ClassMethodTable *itable = classCreate[iSTy];
+//printf("[%s:%d] indication interface topname %s sname %s elementName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), elementName.c_str());
+        for (auto FI : itable->method) {
+            std::string wparam = outp;
+            Function *func = FI.second;
+            auto AI = func->arg_begin(), AE = func->arg_end();
+printf("[%s:%d] methodName %s func %p\n", __FUNCTION__, __LINE__, FI.first.c_str(), func);
+            if (!isActionMethod(func))
+                wparam = inp + (instance == "" ? verilogArrRange(func->getReturnType()):"");
+            modulePortList.push_back(wparam + elementName + FI.first);
+            for (AI++; AI != AE; ++AI) {
+                modulePortList.push_back(outp
+                   + (instance == "" ? verilogArrRange(AI->getType()):"")
+                   + elementName + AI->getName().str());
             }
         }
     }
