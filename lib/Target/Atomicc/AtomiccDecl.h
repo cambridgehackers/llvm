@@ -70,6 +70,11 @@ typedef struct {
     MetaRef list[MetaMax];
 } MetaData;
 
+typedef struct {
+    std::string fname;
+    Function   *func;
+} FuncInfo;
+
 class ClassMethodTable {
 public:
     const StructType                  *STy;
@@ -87,6 +92,7 @@ public:
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
+    std::map<std::string, FuncInfo> funcMap;
     ClassMethodTable() {}
 };
 
@@ -98,15 +104,9 @@ typedef  struct {
     uint64_t   vecCount;
 } MEMORY_REGION;
 
-typedef struct {
-    std::string fname;
-    Function   *func;
-} FuncInfo;
-
 typedef std::map<std::string, int> StringMapType;
 
 extern ExecutionEngine *EE;
-extern std::map<const StructType *,ClassMethodTable *> classCreate;
 extern std::map<Function *, Function *> ruleRDYFunction;
 extern std::map<Function *, Function *> ruleENAFunction;
 extern std::list<MEMORY_REGION> memoryRegion;
@@ -149,8 +149,7 @@ void dumpMemoryRegions(int arg);
 void generateClasses(FILE *OStrV, FILE *OStrVH);
 void metaGenerate(const StructType *STy, FILE *OStr);
 bool isActionMethod(const Function *func);
-void getClass(const StructType *STy);
+ClassMethodTable *getClass(const StructType *STy);
 std::string printCall(Instruction *I);
 bool isAlloca(Value *arg);
 bool isInterface(const StructType *STy);
-void buildSMap(const StructType *STy, std::map<std::string, FuncInfo> &funcMap);

@@ -29,7 +29,7 @@ static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
 static int trace_operand;//=1;
-std::map<const StructType *,ClassMethodTable *> classCreate;
+static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
 
 static std::map<const Value *, std::string> allocaMap;
@@ -140,8 +140,8 @@ bool isActionMethod(const Function *func)
 
 static void checkClass(const StructType *STy, const StructType *ActSTy)
 {
-    ClassMethodTable *table = classCreate[STy];
-    //ClassMethodTable *atable = classCreate[ActSTy];
+    ClassMethodTable *table = getClass(STy);
+    //ClassMethodTable *atable = getClass(ActSTy);
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         Type *element = *I;
@@ -156,13 +156,39 @@ static void checkClass(const StructType *STy, const StructType *ActSTy)
     }
 }
 
-void getClass(const StructType *STy)
+ClassMethodTable *getClass(const StructType *STy)
 {
     if (!classCreate[STy]) {
-        classCreate[STy] = new ClassMethodTable;
+        ClassMethodTable *table = new ClassMethodTable;
+        classCreate[STy] = table;
         classCreate[STy]->STy = STy;
         checkClass(STy, STy);
+        int len = STy->structFieldMap.length();
+        int subs = 0, last_subs = 0;
+        while (subs < len) {
+            while (subs < len && STy->structFieldMap[subs] != ',') {
+                subs++;
+            }
+            subs++;
+            if (STy->structFieldMap[last_subs] == '/')
+                last_subs++;
+            std::string ret = STy->structFieldMap.substr(last_subs);
+            int idx = ret.find(',');
+            if (idx >= 0)
+                ret = ret.substr(0,idx);
+            idx = ret.find(':');
+            if (idx >= 0) {
+                std::string fname = ret.substr(0, idx);
+                Function *func = globalMod->getFunction(fname);
+                std::string mName = ret.substr(idx+1);
+                if (func)
+                    table->funcMap[mName] = {fname, func};
+//printf("[%s:%d] fname %s mName %s func %p\n", __FUNCTION__, __LINE__, fname.c_str(), mName.c_str(), func);
+                }
+            last_subs = subs;
+        }
     }
+    return classCreate[STy];
 }
 
 /*
@@ -488,7 +514,7 @@ std::string getMethodName(Function *func)
 {
     std::string fname = func->getName();
     if (const StructType *targetSTy = findThisArgument(func))
-    if (ClassMethodTable *targetTable = classCreate[targetSTy])
+    if (ClassMethodTable *targetTable = getClass(targetSTy))
         for (auto item: targetTable->method)
             if (item.second == func)
                 return item.first;
@@ -823,7 +849,7 @@ static void getDepend(const StructType *STy)
     if (!isInterface(STy))
     if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
      && strncmp(STy->getName().str().c_str(), "struct.std::", 12)) {
-        ClassMethodTable *table = classCreate[STy];
+        ClassMethodTable *table = getClass(STy);
         int Idx = 0;
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
             Type *element = *I;

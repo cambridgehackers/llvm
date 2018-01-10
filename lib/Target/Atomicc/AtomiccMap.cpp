@@ -271,7 +271,7 @@ copyt = false;
 // Preprocess the body rules, moving items to RDY() and ENA()
 static void processPromote(Function *currentFunction)
 {
-    //ClassMethodTable *table = classCreate[findThisArgument(currentFunction)];
+    //ClassMethodTable *table = getClass(findThisArgument(currentFunction));
 restart:
     for (auto BI = currentFunction->begin(), BE = currentFunction->end(); BI != BE; BI++) {
         for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;) {
@@ -346,7 +346,7 @@ restart:
                                 eleIndex = CI->getZExtValue();
                             for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++)
                                 if (Idx == eleIndex)
-                                if (ClassMethodTable *table = classCreate[STy])
+                                if (ClassMethodTable *table = getClass(STy))
                                     if (table->replaceType[Idx]) {
                                         Values_size = table->replaceCount[Idx];
 printf("[%s:%d] get dyn size (static not handled) %d\n", __FUNCTION__, __LINE__, Values_size);
@@ -492,9 +492,8 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
     switch (Ty->getTypeID()) {
     case Type::StructTyID: {
         StructType *STy = cast<StructType>(Ty);
-        getClass(STy); // allocate classCreate
         const StructLayout *SLO = TD.getStructLayout(STy);
-        //ClassMethodTable *table = classCreate[STy];
+        ClassMethodTable *table = getClass(STy); // allocate classCreate
         int Idx = 0;
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
             std::string fname = fieldName(STy, Idx);
@@ -515,15 +514,14 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                         printf("%s: info.p %p info.p+info.size %lx\n", __FUNCTION__, info.p, ((size_t)info.p + info.size));
                     if (p >= info.p && (size_t)p < ((size_t)info.p + info.size)) {
                     if (checkDerived(info.type, PTy)) {
-                        getClass(STy);
-                        classCreate[STy]->replaceType[Idx] = info.type;
-                        classCreate[STy]->replaceCount[Idx] = info.vecCount;
+                        getClass(STy)->replaceType[Idx] = info.type;
+                        getClass(STy)->replaceCount[Idx] = info.vecCount;
                         //if (trace_map)
                             printf("%s: pointerFound %p info.STy %s count %d\n", __FUNCTION__, p, info.STy->getName().str().c_str(), (int)info.vecCount);
                         if (STy == info.STy) {
-                            classCreate[STy]->allocateLocally[Idx] = true;
+                            getClass(STy)->allocateLocally[Idx] = true;
                             inlineReferences(Mod, STy, Idx, info.type);
-                            classCreate[STy]->replaceType[Idx] = cast<PointerType>(info.type)->getElementType();
+                            getClass(STy)->replaceType[Idx] = cast<PointerType>(info.type)->getElementType();
                             setInterface = 0;
                         }
                     }

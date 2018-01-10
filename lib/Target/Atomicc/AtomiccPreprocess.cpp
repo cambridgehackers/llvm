@@ -57,8 +57,7 @@ static void processConnectInterface(CallInst *II)
     const StructType *STy = findThisArgument(II->getParent()->getParent());
 printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 STy->dump();
-        getClass(STy);  // make sure that classCreate is initialized
-        ClassMethodTable *table = classCreate[STy];
+        ClassMethodTable *table = getClass(STy); // make sure that classCreate is initialized
         std::string sname = STy->getName();
         std::string target = printOperand(II->getOperand(0), false);
         std::string source = printOperand(II->getOperand(1), false);
@@ -303,37 +302,11 @@ void preprocessModule(Module *Mod)
     for (unsigned i = 0, e = StructTypes.size(); i != e; ++i) {
         StructType *STy = StructTypes[i];
         if (STy->isLiteral() || STy->getName().empty()) continue;
-        getClass(STy);  // make sure that classCreate is initialized
-        ClassMethodTable *table = classCreate[STy];
+        ClassMethodTable *table = getClass(STy); // make sure that classCreate is initialized
 //printf("[%s:%d] STy %p table %p name %s map %s\n", __FUNCTION__, __LINE__, STy, table, getStructName(STy).c_str(), STy->structFieldMap.c_str());
-        std::map<std::string, Function *> funcMap;
-        int len = STy->structFieldMap.length();
-        int subs = 0, last_subs = 0;
-        while (subs < len) {
-            while (subs < len && STy->structFieldMap[subs] != ',') {
-                subs++;
-            }
-            subs++;
-            if (STy->structFieldMap[last_subs] == '/')
-                last_subs++;
-            std::string ret = STy->structFieldMap.substr(last_subs);
-            int idx = ret.find(',');
-            if (idx >= 0)
-                ret = ret.substr(0,idx);
-            idx = ret.find(':');
-            if (idx >= 0) {
-                std::string fname = ret.substr(0, idx);
-                std::string mname = ret.substr(idx+1);
-                Function *func = Mod->getFunction(fname);
-//printf("[%s:%d] %s mname %s fname %s func %p\n", __FUNCTION__, __LINE__, getStructName(STy).c_str(), mname.c_str(), fname.c_str(), func);
-                if (func)  // do not put generic template protos into list
-                    funcMap[mname] = func;
-            }
-            last_subs = subs;
-        }
-        for (auto item: funcMap) {
-//printf("[%s:%d] sname %s first %s second %p name %s callingconv %x\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, item.second->getName().str().c_str(), item.second->getCallingConv() == CallingConv::X86_VectorCall);
-            if (item.second->getCallingConv() == CallingConv::X86_VectorCall)
+        for (auto item: table->funcMap) {
+//printf("[%s:%d] sname %s first %s second %p name %s callingconv %x\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second.func, item.second.func->getName().str().c_str(), item.second.func->getCallingConv() == CallingConv::X86_VectorCall);
+            if (item.second.func->getCallingConv() == CallingConv::X86_VectorCall)
             if (endswith(item.first, "__RDY") || endswith(item.first, "__READY")) {
                 std::string enaName = item.first.substr(0, item.first.length() - 5);
                 std::string enaSuffix = "__ENA";
@@ -341,7 +314,7 @@ void preprocessModule(Module *Mod)
                     enaName = item.first.substr(0, item.first.length() - 7);
                     enaSuffix = "__VALID";
                 }
-                Function *enaFunc = funcMap[enaName];
+                Function *enaFunc = table->funcMap[enaName].func;
                 if (!enaFunc) {
                     printf("[%s:%d] %s function NULL\n", __FUNCTION__, __LINE__, enaName.c_str());
                     continue;
@@ -349,14 +322,14 @@ void preprocessModule(Module *Mod)
                 if (!isActionMethod(enaFunc))
                     enaSuffix = "";
                 enaName += enaSuffix;
-//printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second, enaName.c_str(), enaFunc);
+//printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second.func, enaName.c_str(), enaFunc);
                 table->method[enaName] = enaFunc;
-                table->method[item.first] = item.second;
-                ruleRDYFunction[enaFunc] = item.second; // must be before pushWork() calls
-                ruleENAFunction[item.second] = enaFunc;
+                table->method[item.first] = item.second.func;
+                ruleRDYFunction[enaFunc] = item.second.func; // must be before pushWork() calls
+                ruleENAFunction[item.second.func] = enaFunc;
                 // could be hoisted interface functions
                 setSeen(enaFunc, enaName);
-                setSeen(item.second, item.first);
+                setSeen(item.second.func, item.first);
             }
         }
     }

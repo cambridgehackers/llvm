@@ -113,7 +113,7 @@ void setAssign(std::string target, std::string value)
 static void generateModuleSignature(FILE *OStr, const StructType *STy, std::string instance)
 {
     std::list<std::string> modulePortList, wireList;
-    ClassMethodTable *table = classCreate[STy];
+    ClassMethodTable *table = getClass(STy);
     std::string topClassName = getStructName(STy);
     std::string inp = "input ", outp = "output ", instPrefix, inpClk = "input ";
 
@@ -176,7 +176,7 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
 //printf("[%s:%d] indication interface topname %s sname %s fldName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), fldName.c_str());
 iSTy->dump();
         std::string elementName = fldName + MODULE_SEPARATOR;
-        ClassMethodTable *itable = classCreate[iSTy];
+        ClassMethodTable *itable = getClass(iSTy);
 //printf("[%s:%d] indication interface topname %s sname %s elementName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), elementName.c_str());
         for (auto FI : itable->method) {
             std::string wparam = outp;
@@ -219,13 +219,13 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
 {
     std::list<std::string> alwaysLines, resetList;
     std::string name = getStructName(STy);
-    ClassMethodTable *table = classCreate[STy];
+    ClassMethodTable *table = getClass(STy);
 
     assignList.clear();
     lateAssignList.clear();
     generateModuleSignature(OStr, STy, "");
     for (auto IC : table->interfaceConnect) {
-        ClassMethodTable *mtable = classCreate[IC.STy];
+        ClassMethodTable *mtable = getClass(IC.STy);
         for (auto FI : mtable->method) {
             setAssign(IC.target + MODULE_SEPARATOR + FI.first,
                       IC.source + MODULE_SEPARATOR + FI.first);

@@ -210,8 +210,7 @@ void setSeen(Function *func, std::string mName)
 static void pushWork(std::string mName, Function *func)
 {
     assert (func);
-    const StructType *STy = findThisArgument(func);
-    ClassMethodTable *table = classCreate[STy];
+    ClassMethodTable *table = getClass(findThisArgument(func));
     setSeen(func, mName);
     //printf("[%s:%d] setmethodddd %s = %p %s\n", __FUNCTION__, __LINE__, mName.c_str(), func, func->getName().str().c_str());
     table->method[mName] = func;
@@ -333,7 +332,7 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
         tempName += "_" + utostr(bcap[i]);
     Function *rdyFunc = fixupFunction(bcap, ardyFunc);
     Function *enaFunc = fixupFunction(bcap, aenaFunc);
-    ClassMethodTable *table = classCreate[findThisArgument(rdyFunc)];
+    ClassMethodTable *table = getClass(findThisArgument(rdyFunc));
     std::string enaName = tempName;
     int counter = 100;
     // if necessary to avoid conflicts, generate unique rule names
@@ -350,7 +349,7 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
  */
 extern "C" void atomiccSchedulePriority(const char *rule, const char *priority, const StructType *STy)
 {
-    ClassMethodTable *table = classCreate[STy];
+    ClassMethodTable *table = getClass(STy);
     printf("%s: %s %s %p\n", __FUNCTION__, rule, priority, STy);
     STy->dump();
     table->priority[rule] = priority;
@@ -381,36 +380,9 @@ static void replaceFunc(Function *target, Function *source)
         }
     }
 }
-void buildSMap(const StructType *STy, std::map<std::string, FuncInfo> &funcMap)
-{
-    int len = STy->structFieldMap.length();
-    int subs = 0, last_subs = 0;
-    while (subs < len) {
-        while (subs < len && STy->structFieldMap[subs] != ',') {
-            subs++;
-        }
-        subs++;
-        if (STy->structFieldMap[last_subs] == '/')
-            last_subs++;
-        std::string ret = STy->structFieldMap.substr(last_subs);
-        int idx = ret.find(',');
-        if (idx >= 0)
-            ret = ret.substr(0,idx);
-        idx = ret.find(':');
-        if (idx >= 0) {
-            std::string fname = ret.substr(0, idx);
-            Function *func = globalMod->getFunction(fname);
-            std::string mName = ret.substr(idx+1);
-            if (func)
-                funcMap[mName] = {fname, func};
-//printf("[%s:%d] fname %s mName %s func %p\n", __FUNCTION__, __LINE__, fname.c_str(), mName.c_str(), func);
-            }
-        last_subs = subs;
-    }
-}
 extern "C" void atomiccInterfaceName(const char *target, const char *source, const StructType *STy)
 {
-    ClassMethodTable *table = classCreate[STy];
+    ClassMethodTable *table = getClass(STy);
     std::string enaName = target;
     std::string enaSuffix = "__ENA";
     //if (endswith(item.first, "__READY")) {
@@ -419,15 +391,13 @@ extern "C" void atomiccInterfaceName(const char *target, const char *source, con
     //}
 std::string rdyString = "__RDY";
 printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
-    std::map<std::string, FuncInfo> funcMap;
-    buildSMap(STy, funcMap);
-    Function *enaFunc = funcMap[target].func;
-    Function *rdyFunc = funcMap[target + rdyString].func;
-    Function *senaFunc = funcMap[source].func;
-    Function *srdyFunc = funcMap[source + rdyString].func;
+    Function *enaFunc = table->funcMap[target].func;
+    Function *rdyFunc = table->funcMap[target + rdyString].func;
+    Function *senaFunc = table->funcMap[source].func;
+    Function *srdyFunc = table->funcMap[source + rdyString].func;
 printf("[%s:%d] functions: target %s / %s  source %s / %s\n", __FUNCTION__, __LINE__,
-    funcMap[target].fname.c_str(), funcMap[target + rdyString].fname.c_str(),
-    funcMap[source].fname.c_str(), funcMap[source + rdyString].fname.c_str());
+    table->funcMap[target].fname.c_str(), table->funcMap[target + rdyString].fname.c_str(),
+    table->funcMap[source].fname.c_str(), table->funcMap[source + rdyString].fname.c_str());
 printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFunc, srdyFunc);
     if (!enaFunc || !rdyFunc || !senaFunc) {
         printf("[%s:%d] %s function NULL %p rdy %p BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB \n", __FUNCTION__, __LINE__, enaName.c_str(), enaFunc, rdyFunc);
@@ -448,17 +418,15 @@ printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFun
 }
 extern "C" void connectInterfaceNew(const char *target, const char *source, const StructType *STy)
 {
-    ClassMethodTable *table = classCreate[STy];
+    ClassMethodTable *table = getClass(STy);
     std::string targetItem = target, targetInterface;
     int i = targetItem.find("$");
     if (i > 0) {
         targetInterface = targetItem.substr(i+1);
         targetItem = targetItem.substr(0, i);
     }
-    std::map<std::string, FuncInfo> funcMap;
 printf("[%s:%d] target %s '%s' '%s' source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, targetItem.c_str(), targetInterface.c_str(), source, STy, table);
-    buildSMap(STy, funcMap);
-    for (auto item: funcMap) {
+    for (auto item: table->funcMap) {
 printf("[%s:%d] %s = %p %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.func, item.second.fname.c_str());
     }
     int Idx = 0;

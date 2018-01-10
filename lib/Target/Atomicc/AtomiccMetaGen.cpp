@@ -28,7 +28,7 @@ static std::string gatherList(MetaData *bm, int listIndex)
 
 void metaGenerate(const StructType *STy, FILE *OStr)
 {
-    ClassMethodTable *table = classCreate[STy];
+    ClassMethodTable *table = getClass(STy);
     std::string name = getStructName(table->STy);
     std::map<std::string, int> exclusiveSeen;
 
