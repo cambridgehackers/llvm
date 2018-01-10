@@ -210,6 +210,9 @@ printf("[%s:%d] methodName %s func %p\n", __FUNCTION__, __LINE__, FI.first.c_str
             fprintf(OStr, ",\n");
     }
     fprintf(OStr, ");\n");
+    for (auto item: table->softwareName) {
+        fprintf(OStr, "// software: %s\n", item.first.c_str());
+    }
 }
 
 /*

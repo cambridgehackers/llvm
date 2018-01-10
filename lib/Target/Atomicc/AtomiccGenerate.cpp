@@ -109,23 +109,7 @@ static bool isAddressExposed(const Value *V)
  */
 std::string fieldName(const StructType *STy, uint64_t ind)
 {
-    unsigned int subs = 0;
-    int idx = ind;
-    while (idx-- > 0) {
-        while (subs < STy->structFieldMap.length() && STy->structFieldMap[subs] != ',') {
-            if (STy->structFieldMap[subs] == '/')
-                return "";
-            subs++;
-        }
-        subs++;
-    }
-    if (subs >= STy->structFieldMap.length() || STy->structFieldMap[subs] == '/')
-        return "";
-    std::string ret = STy->structFieldMap.substr(subs);
-    idx = ret.find(',');
-    if (idx >= 0)
-        ret = ret.substr(0,idx);
-    return ret;
+    return getClass(STy)->fieldName[ind];
 }
 
 bool isInterface(const StructType *STy)
@@ -158,26 +142,38 @@ static void checkClass(const StructType *STy, const StructType *ActSTy)
 
 ClassMethodTable *getClass(const StructType *STy)
 {
+    int fieldSub = 0;
     if (!classCreate[STy]) {
         ClassMethodTable *table = new ClassMethodTable;
         classCreate[STy] = table;
         classCreate[STy]->STy = STy;
-        checkClass(STy, STy);
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
+        int processSequence = 0;
         while (subs < len) {
             while (subs < len && STy->structFieldMap[subs] != ',') {
                 subs++;
             }
             subs++;
-            if (STy->structFieldMap[last_subs] == '/')
+            if (STy->structFieldMap[last_subs] == '/') {
+                processSequence++;
                 last_subs++;
+            }
+            if (STy->structFieldMap[last_subs] == ';') {
+                processSequence++;
+                last_subs++;
+            }
             std::string ret = STy->structFieldMap.substr(last_subs);
             int idx = ret.find(',');
             if (idx >= 0)
                 ret = ret.substr(0,idx);
             idx = ret.find(':');
-            if (idx >= 0) {
+//printf("[%s:%d] sequence %d ret %s idx %d\n", __FUNCTION__, __LINE__, processSequence, ret.c_str(), idx);
+            if (processSequence == 0)
+                table->fieldName[fieldSub++] = ret;
+            else if (processSequence == 2)
+                table->softwareName[ret] = 1;
+            else if (idx >= 0) {
                 std::string fname = ret.substr(0, idx);
                 Function *func = globalMod->getFunction(fname);
                 std::string mName = ret.substr(idx+1);
@@ -187,6 +183,7 @@ ClassMethodTable *getClass(const StructType *STy)
                 }
             last_subs = subs;
         }
+        checkClass(STy, STy);
     }
     return classCreate[STy];
 }

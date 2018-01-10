@@ -92,7 +92,9 @@ public:
     std::list<MuxEnableEntry> muxEnableList;
 // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
-    std::map<std::string, FuncInfo> funcMap;
+    std::map<std::string, FuncInfo>   funcMap;
+    std::map<int, std::string>        fieldName;
+    std::map<std::string, int>        softwareName;
     ClassMethodTable() {}
 };
 
