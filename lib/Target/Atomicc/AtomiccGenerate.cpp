@@ -39,8 +39,7 @@ static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
 std::map<const Function *,std::list<StoreInst *>> storeList;
 std::map<const Function *,std::list<Instruction *>> functionList;
-std::map<const Function *,std::list<Instruction *>> callList;
-std::map<const Function *,std::list<Instruction *>> declareList;
+std::map<const Function *,std::list<CallInst *>> callList;
 static std::string globalMethodName;
 
 static INTMAP_TYPE predText[] = {
@@ -381,7 +380,7 @@ int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_ty
  */
 static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_iterator E)
 {
-    std::string cbuffer, sep = " ", amper = "&";
+    std::string cbuffer, amper = "&";
     ConstantDataArray *CPA;
     int64_t Total = 0;
     VectorType *LastIndexIsVector = 0;
@@ -487,7 +486,7 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
     }
     cbuffer += referstr;
     if (trace_gep || Total == -1)
-        printf("%s: return %s\n", __FUNCTION__, cbuffer.c_str());
+        printf("%s: return '%s'\n", __FUNCTION__, cbuffer.c_str());
     return cbuffer;
 }
 
@@ -525,10 +524,10 @@ std::string getMethodName(Function *func)
  */
 std::string printCall(Instruction *I)
 {
-    std::string vout, sep;
     CallInst *ICL = dyn_cast<CallInst>(I);
     Function *func = ICL->getCalledFunction();
-    std::string fname = getMethodName(func);
+    std::string calledName = func->getName();
+    std::string vout, sep, fname = getMethodName(func), prefix = MODULE_ARROW;
     CallSite CS(I);
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
     if (!func) {
@@ -539,43 +538,33 @@ std::string printCall(Instruction *I)
 return "";
         exit(-1);
     }
-    auto FAI = func->arg_begin();
     std::string pcalledFunction = printOperand(*AI++, false); // skips 'this' param
-    std::string prefix = MODULE_ARROW;
     if (pcalledFunction[0] == '&') {
         pcalledFunction = pcalledFunction.substr(1);
-        prefix = MODULE_DOT;
+        //prefix = MODULE_DOT;
     }
     prefix = pcalledFunction + prefix;
     if (pcalledFunction == "this") {
         pcalledFunction = "";
         prefix = "";
     }
-    std::string calledName = func->getName();
-    if (trace_call)
+    if (trace_call || fname == "")
         printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
-        printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s missing\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
-//I->dump();
-//I->getParent()->getParent()->dump();
-        //return "caller_error";
         fname = "[ERROR_" + calledName + "_ERROR]";
         //exit(-1);
     }
     if (calledName == "printf") {
         //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
-        vout = "printf(" + pcalledFunction.substr(1, pcalledFunction.length()-2);
-        sep = ", ";
+        vout = "printf{" + pcalledFunction.substr(1, pcalledFunction.length()-2);
+        sep = ",";
     }
     else {
         std::string methodName = prefix + fname;
-        if (isActionMethod(func))
-            globalClassTable->muxEnableList.push_back(MuxEnableEntry{globalMethodName + "_internal", I->getParent(), methodName});
-        else
-            vout += methodName;
+        vout += methodName + "{";
         appendList(MetaInvoke, I->getParent(), methodName);
     }
-    for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
+    for (; AI != AE; ++AI) { // first param processed as pcalledFunction
         bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
         if (auto *ins = dyn_cast<Instruction>(*AI)) {
             if (ins->getOpcode() == Instruction::GetElementPtr)
@@ -584,18 +573,22 @@ return "";
         if (dyn_cast<Argument>(*AI))
             indirect = false;
         std::string parg = printOperand(*AI, indirect);
-        globalClassTable->muxValueList[prefix + FAI->getName().str()]
-            .push_back(MuxValueEntry{globalMethodName + "_internal", I->getParent(), parg});
-        sep = ", ";
+        vout += sep + parg;
+        sep = ",";
     }
-    return vout;
+    return vout + "}";
 }
 
 std::string parenOperand(Value *Operand)
 {
     std::string temp = printOperand(Operand, false);
+    int indent = 0;
     for (auto ch: temp)
-        if (!isalnum(ch) && ch != '$' && ch != '_')
+        if (ch == '{')
+            indent++;
+        else if (ch == '}')
+            indent--;
+        else if (indent == 0 && !isalnum(ch) && ch != '$' && ch != '_')
             return "(" + temp + ")";
     return temp;
 }
@@ -765,7 +758,7 @@ std::string printOperand(Value *Operand, bool Indirect)
         }
     }
     if (trace_operand)
-        printf("[%s:%d] depth %d return %s\n", __FUNCTION__, __LINE__, depth, cbuffer.c_str());
+        printf("[%s:%d] depth %d return '%s'\n", __FUNCTION__, __LINE__, depth, cbuffer.c_str());
     depth--;
     return cbuffer;
 }
@@ -815,12 +808,9 @@ static void processClass(ClassMethodTable *table)
                         temp += printOperand(II->getOperand(0), false);
                     }
                     break;
-                case Instruction::Alloca:
-                    declareList[func].push_back(II);
-                    break;
                 case Instruction::Call: // can have value
                     if (II->getType() == Type::getVoidTy(II->getContext())) {
-                        callList[func].push_back(II);
+                        callList[func].push_back(cast<CallInst>(II));
                         printCall(II);   // force evaluation to get metadata and side effects....
                     }
                     break;

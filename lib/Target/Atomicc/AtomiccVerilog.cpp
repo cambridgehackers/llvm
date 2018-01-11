@@ -215,6 +215,14 @@ printf("[%s:%d] methodName %s func %p\n", __FUNCTION__, __LINE__, FI.first.c_str
     }
 }
 
+std::string cleanupValue(std::string arg)
+{
+    int ind;
+    while((ind = arg.find("{}")) > 0)
+        arg = arg.substr(0, ind) + arg.substr(ind+2); // remove '{}'
+    return arg;
+}
+
 /*
  * Generate *.v and *.vh for a Verilog module
  */
@@ -223,6 +231,10 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     std::list<std::string> alwaysLines, resetList;
     std::string name = getStructName(STy);
     ClassMethodTable *table = getClass(STy);
+    // 'Or' together ENA lines from all invocations of a method from this class
+    std::list<MuxEnableEntry> muxEnableList;
+    // 'Mux' together parameter settings from all invocations of a method from this class
+    std::map<std::string, std::list<MuxValueEntry>> muxValueList;
 
     assignList.clear();
     lateAssignList.clear();
@@ -250,13 +262,42 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             if (pdest[0] == '&')
                 pdest = pdest.substr(1);
             if (isAlloca(info->getPointerOperand()))
-                setAssign(pdest, pvalue);
+                setAssign(pdest, cleanupValue(pvalue));
             else {
                 if (Value *cond = getCondition(info->getParent(), 0))
                     localStore.push_back("    if (" + printOperand(cond, false) + ")");
                 localStore.push_back("    " + pdest + " <= " + pvalue + ";");
             }
         }
+        for (auto info: callList[func]) {
+            std::string rval = printCall(info); // get call info
+            Function *cfunc = info->getCalledFunction();
+            const StructType *fthis = findThisArgument(func);
+            auto FAI = cfunc->arg_begin();
+            int ind = rval.find("{");
+            std::string calledName = rval.substr(0, ind);
+            rval = rval.substr(ind+1);
+            rval = rval.substr(0, rval.length()-1);
+            if (isActionMethod(cfunc))
+                muxEnableList.push_back(MuxEnableEntry{methodName + "_internal", info->getParent(), calledName});
+            std::string rest;
+            int pind = calledName.rfind(MODULE_SEPARATOR);
+            std::string prefix = calledName.substr(0,pind+1);
+            if (findThisArgument(cfunc) == fthis)
+                prefix = "";
+            while(++FAI != cfunc->arg_end()) {
+                int ind = rval.find(",");
+                if (ind > 0) {
+                    rest = rval.substr(ind+1);
+                    rval = rval.substr(0, ind);
+                }
+                muxValueList[prefix + FAI->getName().str()]
+                    .push_back(MuxValueEntry{methodName + "_internal",
+                        info->getParent(), cleanupValue(rval)});
+                rval = rest;
+            }
+        }
+        table->guard[func] = cleanupValue(table->guard[func]);
         if (!isActionMethod(func)) {
             if (ruleENAFunction[func])
                 assignList[methodName + "_internal"] = table->guard[func];  // collect the text of the return value into a single 'assign'
@@ -274,7 +315,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             alwaysLines.push_back("end; // End of " + methodName);
         }
     }
-    for (auto item: table->muxEnableList) {
+    for (auto item: muxEnableList) {
         std::string tempCond = item.fname;
         if (Value *cond = getCondition(item.bb, 0))
             tempCond += " & " + printOperand(cond, false);
@@ -284,7 +325,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     }
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
-    for (auto item: table->muxValueList) {
+    for (auto item: muxValueList) {
         int remain = item.second.size();
         std::string temp;
         for (auto element: item.second) {

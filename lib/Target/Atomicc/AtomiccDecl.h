@@ -88,10 +88,6 @@ public:
     std::list<std::string>            metaList;
     std::map<const Function *, std::string> guard;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
-// 'Or' together ENA lines from all invocations of a method from this class
-    std::list<MuxEnableEntry> muxEnableList;
-// 'Mux' together parameter settings from all invocations of a method from this class
-    std::map<std::string, std::list<MuxValueEntry>> muxValueList;
     std::map<std::string, FuncInfo>   funcMap;
     std::map<int, std::string>        fieldName;
     std::map<std::string, int>        softwareName;
@@ -118,8 +114,7 @@ extern Module *globalMod;
 extern std::map<const Function *, MetaData> funcMetaMap;
 extern std::map<const Function *,std::list<StoreInst *>> storeList;
 extern std::map<const Function *,std::list<Instruction *>> functionList;
-extern std::map<const Function *,std::list<Instruction *>> callList;
-extern std::map<const Function *,std::list<Instruction *>> declareList;
+extern std::map<const Function *,std::list<CallInst *>> callList;
 
 void constructAddressMap(Module *Mod);
 std::string fieldName(const StructType *STy, uint64_t ind);
@@ -155,3 +150,4 @@ ClassMethodTable *getClass(const StructType *STy);
 std::string printCall(Instruction *I);
 bool isAlloca(Value *arg);
 bool isInterface(const StructType *STy);
+std::string cleanupValue(std::string arg);
