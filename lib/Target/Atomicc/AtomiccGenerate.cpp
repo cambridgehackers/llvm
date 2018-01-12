@@ -37,7 +37,7 @@ static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
-std::map<const Function *,std::list<const StoreInst *>> storeList;
+std::map<const Function *,std::list<StoreListElement>> storeList;
 std::map<const Function *,std::list<const Instruction *>> functionList;
 std::map<const Function *,std::list<CallListElement>> callList;
 static std::string globalMethodName;
@@ -768,8 +768,9 @@ std::string printOperand(const Value *Operand, bool Indirect)
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processClass(ClassMethodTable *table)
+static void processClass(const StructType *STy)
 {
+    ClassMethodTable *table = getClass(STy);
     globalClassTable = table;
     for (auto FI : table->method) {
         globalMethodName = FI.first;
@@ -789,7 +790,15 @@ static void processClass(ClassMethodTable *table)
                     break;
                 case Instruction::Store: {
                     const StoreInst *SI = cast<StoreInst>(II);
-                    storeList[func].push_back(SI);
+                    std::string tempCond;
+                    std::string value = printOperand(SI->getOperand(0), false);
+                    std::string dest = printOperand(SI->getPointerOperand(), true);
+                    if (dest[0] == '&')
+                        dest = dest.substr(1);
+                    if (Value *cond = getCondition(const_cast<Instruction *>(II)->getParent(), 0))
+                        tempCond = printOperand(cond, false);
+                    storeList[func].push_back(StoreListElement{dest, value, tempCond,
+                         isAlloca(SI->getPointerOperand())});
                     std::string pdest = printOperand(SI->getPointerOperand(), true);
                     if (pdest[0] == '&')
                         pdest = pdest.substr(1);
@@ -811,8 +820,10 @@ static void processClass(ClassMethodTable *table)
                     break;
                 case Instruction::Call: // can have value
                     if (II->getType() == Type::getVoidTy(II->getContext())) {
-                        callList[func].push_back(CallListElement{printCall(II),
-                            const_cast<Instruction *>(II)->getParent(),
+                        std::string tempCond;
+                        if (Value *cond = getCondition(const_cast<Instruction *>(II)->getParent(), 0))
+                            tempCond = " & " + printOperand(cond, false);
+                        callList[func].push_back(CallListElement{printCall(II), tempCond,
                             isActionMethod(cast<CallInst>(II)->getCalledFunction())});
                     }
                     break;
@@ -885,12 +896,8 @@ void generateClasses(FILE *OStrV, FILE *OStrVH)
         if (item.second)
             getDepend(item.second);
     for (auto STy : structSeq) {
-        ClassMethodTable *table = classCreate[STy];
-        processClass(table);
-        std::string temp;
-        getClass(STy);
-        temp = STy->getName();
-        if (temp.substr(0, 6) == "module") {
+        if (STy->getName().substr(0, 6) == "module") {
+            processClass(STy);
             // now generate the verilog header file '.vh'
             metaGenerate(STy, OStrVH);
             // Only generate verilog for modules derived from Module

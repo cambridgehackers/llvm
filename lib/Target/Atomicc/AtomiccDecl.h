@@ -91,8 +91,15 @@ typedef  struct {
 } MEMORY_REGION;
 
 typedef struct {
+    std::string dest;
     std::string value;
-    BasicBlock *block;
+    std::string cond;
+    bool        isAlloca;
+} StoreListElement;
+
+typedef struct {
+    std::string value;
+    std::string cond;
     bool isAction;
 } CallListElement;
 
@@ -106,7 +113,7 @@ extern std::list<Function *> fixupFuncList;
 extern int trace_pair;
 extern Module *globalMod;
 extern std::map<const Function *, MetaData> funcMetaMap;
-extern std::map<const Function *,std::list<const StoreInst *>> storeList;
+extern std::map<const Function *,std::list<StoreListElement>> storeList;
 extern std::map<const Function *,std::list<const Instruction *>> functionList;
 extern std::map<const Function *,std::list<CallListElement>> callList;
 

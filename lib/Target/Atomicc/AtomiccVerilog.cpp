@@ -225,13 +225,11 @@ std::string cleanupValue(std::string arg)
 
 typedef struct {
     std::string fname;
-    BasicBlock *bb;
     std::string value;
 } MuxValueEntry;
 
 typedef struct {
     std::string fname;
-    BasicBlock *bb;
     std::string signal;
 } MuxEnableEntry;
 /*
@@ -268,27 +266,23 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             rdyName = methodName.substr(0, methodName.length()-7) + "__READY";
         std::list<std::string> localStore;
         for (auto info: storeList[func]) {
-            std::string pdest = printOperand(info->getPointerOperand(), true);
-            std::string pvalue = printOperand(info->getOperand(0), false);
-            if (pdest[0] == '&')
-                pdest = pdest.substr(1);
-            if (isAlloca(info->getPointerOperand()))
-                setAssign(pdest, cleanupValue(pvalue));
+            if (info.isAlloca)
+                setAssign(info.dest, cleanupValue(info.value));
             else {
-                if (Value *cond = getCondition(const_cast<StoreInst *>(info)->getParent(), 0))
-                    localStore.push_back("    if (" + printOperand(cond, false) + ")");
-                localStore.push_back("    " + pdest + " <= " + pvalue + ";");
+                if (info.cond != "")
+                    localStore.push_back("    if (" + info.cond + ")");
+                localStore.push_back("    " + info.dest + " <= " + info.value + ";");
             }
         }
         for (auto info: callList[func]) {
+            std::string tempCond = methodName + "_internal" + info.cond;
             std::string rval = info.value; // get call info
             int ind = rval.find("{");
             std::string calledName = rval.substr(0, ind);
             rval = rval.substr(ind+1);
             rval = cleanupValue(rval.substr(0, rval.length()-1));
             if (info.isAction)
-                muxEnableList.push_back(
-                    MuxEnableEntry{methodName + "_internal", info.block, calledName});
+                muxEnableList.push_back(MuxEnableEntry{tempCond, calledName});
             while(rval.length()) {
                 std::string rest;
                 int ind = rval.find(",");
@@ -302,8 +296,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                     paramValue = rval.substr(ind+1);
                     rval = rval.substr(0, ind);
                 }
-                muxValueList[rval].push_back(
-                    MuxValueEntry{methodName + "_internal", info.block, paramValue});
+                muxValueList[rval].push_back(MuxValueEntry{tempCond, paramValue});
                 rval = rest;
             }
         }
@@ -326,12 +319,9 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         }
     }
     for (auto item: muxEnableList) {
-        std::string tempCond = item.fname;
-        if (Value *cond = getCondition(item.bb, 0))
-            tempCond += " & " + printOperand(cond, false);
         if (assignList[item.signal] != "")
             assignList[item.signal] += " || ";
-        assignList[item.signal] += tempCond;
+        assignList[item.signal] += item.fname;
     }
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
@@ -340,8 +330,6 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         std::string temp;
         for (auto element: item.second) {
             std::string tempCond = element.fname;
-            if (Value *cond = getCondition(element.bb, 0))
-                tempCond += " & " + printOperand(cond, false);
             if (--remain)
                 temp += tempCond + " ? ";
             temp += element.value;
