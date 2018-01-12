@@ -37,9 +37,9 @@ static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
-std::map<const Function *,std::list<StoreInst *>> storeList;
-std::map<const Function *,std::list<Instruction *>> functionList;
-std::map<const Function *,std::list<CallInst *>> callList;
+std::map<const Function *,std::list<const StoreInst *>> storeList;
+std::map<const Function *,std::list<const Instruction *>> functionList;
+std::map<const Function *,std::list<CallListElement>> callList;
 static std::string globalMethodName;
 
 static INTMAP_TYPE predText[] = {
@@ -89,11 +89,11 @@ static const AllocaInst *isDirectAlloca(const Value *V)
         return 0;
     return AA;
 }
-bool isAlloca(Value *arg)
+bool isAlloca(const Value *arg)
 {
-    if (GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
+    if (const GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
         arg = dyn_cast<Instruction>(IG->getPointerOperand());
-    if (Instruction *source = dyn_cast_or_null<Instruction>(arg))
+    if (const Instruction *source = dyn_cast_or_null<Instruction>(arg))
     if (source->getOpcode() == Instruction::Alloca)
             return true;
     return false;
@@ -127,9 +127,9 @@ static void checkClass(const StructType *STy, const StructType *ActSTy)
     //ClassMethodTable *atable = getClass(ActSTy);
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        Type *element = *I;
+        const Type *element = *I;
         if (table)
-            if (Type *newType = table->replaceType[Idx])
+            if (const Type *newType = table->replaceType[Idx])
                 element = newType;
         std::string fname = fieldName(STy, Idx);
         if (const StructType *iSTy = dyn_cast<StructType>(element)) {
@@ -247,7 +247,7 @@ static const StructType *findThisArgumentType(const PointerType *PTy, int ind)
     }
     return NULL;
 }
-const StructType *findThisArgument(Function *func)
+const StructType *findThisArgument(const Function *func)
 {
     return findThisArgumentType(func->getType(), false);
 }
@@ -256,7 +256,7 @@ const StructType *findThisArgument(Function *func)
  * Output type declarations.  Note that each case in the switch statement
  * is different for verilog and cpp.
  */
-std::string printType(Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr)
+std::string printType(const Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr)
 {
     std::string sep, cbuffer = prefix, sp = (isSigned?"signed":"unsigned");
     int thisId = Ty->getTypeID();
@@ -289,8 +289,8 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
         break;
         }
     case Type::FunctionTyID: {
-        FunctionType *FTy = cast<FunctionType>(Ty);
-        Type *retType = FTy->getReturnType();
+        const FunctionType *FTy = cast<FunctionType>(Ty);
+        const Type *retType = FTy->getReturnType();
         auto AI = FTy->param_begin(), AE = FTy->param_end();
         bool structRet = AI != AE && (*AI) != Type::getInt8PtrTy(globalMod->getContext());
         if (structRet) {  //FTy->hasStructRetAttr()
@@ -325,14 +325,14 @@ printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
         break;
         }
     case Type::ArrayTyID: {
-        ArrayType *ATy = cast<ArrayType>(Ty);
+        const ArrayType *ATy = cast<ArrayType>(Ty);
         unsigned len = ATy->getNumElements();
         if (len == 0) len = 1;
         cbuffer += printType(ATy->getElementType(), false, "", "", "", false) + NameSoFar + "[" + utostr(len) + "]";
         break;
         }
     case Type::PointerTyID: {
-        PointerType *PTy = cast<PointerType>(Ty);
+        const PointerType *PTy = cast<PointerType>(Ty);
         std::string ptrName = "*" + NameSoFar;
         if (PTy->getElementType()->isArrayTy() || PTy->getElementType()->isVectorTy())
             ptrName = "(" + ptrName + ")";
@@ -378,13 +378,13 @@ int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_ty
 /*
  * Generate a string for the value represented by a GEP DAG
  */
-static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_iterator E)
+static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep_type_iterator E)
 {
     std::string cbuffer, amper = "&";
-    ConstantDataArray *CPA;
+    const ConstantDataArray *CPA;
     int64_t Total = 0;
     VectorType *LastIndexIsVector = 0;
-    Constant *FirstOp = dyn_cast<Constant>(I.getOperand());
+    const Constant *FirstOp = dyn_cast<Constant>(I.getOperand());
     bool expose = isAddressExposed(Ptr);
     std::string referstr = printOperand(Ptr, false);
 
@@ -409,7 +409,7 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
         if (I != E && (I.getIndexedType())->isArrayTy())
             if (const ConstantInt *CI = dyn_cast<ConstantInt>(I.getOperand())) {
                 uint64_t val = CI->getZExtValue();
-                if (GlobalVariable *globalVar = dyn_cast<GlobalVariable>(Ptr))
+                if (const GlobalVariable *globalVar = dyn_cast<GlobalVariable>(Ptr))
                 if (globalVar && !globalVar->getInitializer()->isNullValue()
                  && (CPA = dyn_cast<ConstantDataArray>(globalVar->getInitializer()))) {
                     ERRORIF(val || !CPA->isString());
@@ -425,7 +425,7 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
     }
     cbuffer += amper;
     for (; I != E; ++I) {
-        if (StructType *STy = I.getStructTypeOrNull()) {
+        if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
             std::string dot = MODULE_DOT;
             std::string fname = fieldName(STy, foffset);
@@ -491,7 +491,7 @@ static std::string printGEPExpression(Value *Ptr, gep_type_iterator I, gep_type_
 }
 
 static ClassMethodTable *globalClassTable;
-static Function *globalProcessFunction;
+static const Function *globalProcessFunction;
 
 static void appendList(int listIndex, BasicBlock *cond, std::string item)
 {
@@ -506,7 +506,7 @@ static void appendList(int listIndex, BasicBlock *cond, std::string item)
     }
 }
 
-std::string getMethodName(Function *func)
+std::string getMethodName(const Function *func)
 {
     std::string fname = func->getName();
     if (const StructType *targetSTy = findThisArgument(func))
@@ -522,13 +522,13 @@ std::string getMethodName(Function *func)
 /*
  * Generate a string for a function/method call
  */
-std::string printCall(Instruction *I)
+std::string printCall(const Instruction *I)
 {
-    CallInst *ICL = dyn_cast<CallInst>(I);
-    Function *func = ICL->getCalledFunction();
+    const CallInst *ICL = dyn_cast<CallInst>(I);
+    const Function *func = ICL->getCalledFunction();
     std::string calledName = func->getName();
     std::string vout, sep, fname = getMethodName(func), prefix = MODULE_ARROW;
-    CallSite CS(I);
+    CallSite CS(const_cast<Instruction *>(I));
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
     if (!func) {
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI, false).c_str());
@@ -562,7 +562,7 @@ return "";
     else {
         std::string methodName = prefix + fname;
         vout += methodName + "{";
-        appendList(MetaInvoke, I->getParent(), methodName);
+        appendList(MetaInvoke, const_cast<Instruction *>(I)->getParent(), methodName);
     }
     auto FAI = func->arg_begin();
     for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
@@ -580,7 +580,7 @@ return "";
     return vout + "}";
 }
 
-std::string parenOperand(Value *Operand)
+std::string parenOperand(const Value *Operand)
 {
     std::string temp = printOperand(Operand, false);
     int indent = 0;
@@ -597,14 +597,14 @@ std::string parenOperand(Value *Operand)
 /*
  * Generate a string for the value generated by an Instruction DAG
  */
-std::string printOperand(Value *Operand, bool Indirect)
+std::string printOperand(const Value *Operand, bool Indirect)
 {
     static int depth;
     std::string cbuffer;
     if (!Operand)
         return "";
     depth++;
-    if (Instruction *I = dyn_cast<Instruction>(Operand)) {
+    if (const Instruction *I = dyn_cast<Instruction>(Operand)) {
         std::string prefix;
         bool isAddressImplicit = isAddressExposed(Operand);
         if (Indirect && isAddressImplicit) {
@@ -624,7 +624,7 @@ std::string printOperand(Value *Operand, bool Indirect)
             vout += printCall(I);
             break;
         case Instruction::GetElementPtr: {
-            GetElementPtrInst *IG = dyn_cast<GetElementPtrInst>(I);
+            const GetElementPtrInst *IG = dyn_cast<GetElementPtrInst>(I);
             vout = printGEPExpression(IG->getPointerOperand(), gep_type_begin(IG), gep_type_end(IG));
             break;
             }
@@ -632,7 +632,7 @@ std::string printOperand(Value *Operand, bool Indirect)
             vout = printOperand(I->getOperand(0), true);
             if (I->getType()->getTypeID() != Type::PointerTyID && !isAlloca(I->getOperand(0))
              && !dyn_cast<Argument>(I->getOperand(0)))
-                appendList(MetaRead, I->getParent(), vout);
+                appendList(MetaRead, const_cast<Instruction *>(I)->getParent(), vout);
             break;
             }
 
@@ -678,7 +678,7 @@ std::string printOperand(Value *Operand, bool Indirect)
 
         // Other instructions...
         case Instruction::ICmp: case Instruction::FCmp: {
-            ICmpInst *CI = dyn_cast<ICmpInst>(I);
+            const ICmpInst *CI = dyn_cast<ICmpInst>(I);
             vout += parenOperand(I->getOperand(0))
                  + " " + intmapLookup(predText, CI->getPredicate()) + " "
                  + parenOperand(I->getOperand(1));
@@ -725,7 +725,7 @@ std::string printOperand(Value *Operand, bool Indirect)
     }
     else {
         //we need pointer to pass struct params (PipeIn)
-        Constant* CPV = dyn_cast<Constant>(Operand);
+        const Constant* CPV = dyn_cast<Constant>(Operand);
         if (trace_operand)
             printf("[%s:%d] before depth %d noninst %p CPV %p\n", __FUNCTION__, __LINE__, depth, Operand, CPV);
         if (!CPV || isa<GlobalValue>(CPV))
@@ -733,14 +733,14 @@ std::string printOperand(Value *Operand, bool Indirect)
         else {
             /* handle expressions */
             ERRORIF(isa<UndefValue>(CPV) && CPV->getType()->isSingleValueType()); /* handle 'undefined' */
-            if (ConstantExpr *CE = dyn_cast<ConstantExpr>(CPV)) {
+            if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(CPV)) {
                 cbuffer += "(";
                 int op = CE->getOpcode();
                 assert (op == Instruction::GetElementPtr);
                 // used for character string args to printf()
                 cbuffer += printGEPExpression(CE->getOperand(0), gep_type_begin(CPV), gep_type_end(CPV)) +  ")";
             }
-            else if (ConstantInt *CI = dyn_cast<ConstantInt>(CPV)) {
+            else if (const ConstantInt *CI = dyn_cast<ConstantInt>(CPV)) {
                 char temp[100];
                 Type* Ty = CI->getType();
                 temp[0] = 0;
@@ -773,7 +773,7 @@ static void processClass(ClassMethodTable *table)
     globalClassTable = table;
     for (auto FI : table->method) {
         globalMethodName = FI.first;
-        Function *func = FI.second;
+        const Function *func = FI.second;
         globalProcessFunction = func;
         NextAnonValueNumber = 0;
         if (trace_function || trace_call)
@@ -782,19 +782,19 @@ static void processClass(ClassMethodTable *table)
         std::string temp, valsep;
         for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
             for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
-                Instruction *II = &*IIb;
+                const Instruction *II = &*IIb;
                 switch(II->getOpcode()) {
                 case Instruction::Load:
                     ERRORIF(dyn_cast<LoadInst>(II)->isVolatile());
                     break;
                 case Instruction::Store: {
-                    StoreInst *SI = cast<StoreInst>(II);
+                    const StoreInst *SI = cast<StoreInst>(II);
                     storeList[func].push_back(SI);
                     std::string pdest = printOperand(SI->getPointerOperand(), true);
                     if (pdest[0] == '&')
                         pdest = pdest.substr(1);
                     if (!isAlloca(SI->getPointerOperand()))
-                        appendList(MetaWrite, II->getParent(), pdest);
+                        appendList(MetaWrite, const_cast<Instruction *>(II)->getParent(), pdest);
                     (void)printOperand(II->getOperand(0), false); // force evaluation to get metadata
                     break;
                 }
@@ -803,7 +803,7 @@ static void processClass(ClassMethodTable *table)
                         functionList[func].push_back(II);
                         temp += valsep;
                         valsep = "";
-                        if (Value *opCond = getCondition(II->getParent(), 0))
+                        if (Value *opCond = getCondition(const_cast<Instruction *>(II)->getParent(), 0))
                             temp += printOperand(opCond, false) + " ? ";
                         valsep = " : ";
                         temp += printOperand(II->getOperand(0), false);
@@ -811,8 +811,9 @@ static void processClass(ClassMethodTable *table)
                     break;
                 case Instruction::Call: // can have value
                     if (II->getType() == Type::getVoidTy(II->getContext())) {
-                        callList[func].push_back(cast<CallInst>(II));
-                        printCall(II);   // force evaluation to get metadata and side effects....
+                        callList[func].push_back(CallListElement{printCall(II),
+                            const_cast<Instruction *>(II)->getParent(),
+                            isActionMethod(cast<CallInst>(II)->getCalledFunction())});
                     }
                     break;
                 }
@@ -840,15 +841,15 @@ static void getDepend(const StructType *STy)
         ClassMethodTable *table = getClass(STy);
         int Idx = 0;
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-            Type *element = *I;
+            const Type *element = *I;
             if (table)
-            if (Type *newType = table->replaceType[Idx])
+            if (const Type *newType = table->replaceType[Idx])
                 element = newType;
             if (auto iSTy = dyn_cast<StructType>(element))
                 structTemp[getStructName(iSTy)] = iSTy;
         }
         for (auto FI : table->method) {
-            Function *func = FI.second;
+            const Function *func = FI.second;
             auto AI = func->arg_begin(), AE = func->arg_end();
             if (const StructType *iSTy = dyn_cast<StructType>(func->getReturnType()))
                 structTemp[getStructName(iSTy)] = iSTy;

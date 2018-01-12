@@ -20,7 +20,7 @@ using namespace llvm;
 
 static int dontInlineValues;//=1;
 
-static uint64_t sizeType(Type *Ty)
+static uint64_t sizeType(const Type *Ty)
 {
     //const DataLayout *TD = EE->getDataLayout();
     switch (Ty->getTypeID()) {
@@ -38,7 +38,7 @@ static uint64_t sizeType(Type *Ty)
         return len;
         }
     case Type::ArrayTyID: {
-        ArrayType *ATy = cast<ArrayType>(Ty);
+        const ArrayType *ATy = cast<ArrayType>(Ty);
         unsigned len = ATy->getNumElements();
         if (len == 0) len = 1;
         return len * sizeType(ATy->getElementType());
@@ -53,7 +53,7 @@ static uint64_t sizeType(Type *Ty)
     }
 }
 
-std::string verilogArrRange(Type *Ty)
+std::string verilogArrRange(const Type *Ty)
 {
     uint64_t NumBits = sizeType(Ty);
 
@@ -164,8 +164,8 @@ static void generateModuleSignature(FILE *OStr, const StructType *STy, std::stri
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         std::string fldName = fieldName(STy, Idx);
-        Type *element = *I;
-        if (Type *newType = table->replaceType[Idx])
+        const Type *element = *I;
+        if (const Type *newType = table->replaceType[Idx])
             element = newType;
         const PointerType *PTy = dyn_cast<PointerType>(element);
         if (fldName == "" || !PTy)
@@ -180,7 +180,7 @@ iSTy->dump();
 //printf("[%s:%d] indication interface topname %s sname %s elementName %s\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), iSTy->getName().str().c_str(), elementName.c_str());
         for (auto FI : itable->method) {
             std::string wparam = outp;
-            Function *func = FI.second;
+            const Function *func = FI.second;
             auto AI = func->arg_begin(), AE = func->arg_end();
 printf("[%s:%d] methodName %s func %p\n", __FUNCTION__, __LINE__, FI.first.c_str(), func);
             if (!isActionMethod(func))
@@ -223,6 +223,17 @@ std::string cleanupValue(std::string arg)
     return arg;
 }
 
+typedef struct {
+    std::string fname;
+    BasicBlock *bb;
+    std::string value;
+} MuxValueEntry;
+
+typedef struct {
+    std::string fname;
+    BasicBlock *bb;
+    std::string signal;
+} MuxEnableEntry;
 /*
  * Generate *.v and *.vh for a Verilog module
  */
@@ -250,7 +261,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : table->method) {
-        Function *func = FI.second;
+        const Function *func = FI.second;
         std::string methodName = FI.first;
         std::string rdyName = methodName.substr(0, methodName.length()-5) + "__RDY";
         if (endswith(methodName, "__VALID"))
@@ -264,20 +275,20 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
             if (isAlloca(info->getPointerOperand()))
                 setAssign(pdest, cleanupValue(pvalue));
             else {
-                if (Value *cond = getCondition(info->getParent(), 0))
+                if (Value *cond = getCondition(const_cast<StoreInst *>(info)->getParent(), 0))
                     localStore.push_back("    if (" + printOperand(cond, false) + ")");
                 localStore.push_back("    " + pdest + " <= " + pvalue + ";");
             }
         }
         for (auto info: callList[func]) {
-            std::string rval = printCall(info); // get call info
+            std::string rval = info.value; // get call info
             int ind = rval.find("{");
             std::string calledName = rval.substr(0, ind);
             rval = rval.substr(ind+1);
             rval = cleanupValue(rval.substr(0, rval.length()-1));
-            Function *cfunc = info->getCalledFunction();
-            if (isActionMethod(cfunc))
-                muxEnableList.push_back(MuxEnableEntry{methodName + "_internal", info->getParent(), calledName});
+            if (info.isAction)
+                muxEnableList.push_back(
+                    MuxEnableEntry{methodName + "_internal", info.block, calledName});
             while(rval.length()) {
                 std::string rest;
                 int ind = rval.find(",");
@@ -292,7 +303,7 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
                     rval = rval.substr(0, ind);
                 }
                 muxValueList[rval].push_back(
-                    MuxValueEntry{methodName + "_internal", info->getParent(), paramValue});
+                    MuxValueEntry{methodName + "_internal", info.block, paramValue});
                 rval = rest;
             }
         }
@@ -342,11 +353,11 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
     // generate local state element declarations
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        Type *element = *I;
+        const Type *element = *I;
         int64_t vecCount = -1;
         int dimIndex = 0;
         std::string vecDim;
-        if (Type *newType = table->replaceType[Idx]) {
+        if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = table->replaceCount[Idx];
         }

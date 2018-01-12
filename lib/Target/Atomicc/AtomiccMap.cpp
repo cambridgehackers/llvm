@@ -41,8 +41,8 @@ struct MAPSEENcomp {
 };
 typedef std::map<std::string, Function *>MethodMapType;
 
-std::map<Function *, Function *> ruleRDYFunction;
-std::map<Function *, Function *> ruleENAFunction;
+std::map<const Function *, Function *> ruleRDYFunction;
+std::map<const Function *, const Function *> ruleENAFunction;
 std::list<Function *> fixupFuncList;
 static std::map<MAPSEEN_TYPE, int, MAPSEENcomp> addressTypeAlreadyProcessed;
 

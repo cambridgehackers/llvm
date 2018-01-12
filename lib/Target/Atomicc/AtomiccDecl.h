@@ -53,18 +53,6 @@ typedef struct {
     const StructType *STy;
 } InterfaceConnectType;
 
-typedef struct {
-    std::string fname;
-    BasicBlock *bb;
-    std::string value;
-} MuxValueEntry;
-
-typedef struct {
-    std::string fname;
-    BasicBlock *bb;
-    std::string signal;
-} MuxEnableEntry;
-
 typedef std::map<std::string,std::list<Value *>> MetaRef;
 typedef struct {
     MetaRef list[MetaMax];
@@ -78,11 +66,11 @@ typedef struct {
 class ClassMethodTable {
 public:
     const StructType                  *STy;
-    std::map<std::string, Function *> method;
-    std::map<int, Type *>             replaceType;
+    std::map<std::string, const Function *> method;
+    std::map<int, const Type *>       replaceType;
     std::map<int, uint64_t>           replaceCount;
     std::map<int, bool>               allocateLocally;
-    std::map<std::string, Function *> ruleFunctions;
+    std::map<std::string, const Function *> ruleFunctions;
     std::list<InterfaceConnectType>   interfaceConnect;
     std::string                       instance;
     std::list<std::string>            metaList;
@@ -102,27 +90,33 @@ typedef  struct {
     uint64_t   vecCount;
 } MEMORY_REGION;
 
+typedef struct {
+    std::string value;
+    BasicBlock *block;
+    bool isAction;
+} CallListElement;
+
 typedef std::map<std::string, int> StringMapType;
 
 extern ExecutionEngine *EE;
-extern std::map<Function *, Function *> ruleRDYFunction;
-extern std::map<Function *, Function *> ruleENAFunction;
+extern std::map<const Function *, Function *> ruleRDYFunction;
+extern std::map<const Function *, const Function *> ruleENAFunction;
 extern std::list<MEMORY_REGION> memoryRegion;
 extern std::list<Function *> fixupFuncList;
 extern int trace_pair;
 extern Module *globalMod;
 extern std::map<const Function *, MetaData> funcMetaMap;
-extern std::map<const Function *,std::list<StoreInst *>> storeList;
-extern std::map<const Function *,std::list<Instruction *>> functionList;
-extern std::map<const Function *,std::list<CallInst *>> callList;
+extern std::map<const Function *,std::list<const StoreInst *>> storeList;
+extern std::map<const Function *,std::list<const Instruction *>> functionList;
+extern std::map<const Function *,std::list<CallListElement>> callList;
 
 void constructAddressMap(Module *Mod);
 std::string fieldName(const StructType *STy, uint64_t ind);
-std::string printType(Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr);
-std::string printOperand(Value *Operand, bool Indirect);
+std::string printType(const Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr);
+std::string printOperand(const Value *Operand, bool Indirect);
 std::string getStructName(const StructType *STy);
 std::string CBEMangle(const std::string &S);
-std::string verilogArrRange(Type *Ty);
+std::string verilogArrRange(const Type *Ty);
 void memdump(unsigned char *p, int len, const char *title);
 void memdumpl(unsigned char *p, int len, const char *title);
 const Metadata *fetchType(const Metadata *arg);
@@ -130,10 +124,10 @@ std::string ucName(std::string inname);
 Instruction *cloneTree(const Instruction *I, Instruction *insertPoint);
 void prepareClone(Instruction *TI, const Function *SourceF);
 std::string printString(std::string arg);
-std::string getMethodName(Function *func);
+std::string getMethodName(const Function *func);
 bool endswith(std::string str, std::string suffix);
 void generateModuleDef(const StructType *STy, FILE *OStr);
-const StructType *findThisArgument(Function *func);
+const StructType *findThisArgument(const Function *func);
 void preprocessModule(Module *Mod);
 std::string GetValueName(const Value *Operand);
 Value *getCondition(BasicBlock *bb, int invert);
@@ -147,7 +141,7 @@ void generateClasses(FILE *OStrV, FILE *OStrVH);
 void metaGenerate(const StructType *STy, FILE *OStr);
 bool isActionMethod(const Function *func);
 ClassMethodTable *getClass(const StructType *STy);
-std::string printCall(Instruction *I);
-bool isAlloca(Value *arg);
+std::string printCall(const Instruction *I);
+bool isAlloca(const Value *arg);
 bool isInterface(const StructType *STy);
 std::string cleanupValue(std::string arg);

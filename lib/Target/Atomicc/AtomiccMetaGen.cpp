@@ -40,7 +40,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
         int64_t vecCount = -1;
         int dimIndex = 0;
         std::string vecDim;
-        if (Type *newType = table->replaceType[Idx]) {
+        if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = table->replaceCount[Idx];
         }
@@ -63,7 +63,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
         } while(vecCount-- > 0);
     }
     for (auto FI : table->method) {
-        Function *func = FI.second;
+        const Function *func = FI.second;
         std::string temp = cleanupValue(table->guard[func]);
         std::string mname = FI.first;
         if (endswith(mname, "__RDY"))
@@ -83,7 +83,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
             for (auto innerFI : table->method)
                 methodArray[innerFI.second] = innerFI.first;
             for (auto innerFI : table->method) {
-                Function *innerfunc = innerFI.second;
+                const Function *innerfunc = innerFI.second;
                 std::string innermname = methodArray[innerfunc];
                 MetaData *innerbm = &funcMetaMap[innerfunc];
                 std::string tempConflict;
