@@ -148,7 +148,5 @@ void generateClasses(FILE *OStrV, FILE *OStrVH);
 void metaGenerate(const StructType *STy, FILE *OStr);
 bool isActionMethod(const Function *func);
 ClassMethodTable *getClass(const StructType *STy);
-std::string printCall(const Instruction *I);
-bool isAlloca(const Value *arg);
 bool isInterface(const StructType *STy);
 std::string cleanupValue(std::string arg);

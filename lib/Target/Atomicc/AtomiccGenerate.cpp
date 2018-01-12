@@ -89,7 +89,7 @@ static const AllocaInst *isDirectAlloca(const Value *V)
         return 0;
     return AA;
 }
-bool isAlloca(const Value *arg)
+static bool isAlloca(const Value *arg)
 {
     if (const GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
         arg = dyn_cast<Instruction>(IG->getPointerOperand());
@@ -490,7 +490,6 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
     return cbuffer;
 }
 
-static ClassMethodTable *globalClassTable;
 static const Function *globalProcessFunction;
 
 static void appendList(int listIndex, BasicBlock *cond, std::string item)
@@ -522,7 +521,7 @@ std::string getMethodName(const Function *func)
 /*
  * Generate a string for a function/method call
  */
-std::string printCall(const Instruction *I)
+static std::string printCall(const Instruction *I)
 {
     const CallInst *ICL = dyn_cast<CallInst>(I);
     const Function *func = ICL->getCalledFunction();
@@ -562,7 +561,6 @@ return "";
     else {
         std::string methodName = prefix + fname;
         vout += methodName + "{";
-        appendList(MetaInvoke, const_cast<Instruction *>(I)->getParent(), methodName);
     }
     auto FAI = func->arg_begin();
     for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
@@ -768,17 +766,15 @@ std::string printOperand(const Value *Operand, bool Indirect)
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processClass(const StructType *STy)
+static void processClass(ClassMethodTable *table)
 {
-    ClassMethodTable *table = getClass(STy);
-    globalClassTable = table;
     for (auto FI : table->method) {
         globalMethodName = FI.first;
         const Function *func = FI.second;
         globalProcessFunction = func;
         NextAnonValueNumber = 0;
         if (trace_function || trace_call)
-            printf("PROCESSING %s\n", func->getName().str().c_str());
+            printf("PROCESSING %s %s\n", func->getName().str().c_str(), FI.first.c_str());
         /* Gather data for top level instructions in each basic block. */
         std::string temp, valsep;
         for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
@@ -787,6 +783,9 @@ static void processClass(const StructType *STy)
                 switch(II->getOpcode()) {
                 case Instruction::Load:
                     ERRORIF(dyn_cast<LoadInst>(II)->isVolatile());
+                    // cannot put appendList() processing here since loads to reference
+                    // interface methods are not distinguished from loads of data
+                    // Hmm....
                     break;
                 case Instruction::Store: {
                     const StoreInst *SI = cast<StoreInst>(II);
@@ -806,7 +805,7 @@ static void processClass(const StructType *STy)
                         appendList(MetaWrite, const_cast<Instruction *>(II)->getParent(), pdest);
                     (void)printOperand(II->getOperand(0), false); // force evaluation to get metadata
                     break;
-                }
+                    }
                 case Instruction::Ret:
                     if (II->getNumOperands() != 0) {
                         functionList[func].push_back(II);
@@ -818,21 +817,25 @@ static void processClass(const StructType *STy)
                         temp += printOperand(II->getOperand(0), false);
                     }
                     break;
-                case Instruction::Call: // can have value
-                    if (II->getType() == Type::getVoidTy(II->getContext())) {
-                        std::string tempCond;
-                        if (Value *cond = getCondition(const_cast<Instruction *>(II)->getParent(), 0))
-                            tempCond = " & " + printOperand(cond, false);
-                        callList[func].push_back(CallListElement{printCall(II), tempCond,
+                case Instruction::Call: { // can have value
+                    if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
+                        break;
+                    std::string value = printCall(II);
+                    std::string tempCond;
+                    if (Value *cond = getCondition(const_cast<Instruction *>(II)->getParent(), 0))
+                        tempCond = " & " + printOperand(cond, false);
+                    appendList(MetaInvoke, const_cast<Instruction *>(II)->getParent(),
+                        value.substr(0,value.find("{")));
+                    if (II->getType() == Type::getVoidTy(II->getContext()))
+                        callList[func].push_back(CallListElement{value, tempCond,
                             isActionMethod(cast<CallInst>(II)->getCalledFunction())});
-                    }
                     break;
+                    }
                 }
             }
         }
         table->guard[func] = temp;
     }
-    globalClassTable = NULL;
     globalProcessFunction = NULL;
 }
 
@@ -897,7 +900,7 @@ void generateClasses(FILE *OStrV, FILE *OStrVH)
             getDepend(item.second);
     for (auto STy : structSeq) {
         if (STy->getName().substr(0, 6) == "module") {
-            processClass(STy);
+            processClass(getClass(STy));
             // now generate the verilog header file '.vh'
             metaGenerate(STy, OStrVH);
             // Only generate verilog for modules derived from Module
