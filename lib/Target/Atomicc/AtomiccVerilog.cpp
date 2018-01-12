@@ -271,29 +271,28 @@ void generateModuleDef(const StructType *STy, FILE *OStr)
         }
         for (auto info: callList[func]) {
             std::string rval = printCall(info); // get call info
-            Function *cfunc = info->getCalledFunction();
-            const StructType *fthis = findThisArgument(func);
-            auto FAI = cfunc->arg_begin();
             int ind = rval.find("{");
             std::string calledName = rval.substr(0, ind);
             rval = rval.substr(ind+1);
-            rval = rval.substr(0, rval.length()-1);
+            rval = cleanupValue(rval.substr(0, rval.length()-1));
+            Function *cfunc = info->getCalledFunction();
             if (isActionMethod(cfunc))
                 muxEnableList.push_back(MuxEnableEntry{methodName + "_internal", info->getParent(), calledName});
-            std::string rest;
-            int pind = calledName.rfind(MODULE_SEPARATOR);
-            std::string prefix = calledName.substr(0,pind+1);
-            if (findThisArgument(cfunc) == fthis)
-                prefix = "";
-            while(++FAI != cfunc->arg_end()) {
+            while(rval.length()) {
+                std::string rest;
                 int ind = rval.find(",");
                 if (ind > 0) {
                     rest = rval.substr(ind+1);
                     rval = rval.substr(0, ind);
                 }
-                muxValueList[prefix + FAI->getName().str()]
-                    .push_back(MuxValueEntry{methodName + "_internal",
-                        info->getParent(), cleanupValue(rval)});
+                ind = rval.find(";");
+                std::string paramValue;
+                if (ind > 0) {
+                    paramValue = rval.substr(ind+1);
+                    rval = rval.substr(0, ind);
+                }
+                muxValueList[rval].push_back(
+                    MuxValueEntry{methodName + "_internal", info->getParent(), paramValue});
                 rval = rest;
             }
         }

@@ -564,7 +564,8 @@ return "";
         vout += methodName + "{";
         appendList(MetaInvoke, I->getParent(), methodName);
     }
-    for (; AI != AE; ++AI) { // first param processed as pcalledFunction
+    auto FAI = func->arg_begin();
+    for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
         bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
         if (auto *ins = dyn_cast<Instruction>(*AI)) {
             if (ins->getOpcode() == Instruction::GetElementPtr)
@@ -573,7 +574,7 @@ return "";
         if (dyn_cast<Argument>(*AI))
             indirect = false;
         std::string parg = printOperand(*AI, indirect);
-        vout += sep + parg;
+        vout += sep + prefix + FAI->getName().str() + ";" + parg;
         sep = ",";
     }
     return vout + "}";
