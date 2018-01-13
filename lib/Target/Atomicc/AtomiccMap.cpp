@@ -291,8 +291,7 @@ restart:
                 // BUG BUG BUG -> combine the condition for the current block with the getConditions for this instruction
                 const BranchInst *BI = dyn_cast<BranchInst>(II);
                 if (BI && BI->isConditional()) {
-                    std::string cond = printOperand(BI->getCondition(), false);
-                    //printf("[%s:%d] condition %s [%p, %p]\n", __FUNCTION__, __LINE__, cond.c_str(), BI->getSuccessor(0), BI->getSuccessor(1));
+                    //printf("[%s:%d] condition %s [%p, %p]\n", __FUNCTION__, __LINE__, printOperand(BI->getCondition(), false).c_str(), BI->getSuccessor(0), BI->getSuccessor(1));
                     setCondition(BI->getSuccessor(0), 0, BI->getCondition()); // 'true' condition
                     setCondition(BI->getSuccessor(1), 1, BI->getCondition()); // 'inverted' condition
                 }

@@ -19,6 +19,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 #include <list>
+#include <set>
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Operator.h"
@@ -53,7 +54,7 @@ typedef struct {
     const StructType *STy;
 } InterfaceConnectType;
 
-typedef std::map<std::string,std::list<Value *>> MetaRef;
+typedef std::map<std::string,std::set<std::string>> MetaRef;
 typedef struct {
     MetaRef list[MetaMax];
 } MetaData;

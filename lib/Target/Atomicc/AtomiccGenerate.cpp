@@ -490,21 +490,6 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
     return cbuffer;
 }
 
-static const Function *globalProcessFunction;
-
-static void appendList(int listIndex, BasicBlock *cond, std::string item)
-{
-    if (globalProcessFunction) {
-        Value *val = getCondition(cond, 0);
-        if (!val)
-            funcMetaMap[globalProcessFunction].list[listIndex][item].clear();
-        for (auto condIter: funcMetaMap[globalProcessFunction].list[listIndex][item])
-            if (!condIter || condIter == val)
-                return;
-        funcMetaMap[globalProcessFunction].list[listIndex][item].push_back(val);
-    }
-}
-
 std::string getMethodName(const Function *func)
 {
     std::string fname = func->getName();
@@ -626,13 +611,9 @@ std::string printOperand(const Value *Operand, bool Indirect)
             vout = printGEPExpression(IG->getPointerOperand(), gep_type_begin(IG), gep_type_end(IG));
             break;
             }
-        case Instruction::Load: {
+        case Instruction::Load:
             vout = printOperand(I->getOperand(0), true);
-            if (I->getType()->getTypeID() != Type::PointerTyID && !isAlloca(I->getOperand(0))
-             && !dyn_cast<Argument>(I->getOperand(0)))
-                appendList(MetaRead, const_cast<Instruction *>(I)->getParent(), vout);
             break;
-            }
 
         // Standard binary operators...
         case Instruction::Add: case Instruction::FAdd:
@@ -771,63 +752,65 @@ static void processClass(ClassMethodTable *table)
     for (auto FI : table->method) {
         globalMethodName = FI.first;
         const Function *func = FI.second;
-        globalProcessFunction = func;
         NextAnonValueNumber = 0;
         if (trace_function || trace_call)
             printf("PROCESSING %s %s\n", func->getName().str().c_str(), FI.first.c_str());
         /* Gather data for top level instructions in each basic block. */
         std::string temp, valsep;
         for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
+            std::string tempCond;
+            if (Value *cond = getCondition(const_cast<BasicBlock *>(&*BI), 0))
+                tempCond = printOperand(cond, false);
+            auto appendList = [&](int listIndex, std::string item) -> void {
+                  if (tempCond == "")
+                      funcMetaMap[func].list[listIndex][item].clear();
+                  funcMetaMap[func].list[listIndex][item].insert(tempCond);
+              };
             for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
                 const Instruction *II = &*IIb;
                 switch(II->getOpcode()) {
                 case Instruction::Load:
                     ERRORIF(dyn_cast<LoadInst>(II)->isVolatile());
-                    // cannot put appendList() processing here since loads to reference
-                    // interface methods are not distinguished from loads of data
-                    // Hmm....
+                    if (II->getType()->getTypeID() != Type::PointerTyID
+                     && !isAlloca(II->getOperand(0)) && !dyn_cast<Argument>(II->getOperand(0)))
+                        appendList(MetaRead, printOperand(II->getOperand(0), true));
                     break;
                 case Instruction::Store: {
                     const StoreInst *SI = cast<StoreInst>(II);
-                    std::string tempCond;
                     std::string value = printOperand(SI->getOperand(0), false);
                     std::string dest = printOperand(SI->getPointerOperand(), true);
                     if (dest[0] == '&')
                         dest = dest.substr(1);
-                    if (Value *cond = getCondition(const_cast<Instruction *>(II)->getParent(), 0))
-                        tempCond = printOperand(cond, false);
                     storeList[func].push_back(StoreListElement{dest, value, tempCond,
                          isAlloca(SI->getPointerOperand())});
                     std::string pdest = printOperand(SI->getPointerOperand(), true);
                     if (pdest[0] == '&')
                         pdest = pdest.substr(1);
                     if (!isAlloca(SI->getPointerOperand()))
-                        appendList(MetaWrite, const_cast<Instruction *>(II)->getParent(), pdest);
-                    (void)printOperand(II->getOperand(0), false); // force evaluation to get metadata
+                        appendList(MetaWrite, pdest);
+                    printOperand(II->getOperand(0), false); // force evaluation to get metadata
                     break;
                     }
                 case Instruction::Ret:
-                    if (II->getNumOperands() != 0) {
-                        functionList[func].push_back(II);
-                        temp += valsep;
-                        valsep = "";
-                        if (Value *opCond = getCondition(const_cast<Instruction *>(II)->getParent(), 0))
-                            temp += printOperand(opCond, false) + " ? ";
-                        valsep = " : ";
-                        temp += printOperand(II->getOperand(0), false);
-                    }
+                    if (!II->getNumOperands())
+                        break;
+                    functionList[func].push_back(II);
+                    temp += valsep;
+                    valsep = "";
+                    if (tempCond != "")
+                        temp += tempCond + " ? ";
+                    valsep = " : ";
+                    temp += printOperand(II->getOperand(0), false);
                     break;
                 case Instruction::Call: { // can have value
                     if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
                         break;
-                    std::string value = printCall(II);
-                    std::string tempCond;
-                    if (Value *cond = getCondition(const_cast<Instruction *>(II)->getParent(), 0))
-                        tempCond = " & " + printOperand(cond, false);
-                    appendList(MetaInvoke, const_cast<Instruction *>(II)->getParent(),
-                        value.substr(0,value.find("{")));
+                    std::string condStr, value = printCall(II);
+                    if (tempCond != "")
+                        condStr = " & " + tempCond;
+                    appendList(MetaInvoke, value.substr(0,value.find("{")));
                     if (II->getType() == Type::getVoidTy(II->getContext()))
-                        callList[func].push_back(CallListElement{value, tempCond,
+                        callList[func].push_back(CallListElement{value, condStr,
                             isActionMethod(cast<CallInst>(II)->getCalledFunction())});
                     break;
                     }
@@ -836,7 +819,6 @@ static void processClass(ClassMethodTable *table)
         }
         table->guard[func] = temp;
     }
-    globalProcessFunction = NULL;
 }
 
 static std::list<const StructType *> structSeq;

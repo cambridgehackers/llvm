@@ -52,36 +52,6 @@ static void processInterfaceName(CallInst *II)
     II->setOperand(2, ConstantInt::get(Type::getInt64Ty(II->getContext()), (uint64_t)STy));
 }
 
-static void processConnectInterface(CallInst *II)
-{
-    const StructType *STy = findThisArgument(II->getParent()->getParent());
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-STy->dump();
-        ClassMethodTable *table = getClass(STy); // make sure that classCreate is initialized
-        std::string sname = STy->getName();
-        std::string target = printOperand(II->getOperand(0), false);
-        std::string source = printOperand(II->getOperand(1), false);
-        int ind = target.find(".");
-        if (ind > 0)
-            target = target.substr(ind+1);
-        ind = source.find(".");
-        if (ind > 0)
-            source = source.substr(ind+1);
-        if (source[source.length() - 1] == '_') // weird postfix '_'!!
-            source = source.substr(0, source.length()-1);
-        if (Instruction *sins = dyn_cast<Instruction>(II->getOperand(1)))
-        if (sins->getOpcode() == Instruction::BitCast)
-        if (PointerType *iPTy = dyn_cast<PointerType>(sins->getOperand(0)->getType()))
-        if (StructType *iSTy = dyn_cast<StructType>(iPTy->getElementType())) {
-            std::string isname = iSTy->getName();
-printf("[%s:%d] sname %s table %p source %s target %s isname %s\n", __FUNCTION__, __LINE__, sname.c_str(), table, source.c_str(), target.c_str(), isname.c_str());
-        for (unsigned i = 0; i < 2; i++)
-             printf("arg[%d] = %s\n", i, printOperand(II->getOperand(i), false).c_str());
-        table->interfaceConnect.push_back(InterfaceConnectType{target, source, iSTy});
-        }
-    recursiveDelete(II);      // No longer need to call connectInterface() !
-}
-
 /*
  * Map calls to 'new()' and 'malloc()' in constructors to call 'llvm_translate_malloc'.
  * This enables llvm-translate to easily maintain a list of valid memory regions
@@ -281,7 +251,6 @@ void preprocessModule(Module *Mod)
         {"llvm.umul.with.overflow.i64", processOverflow}, {"llvm.uadd.with.overflow.i64", processOverflow},
         // remap all calls to 'malloc' and 'new' to our runtime.
         {"_Znwm", processMalloc}, {"_Znam", processMalloc}, {"malloc", processMalloc},
-        {"connectInterface", processConnectInterface},
         {"llvm.memcpy.p0i8.p0i8.i64", processMemcpy},
         {"_ZL20atomiccNewArrayCountm", processMSize},
         {"atomiccSchedulePriority", processPriority},

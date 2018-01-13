@@ -22,7 +22,7 @@ static std::string gatherList(MetaData *bm, int listIndex)
     std::string temp;
     for (auto titem: bm->list[listIndex])
         for (auto item: titem.second)
-            temp += printOperand(item,false) + ":" + titem.first + ";";
+            temp += item + ":" + titem.first + ";";
     return temp;
 }
 
@@ -95,6 +95,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
                         // if the current method reads a state element that
                         // is written by another method, add it to the 'before' list
                         if (item.first == inneritem.first) {
+//printf("[%s:%d] before conflict '%s' innerfunc %s mname %s\n", __FUNCTION__, __LINE__, item.first.c_str(), innerFI.first.c_str(), mname.c_str());
                             metaBefore[innermname] = "; :";
                             break;
                         }
@@ -109,7 +110,7 @@ void metaGenerate(const StructType *STy, FILE *OStr)
                 for (auto inneritem: innerbm->list[MetaInvoke]) {
                     for (auto item: bm->list[MetaInvoke])
                         if (item.first == inneritem.first) {
-//printf("[%s:%d] mname %s innermname %s item %s\n", __FUNCTION__, __LINE__, mname.c_str(), innermname.c_str(), item.first.c_str());
+//printf("[%s:%d] conflict mname %s innermname %s item %s\n", __FUNCTION__, __LINE__, mname.c_str(), innermname.c_str(), item.first.c_str());
                             metaConflict[innermname] = "; ";
                             break;
                         }
