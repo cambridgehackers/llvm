@@ -197,9 +197,19 @@ restart: // restart here after inlining function.... basic block structure might
     }
 }
 
+std::map<Function *, int> paramAdjustDone;
 void setSeen(Function *func, std::string mName)
 {
     //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
+    auto AI = func->arg_begin(), AE = func->arg_end();
+    AI++;
+    if (!paramAdjustDone[func])
+    for (; AI != AE; AI++) {
+        std::string aname = mName.substr(0, mName.length() - 5) + MODULE_SEPARATOR + AI->getName().str();
+printf("[%s:%d] aname %s\n", __FUNCTION__, __LINE__, aname.c_str());
+        AI->setName(aname);
+    }
+    paramAdjustDone[func] = 1;
     processAlloca(func);
     // inline intra-class method call bodies
     processMethodInlining(func, func);
@@ -209,14 +219,11 @@ void setSeen(Function *func, std::string mName)
  */
 static void pushWork(std::string mName, Function *func)
 {
-    assert (func);
-    ClassMethodTable *table = getClass(findThisArgument(func));
+    getClass(findThisArgument(func))->method[mName] = func;
     setSeen(func, mName);
     //printf("[%s:%d] setmethodddd %s = %p %s\n", __FUNCTION__, __LINE__, mName.c_str(), func, func->getName().str().c_str());
-    table->method[mName] = func;
-    // inline intra-class method call bodies
-    processMethodInlining(func, func);
-    fixupFuncList.push_back(func);
+    //// inline intra-class method call bodies
+    //processMethodInlining(func, func);
 }
 
 /*

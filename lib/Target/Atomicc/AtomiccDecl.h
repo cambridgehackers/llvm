@@ -110,7 +110,6 @@ extern ExecutionEngine *EE;
 extern std::map<const Function *, Function *> ruleRDYFunction;
 extern std::map<const Function *, const Function *> ruleENAFunction;
 extern std::list<MEMORY_REGION> memoryRegion;
-extern std::list<Function *> fixupFuncList;
 extern int trace_pair;
 extern Module *globalMod;
 extern std::map<const Function *, MetaData> funcMetaMap;

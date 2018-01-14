@@ -292,10 +292,10 @@ void preprocessModule(Module *Mod)
                     enaSuffix = "";
                 enaName += enaSuffix;
 //printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second.func, enaName.c_str(), enaFunc);
-                table->method[enaName] = enaFunc;
-                table->method[item.first] = item.second.func;
                 ruleRDYFunction[enaFunc] = item.second.func; // must be before pushWork() calls
                 ruleENAFunction[item.second.func] = enaFunc;
+                table->method[enaName] = enaFunc;
+                table->method[item.first] = item.second.func;
                 // could be hoisted interface functions
                 setSeen(enaFunc, enaName);
                 setSeen(item.second.func, item.first);

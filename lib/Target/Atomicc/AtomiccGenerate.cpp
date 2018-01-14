@@ -29,6 +29,7 @@ static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
 static int trace_operand;//=1;
+static int trace_hoist;//= 1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
 
@@ -743,6 +744,270 @@ std::string printOperand(const Value *Operand, bool Indirect)
     return cbuffer;
 }
 
+static std::list<Instruction *> preCopy;
+static bool copyt = false;
+// This code recursively expands an expression tree that has PHI instructions
+// into a list of trees that for each possible incoming value to the PHI.
+// It is used when computing guard expressions to calculate the 'AND' of all
+// possible targets (ignoring which ones are actually going to be used
+// dynamically).
+static Instruction *defactorTree(Instruction *insertPoint, Instruction *top, Instruction *arg)
+{
+    if (const PHINode *PN = dyn_cast<PHINode>(arg)) {
+        for (unsigned opIndex = 1, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
+            prepareReplace(arg, PN->getIncomingValue(opIndex));
+            preCopy.push_back(cloneTree(top, insertPoint));
+        }
+        return dyn_cast<Instruction>(PN->getIncomingValue(0));
+    }
+    else
+        for (unsigned int i = 0; i < arg->getNumOperands(); i++) {
+            if (Instruction *param = dyn_cast<Instruction>(arg->getOperand(i))) {
+                Instruction *ret = defactorTree(insertPoint, top, param);
+                if (ret) {
+                    arg->setOperand(i, ret);
+                    recursiveDelete(param);
+                }
+            }
+        }
+    return NULL; // nothing to expand
+}
+static Instruction *expandTreeOptions(Instruction *insertPoint, const Instruction *I, Function *func)
+{
+    std::list<Instruction *> postCopy;
+    preCopy.clear();
+    Instruction *retItem = NULL;
+    prepareClone(insertPoint, I->getParent()->getParent());
+    Value *new_thisp = I->getOperand(0);
+    if (Instruction *orig_thisp = dyn_cast<Instruction>(new_thisp))
+        new_thisp = cloneTree(orig_thisp, insertPoint);
+    preCopy.push_back(dyn_cast<Instruction>(new_thisp));
+    for (auto item: preCopy) {
+        defactorTree(insertPoint, item, item);
+        postCopy.push_back(item);
+    }
+    for (auto item: postCopy) {
+        Value *Params[] = {item};
+        IRBuilder<> builder(insertPoint->getParent());
+        builder.SetInsertPoint(insertPoint);
+        CallInst *newCall = builder.CreateCall(func, ArrayRef<Value*>(Params, 1));
+        //newCall->addAttribute(AttributeSet::ReturnIndex, Attribute::ZExt);
+        if (retItem)
+            retItem = BinaryOperator::Create(Instruction::And, retItem, newCall, "newand", insertPoint);
+        else
+            retItem = newCall;
+    }
+    return retItem;
+}
+
+/*
+ * Add another condition to a guard function.
+ */
+static Instruction *recClean(Instruction *arg)
+{
+    int opcode = arg->getOpcode();
+    for (unsigned i = 0, e = arg->getNumOperands(); i != e; ++i) {
+        if (Instruction *op = dyn_cast<Instruction>(arg->getOperand(i))) {
+            Instruction *newOp = recClean(op);
+            if (!newOp) {
+                if (opcode == Instruction::Or || opcode == Instruction::And) {
+                    if (Instruction *otherOp = dyn_cast<Instruction>(arg->getOperand(1-i))) {
+                        Instruction *onewOp = recClean(otherOp);
+//printf("[%s:%d] AND/OR replace i=%d newOp %p onewOp %p\n", __FUNCTION__, __LINE__, i, newOp, onewOp);
+//op->dump();
+//otherOp->dump();
+                        if (onewOp)
+                            return onewOp;
+                    }
+                }
+                return NULL;
+            }
+            if (newOp != op) {
+                op->replaceAllUsesWith(newOp);
+                recursiveDelete(op);
+            }
+        }
+        else if (Argument *inv = dyn_cast<Argument>(arg->getOperand(i))) {
+//printf("[%s:%d] inv %p begin %p\n", __FUNCTION__, __LINE__, inv, &*arg->getParent()->getParent()->arg_begin());
+//arg->dump();
+            if (inv != arg->getParent()->getParent()->arg_begin()) {
+//printf("[%s:%d] ARGNULL\n", __FUNCTION__, __LINE__);
+                return NULL;
+            }
+        }
+    }
+    return arg;
+}
+
+static std::string jstr = //"zz_ZN16EchoRequestInput8enq__RDYEv";
+"zz_ZN8FifoPongI9ValuePairE8deq__RDYEv";
+static void addGuard(Instruction *argI, Function *func, Function *currentFunction)
+{
+    /* get my function's guard function */
+    Function *parentRDYName = ruleRDYFunction[currentFunction];
+//printf("[%s:%d] nane %s\n", __FUNCTION__, __LINE__, parentRDYName->getName().str().c_str());
+    if (!parentRDYName || !func)
+        return;
+if (parentRDYName->getName() == jstr)
+copyt = true;
+if (copyt) {
+printf("[%s:%d] before\n", __FUNCTION__, __LINE__);
+argI->dump();
+func->dump();
+parentRDYName->dump();
+}
+    TerminatorInst *TI = parentRDYName->begin()->getTerminator();
+    /* make a call to the guard being promoted */
+    Instruction *newI = expandTreeOptions(TI, argI, func);
+    /* if the promoted guard is in an 'if' block, 'or' with inverted condition of block */
+    if (Instruction *bcond = dyn_cast_or_null<Instruction>(getCondition(argI->getParent(), 1))) { // get inverted condition, if any
+        prepareReplace(argI->getParent()->getParent()->arg_begin(), TI->getParent()->getParent()->arg_begin());
+        newI = BinaryOperator::Create(Instruction::Or, newI, cloneTree(bcond,TI), "newor", TI);
+    }
+    /* get existing return value from my function's guard */
+    Value *cond = TI->getOperand(0);
+    const ConstantInt *CI = dyn_cast<ConstantInt>(cond);
+    if (!CI || !CI->getType()->isIntegerTy(1) || !CI->getZExtValue())
+        newI = BinaryOperator::Create(Instruction::And, cond, newI, "newand", TI);
+        // 'And' return value into condition
+//printf("[%s:%d] condition '%s'\n", __FUNCTION__, __LINE__, printOperand(newI, false).c_str());
+//parentRDYName->dump();
+    Instruction *repNewI = recClean(newI);
+    TI->setOperand(0, repNewI); /* replace 'return' expression */
+    if (repNewI != newI)
+        recursiveDelete(newI);
+if (copyt) {
+printf("[%s:%d] after\n", __FUNCTION__, __LINE__);
+parentRDYName->dump();
+}
+copyt = false;
+}
+
+// Preprocess the body rules, moving items to RDY() and ENA()
+static void processPromote(Function *currentFunction)
+{
+    //ClassMethodTable *table = getClass(findThisArgument(currentFunction));
+restart:
+    for (auto BI = currentFunction->begin(), BE = currentFunction->end(); BI != BE; BI++) {
+        for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;) {
+            auto INEXT = std::next(BasicBlock::iterator(IIb));
+            Instruction *II = &*IIb;
+            switch (II->getOpcode()) {
+            case Instruction::Call: {
+                Function *func = dyn_cast<Function>(dyn_cast<CallInst>(II)->getCalledValue());
+                Function *calledFunctionGuard = ruleRDYFunction[func];
+                if (trace_hoist)
+                    printf("HOIST: CALLER %s calling '%s' guard %p\n", currentFunction->getName().str().c_str(), func->getName().str().c_str(), calledFunctionGuard);
+                if (calledFunctionGuard)
+                    addGuard(II, calledFunctionGuard, currentFunction);
+                break;
+                }
+            case Instruction::Br: {
+                // BUG BUG BUG -> combine the condition for the current block with the getConditions for this instruction
+                const BranchInst *BI = dyn_cast<BranchInst>(II);
+                if (BI && BI->isConditional()) {
+                    //printf("[%s:%d] condition %s [%p, %p]\n", __FUNCTION__, __LINE__, printOperand(BI->getCondition(), false).c_str(), BI->getSuccessor(0), BI->getSuccessor(1));
+                    setCondition(BI->getSuccessor(0), 0, BI->getCondition()); // 'true' condition
+                    setCondition(BI->getSuccessor(1), 1, BI->getCondition()); // 'inverted' condition
+                }
+                else if (isa<IndirectBrInst>(II)) {
+                    printf("[%s:%d] indirect\n", __FUNCTION__, __LINE__);
+                    for (unsigned i = 0, e = II->getNumOperands(); i != e; ++i) {
+                        printf("[%d] = %s\n", i, printOperand(II->getOperand(i), false).c_str());
+                    }
+                }
+                else {
+                    //printf("[%s:%d] BRUNCOND %p\n", __FUNCTION__, __LINE__, BI->getSuccessor(0));
+                }
+                break;
+                }
+            case Instruction::Switch: {
+                SwitchInst* SI = cast<SwitchInst>(II);
+                Value *switchIndex = SI->getCondition();
+                Type  *swType = switchIndex->getType();
+                //BasicBlock *defaultBB = SI->getDefaultDest();
+                for (SwitchInst::CaseIt CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
+                    BasicBlock *caseBB = CI->getCaseSuccessor();
+                    int64_t val = CI->getCaseValue()->getZExtValue();
+                    printf("[%s:%d] [%ld] = %s\n", __FUNCTION__, __LINE__, val, caseBB?caseBB->getName().str().c_str():"NONE");
+                    if (!getCondition(caseBB, 0)) { // 'true' condition
+                        IRBuilder<> cbuilder(caseBB);
+                        Instruction *TI = caseBB->getTerminator();
+                        Value *myIndex = switchIndex;
+                        if (Instruction *expr = dyn_cast<Instruction>(switchIndex)) {
+                            prepareClone(TI, II->getParent()->getParent());
+                            myIndex = cloneTree(expr, TI);
+                        }
+                        cbuilder.SetInsertPoint(TI);
+                        Value *cmp = cbuilder.CreateICmpEQ(myIndex, ConstantInt::get(swType, val));
+                        setCondition(caseBB, 0, cmp);
+                    }
+                }
+                //printf("[%s:%d] after switch\n", __FUNCTION__, __LINE__);
+                //II->getParent()->getParent()->dump();
+                break;
+                }
+            case Instruction::GetElementPtr:
+                // Expand out index expression references
+                if (II->getNumOperands() == 2)
+                if (Instruction *switchIndex = dyn_cast<Instruction>(II->getOperand(1))) {
+                    int Values_size = 2;
+                    if (Instruction *ins = dyn_cast<Instruction>(II->getOperand(0))) {
+                        if (PointerType *PTy = dyn_cast<PointerType>(ins->getOperand(0)->getType()))
+                        if (StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
+                            int Idx = 0, eleIndex = -1;
+                            if (const ConstantInt *CI = dyn_cast<ConstantInt>(ins->getOperand(2)))
+                                eleIndex = CI->getZExtValue();
+                            for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++)
+                                if (Idx == eleIndex)
+                                if (ClassMethodTable *table = getClass(STy))
+                                    if (table->replaceType[Idx]) {
+                                        Values_size = table->replaceCount[Idx];
+printf("[%s:%d] get dyn size (static not handled) %d\n", __FUNCTION__, __LINE__, Values_size);
+if (Values_size < 0 || Values_size > 100) Values_size = 2;
+                                        //II->getParent()->dump();
+                                    }
+                        }
+                        ins->getOperand(0)->dump();
+                    }
+                    II->getOperand(0)->dump();
+                    BasicBlock *afterswitchBB = BI->splitBasicBlock(II, "afterswitch");
+                    IRBuilder<> afterBuilder(afterswitchBB);
+                    afterBuilder.SetInsertPoint(II);
+                    // Build Switch instruction in starting block
+                    IRBuilder<> startBuilder(&*BI);
+                    startBuilder.SetInsertPoint(BI->getTerminator());
+                    BasicBlock *lastCaseBB = BasicBlock::Create(BI->getContext(), "lastcase", currentFunction, afterswitchBB);
+                    SwitchInst *switchInst = startBuilder.CreateSwitch(switchIndex, lastCaseBB, Values_size - 1);
+                    BI->getTerminator()->eraseFromParent();
+                    // Build PHI in end block
+                    PHINode *phi = afterBuilder.CreatePHI(II->getType(), Values_size, "phi");
+                    // Add all of the 'cases' to the switch instruction.
+                    for (int caseIndex = 0; caseIndex < Values_size; ++caseIndex) {
+                        ConstantInt *caseInt = startBuilder.getInt64(caseIndex);
+                        BasicBlock *caseBB = lastCaseBB;
+                        if (caseIndex != Values_size - 1) { // already created a block for 'default'
+                            caseBB = BasicBlock::Create(BI->getContext(), "switchcase", currentFunction, afterswitchBB);
+                            switchInst->addCase(caseInt, caseBB);
+                        }
+                        IRBuilder<> cbuilder(caseBB);
+                        cbuilder.CreateBr(afterswitchBB);
+                        prepareReplace(NULL, NULL);
+                        Instruction *val = cloneTree(II, caseBB->getTerminator());
+                        val->setOperand(1, caseInt);
+                        phi->addIncoming(val, caseBB);
+                    }
+                    II->replaceAllUsesWith(phi);
+                    recursiveDelete(II);
+                    goto restart;  // the instruction INEXT is no longer in the block BI
+                }
+                break;
+            }
+            IIb = INEXT;
+        }
+    }
+}
+
 /*
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
@@ -752,6 +1017,8 @@ static void processClass(ClassMethodTable *table)
     for (auto FI : table->method) {
         globalMethodName = FI.first;
         const Function *func = FI.second;
+        // promote guards from contained calls to be guards for this function
+        processPromote(const_cast<Function *>(func));
         NextAnonValueNumber = 0;
         if (trace_function || trace_call)
             printf("PROCESSING %s %s\n", func->getName().str().c_str(), FI.first.c_str());
