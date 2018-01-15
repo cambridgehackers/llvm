@@ -40,42 +40,7 @@ struct MAPSEENcomp {
 };
 typedef std::map<std::string, Function *>MethodMapType;
 
-std::map<const Function *, Function *> ruleRDYFunction;
-std::map<const Function *, const Function *> ruleENAFunction;
 static std::map<MAPSEEN_TYPE, int, MAPSEENcomp> addressTypeAlreadyProcessed;
-
-static struct {
-    std::map<const BasicBlock *, Value *> val;
-} blockCondition[2];
-void setCondition(BasicBlock *bb, int invert, Value *val)
-{
-    blockCondition[invert].val[bb] = val;
-}
-
-Value *getCondition(BasicBlock *bb, int invert)
-{
-    if (Value *val = blockCondition[invert].val[bb])
-        return val;
-    if (Instruction *val = dyn_cast_or_null<Instruction>(blockCondition[1-invert].val[bb])) {
-        BasicBlock *prevBB = val->getParent();
-        Instruction *TI = bb->getTerminator();
-        if (!TI) {
-printf("[%s:%d] terminator not found!!\n", __FUNCTION__, __LINE__);
-            bb->dump();
-            exit(-1);
-        }
-        if (prevBB != bb) {
-            prepareReplace(NULL, NULL);
-            val = cloneTree(val, TI);
-        }
-        IRBuilder<> builder(bb);
-        builder.SetInsertPoint(TI);
-        setCondition(bb, invert, BinaryOperator::Create(Instruction::Xor,
-           val, builder.getInt1(1), "invertCond", TI));
-        return blockCondition[invert].val[bb];
-    }
-    return NULL;
-}
 
 /*
  * Dump all statically allocated and malloc'ed data areas
@@ -227,7 +192,7 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
     case Type::StructTyID: {
         StructType *STy = cast<StructType>(Ty);
         const StructLayout *SLO = TD.getStructLayout(STy);
-        ClassMethodTable *table = getClass(STy); // allocate classCreate
+        getClass(STy); // allocate classCreate
         int Idx = 0;
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
             std::string fname = fieldName(STy, Idx);

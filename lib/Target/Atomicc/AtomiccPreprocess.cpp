@@ -47,9 +47,8 @@ static void processInterfaceName(CallInst *II)
     Function *callingFunction = II->getParent()->getParent();
     IRBuilder<> builder(II->getParent());
     builder.SetInsertPoint(II);
-    const StructType *STy = findThisArgument(callingFunction);
-    Value *oldOp = II->getOperand(2);
-    II->setOperand(2, ConstantInt::get(Type::getInt64Ty(II->getContext()), (uint64_t)STy));
+    II->setOperand(2, ConstantInt::get(Type::getInt64Ty(II->getContext()),
+        (uint64_t)findThisArgument(callingFunction)));
 }
 
 /*

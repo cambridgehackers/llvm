@@ -246,7 +246,6 @@ static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, 
  */
 extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
 {
-    static int counter;
     ValueToValueMapTy VMap;
     SmallVector<ReturnInst*, 8> Returnsfunc;  // Ignore returns cloned.
 
@@ -293,7 +292,7 @@ extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
                     IRBuilder<> builder(II->getParent());
                     builder.SetInsertPoint(II);
                     int64_t val = CI->getZExtValue();
-                    printf("%s: SExt %ld\n", __FUNCTION__, val);
+                    printf("%s: SExt %lld\n", __FUNCTION__, val);
                     II->replaceAllUsesWith(ConstantInt::get(II->getType(), val));
                     recursiveDelete(II);
                 }
@@ -335,7 +334,7 @@ extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType
 extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc, Function *aenaFunc)
 {
     std::string tempName = name;
-    for (int i = 0; i < aenaFunc->arg_size() - 1; i++)
+    for (unsigned i = 0; i < aenaFunc->arg_size() - 1; i++)
         tempName += "_" + utostr(bcap[i]);
     Function *rdyFunc = fixupFunction(bcap, ardyFunc);
     Function *enaFunc = fixupFunction(bcap, aenaFunc);
