@@ -140,7 +140,7 @@ std::string GetValueName(const Value *Operand);
 int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_type_iterator E);
 void prepareReplace(const Value *olda, Value *newa);
 void recursiveDelete(Value *V);
-void setSeen(Function *func, std::string mName);
+void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName);
 void dumpMemoryRegions(int arg);
 void generateClasses(FILE *OStrV, FILE *OStrVH);
 void metaGenerate(const StructType *STy, FILE *OStr);

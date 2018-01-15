@@ -710,16 +710,13 @@ std::string printOperand(const Value *Operand, bool Indirect)
             Value *prevCond = NULL;
             for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
-                Value *opCond = getACondition(inBlock, 0);
-                if (opIndex != Eop - 1 || getACondition(inBlock, 1) != prevCond) {
-                    std::string cStr = printOperand(opCond, false);
-                    if (cStr != "")
-                        vout += cStr + " ? ";
-                }
+                std::string cStr = getCondStr(inBlock);
+                if (cStr != "" && (opIndex != Eop - 1 || getACondition(inBlock, 1) != prevCond))
+                    vout += cStr + " ? ";
+                prevCond = getACondition(inBlock, 0);
                 vout += printOperand(PN->getIncomingValue(opIndex), false);
                 if (opIndex != Eop - 1)
                     vout += ":";
-                prevCond = opCond;
             }
             break;
             }
@@ -786,7 +783,6 @@ std::string printOperand(const Value *Operand, bool Indirect)
 }
 
 static std::list<Instruction *> preCopy;
-static bool copyt = false;
 // This code recursively expands an expression tree that has PHI instructions
 // into a list of trees that for each possible incoming value to the PHI.
 // It is used when computing guard expressions to calculate the 'AND' of all
@@ -880,23 +876,11 @@ static Instruction *recClean(Instruction *arg)
     return arg;
 }
 
-static std::string jstr = //"zz_ZN16EchoRequestInput8enq__RDYEv";
-"zz_ZN8FifoPongI9ValuePairE8deq__RDYEv";
 static void addGuard(Instruction *argI, Function *func, Function *currentFunction)
 {
     /* get my function's guard function */
     Function *parentRDYName = ruleRDYFunction[currentFunction];
-//printf("[%s:%d] nane %s\n", __FUNCTION__, __LINE__, parentRDYName->getName().str().c_str());
-    if (!parentRDYName || !func)
-        return;
-if (parentRDYName->getName() == jstr)
-copyt = true;
-if (copyt) {
-printf("[%s:%d] before\n", __FUNCTION__, __LINE__);
-argI->dump();
-func->dump();
-parentRDYName->dump();
-}
+    assert (parentRDYName && func);
     TerminatorInst *TI = parentRDYName->begin()->getTerminator();
     /* make a call to the guard being promoted */
     Instruction *newI = expandTreeOptions(TI, argI, func);
@@ -917,17 +901,11 @@ parentRDYName->dump();
     TI->setOperand(0, repNewI); /* replace 'return' expression */
     if (repNewI != newI)
         recursiveDelete(newI);
-if (copyt) {
-printf("[%s:%d] after\n", __FUNCTION__, __LINE__);
-parentRDYName->dump();
-}
-copyt = false;
 }
 
 // Preprocess the body rules, moving items to RDY() and ENA()
 static void processPromote(Function *currentFunction)
 {
-    //ClassMethodTable *table = getClass(findThisArgument(currentFunction));
 restart:
     for (auto BI = currentFunction->begin(), BE = currentFunction->end(); BI != BE; BI++) {
         for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;) {

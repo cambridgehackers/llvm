@@ -198,9 +198,13 @@ restart: // restart here after inlining function.... basic block structure might
 }
 
 std::map<Function *, int> paramAdjustDone;
-void setSeen(Function *func, std::string mName)
+/*
+ * Add a function to the processing list for generation of cpp and verilog.
+ */
+static void pushWork(Function *func, std::string mName)
 {
     //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
+    getClass(findThisArgument(func))->method[mName] = func;
     auto AI = func->arg_begin(), AE = func->arg_end();
     AI++;
     if (!paramAdjustDone[func])
@@ -214,29 +218,18 @@ printf("[%s:%d] aname %s\n", __FUNCTION__, __LINE__, aname.c_str());
     // inline intra-class method call bodies
     processMethodInlining(func, func);
 }
-/*
- * Add a function to the processing list for generation of cpp and verilog.
- */
-static void pushWork(std::string mName, Function *func)
-{
-    getClass(findThisArgument(func))->method[mName] = func;
-    setSeen(func, mName);
-    //printf("[%s:%d] setmethodddd %s = %p %s\n", __FUNCTION__, __LINE__, mName.c_str(), func, func->getName().str().c_str());
-    //// inline intra-class method call bodies
-    //processMethodInlining(func, func);
-}
 
 /*
  * Methods, guarded values, rules all get pushed as pairs so that 'RDY' function
  * is processed after processing for base method (so that guards promoted during
  * the method processing are later handled)
  */
-static void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName)
+void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName)
 {
     ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
     ruleENAFunction[rdyFunc] = enaFunc;
-    pushWork(enaName, enaFunc);
-    pushWork(rdyName, rdyFunc); // must be after 'ENA', since hoisting copies guards
+    pushWork(enaFunc, enaName);
+    pushWork(rdyFunc, rdyName); // must be after 'ENA', since hoisting copies guards
 }
 
 /*
@@ -385,42 +378,6 @@ static void replaceFunc(Function *target, Function *source)
             recursiveDelete(oldI);
         }
     }
-}
-extern "C" void atomiccInterfaceName(const char *target, const char *source, const StructType *STy)
-{
-    ClassMethodTable *table = getClass(STy);
-    std::string enaName = target;
-    std::string enaSuffix = "__ENA";
-    //if (endswith(item.first, "__READY")) {
-        //enaName = item.first.substr(0, item.first.length() - 7);
-        //enaSuffix = "__VALID";
-    //}
-std::string rdyString = "__RDY";
-printf("[%s:%d] target %s source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, source, STy, table);
-    Function *enaFunc = table->funcMap[target].func;
-    Function *rdyFunc = table->funcMap[target + rdyString].func;
-    Function *senaFunc = table->funcMap[source].func;
-    Function *srdyFunc = table->funcMap[source + rdyString].func;
-printf("[%s:%d] functions: target %s / %s  source %s / %s\n", __FUNCTION__, __LINE__,
-    table->funcMap[target].fname.c_str(), table->funcMap[target + rdyString].fname.c_str(),
-    table->funcMap[source].fname.c_str(), table->funcMap[source + rdyString].fname.c_str());
-printf(" functions: target %p / %p  source %p / %p\n", enaFunc, rdyFunc, senaFunc, srdyFunc);
-    if (!enaFunc || !rdyFunc || !senaFunc) {
-        printf("[%s:%d] %s function NULL %p rdy %p BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB \n", __FUNCTION__, __LINE__, enaName.c_str(), enaFunc, rdyFunc);
-        return;
-    }
-    replaceFunc(enaFunc, senaFunc);
-    replaceFunc(rdyFunc, srdyFunc);
-    if (!isActionMethod(enaFunc))
-        enaSuffix = "";
-    std::string rdyName = enaName + rdyString;
-    enaName += enaSuffix;
-    table->method[enaName] = enaFunc;
-    table->method[rdyName] = rdyFunc;
-    pushPair(enaFunc, enaName, rdyFunc, rdyName);
-//printf("[%s:%d] DDUMMMMMMMMMMMMP\n", __FUNCTION__, __LINE__);
-//enaFunc->dump();
-//rdyFunc->dump();
 }
 extern "C" void connectInterfaceNew(const char *target, const char *source, const StructType *STy)
 {
