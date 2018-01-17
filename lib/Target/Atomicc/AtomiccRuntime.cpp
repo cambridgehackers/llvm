@@ -350,38 +350,3 @@ extern "C" void atomiccSchedulePriority(const char *rule, const char *priority, 
     STy->dump();
     table->priority[rule] = priority;
 }
-
-/*
- * Called from user constructors to set interface methods
- */
-extern "C" void connectInterfaceNew(const char *target, const char *source, const StructType *STy)
-{
-    ClassMethodTable *table = getClass(STy);
-    std::string targetItem = target, targetInterface;
-    int i = targetItem.find("$");
-    if (i > 0) {
-        targetInterface = targetItem.substr(i+1);
-        targetItem = targetItem.substr(0, i);
-    }
-printf("[%s:%d] target %s '%s' '%s' source %s STy %p table %p\n", __FUNCTION__, __LINE__, target, targetItem.c_str(), targetInterface.c_str(), source, STy, table);
-    for (auto item: table->funcMap) {
-printf("[%s:%d] %s = %p %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.func, item.second.fname.c_str());
-    }
-    int Idx = 0;
-    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        if (const StructType *STyE = dyn_cast<StructType>(*I))
-        if (targetItem == fieldName(STy, Idx)) {
-            int Idx = 0;
-            for (auto I = STyE->element_begin(), E = STyE->element_end(); I != E; ++I, Idx++) {
-                if (const PointerType *PTy = dyn_cast<PointerType>(*I))
-                if (const StructType *STyI = dyn_cast<StructType>(PTy->getElementType()))
-                if (targetInterface == fieldName(STyE, Idx)) {
-printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
-                    table->interfaceConnect.push_back(InterfaceConnectType{target, source, STyI});
-                    return;
-                }
-            }
-        }
-//source lERI$pipe target lERO_test$pipe isname ainterface.PipeIn
-    }
-}

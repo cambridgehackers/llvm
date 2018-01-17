@@ -42,15 +42,6 @@ static void processSelect(Function *thisFunc)
     }
 }
 
-static void processInterfaceName(CallInst *II)
-{
-    Function *callingFunction = II->getParent()->getParent();
-    IRBuilder<> builder(II->getParent());
-    builder.SetInsertPoint(II);
-    II->setOperand(2, ConstantInt::get(Type::getInt64Ty(II->getContext()),
-        (uint64_t)findThisArgument(callingFunction)));
-}
-
 /*
  * Map calls to 'new()' and 'malloc()' in constructors to call 'llvm_translate_malloc'.
  * This enables llvm-translate to easily maintain a list of valid memory regions
@@ -253,8 +244,6 @@ void preprocessModule(Module *Mod)
         {"llvm.memcpy.p0i8.p0i8.i64", processMemcpy},
         {"_ZL20atomiccNewArrayCountm", processMSize},
         {"atomiccSchedulePriority", processPriority},
-        {"atomiccInterfaceName", processInterfaceName},
-        {"connectInterfaceNew", processInterfaceName},
         {NULL, NULL}};
 
     for (int i = 0; callProcess[i].name; i++) {

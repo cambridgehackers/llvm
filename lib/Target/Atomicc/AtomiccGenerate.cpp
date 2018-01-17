@@ -154,18 +154,22 @@ ClassMethodTable *getClass(const StructType *STy)
         classCreate[STy]->STy = STy;
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
-        int processSequence = 0;
+        int processSequence = 0; // seq=0 -> fields
         while (subs < len) {
             while (subs < len && STy->structFieldMap[subs] != ',') {
                 subs++;
             }
             subs++;
             if (STy->structFieldMap[last_subs] == '/') {
-                processSequence++;
+                processSequence++; // seq=1 -> methods
                 last_subs++;
             }
             if (STy->structFieldMap[last_subs] == ';') {
-                processSequence++;
+                processSequence++; // seq=2 -> software interfaces
+                last_subs++;
+            }
+            if (STy->structFieldMap[last_subs] == '@') {
+                processSequence++; // seq=3 -> interface connect
                 last_subs++;
             }
             std::string ret = STy->structFieldMap.substr(last_subs);
@@ -178,6 +182,34 @@ ClassMethodTable *getClass(const StructType *STy)
                 table->fieldName[fieldSub++] = ret;
             else if (processSequence == 2)
                 table->softwareName[ret] = 1;
+            else if (processSequence == 3) {
+                int ind = ret.find(":");
+                std::string source = ret.substr(ind+1);
+                std::string target = ret.substr(0, ind);
+                std::string targetItem = target, targetInterface;
+                ind = targetItem.find("$");
+                if (ind > 0) {
+                    targetInterface = targetItem.substr(ind+1);
+                    targetItem = targetItem.substr(0, ind);
+                }
+                int Idx = 0;
+                for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+                    if (const StructType *STyE = dyn_cast<StructType>(*I))
+                    if (targetItem == fieldName(STy, Idx)) {
+                        int Idx = 0;
+                        for (auto I = STyE->element_begin(), E = STyE->element_end(); I != E; ++I, Idx++) {
+                            if (const PointerType *PTy = dyn_cast<PointerType>(*I))
+                            if (const StructType *STyI = dyn_cast<StructType>(PTy->getElementType()))
+                            if (targetInterface == fieldName(STyE, Idx)) {
+printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
+                                table->interfaceConnect.push_back(InterfaceConnectType{target, source, STyI});
+                                goto nextInterface;
+                            }
+                        }
+                    }
+                }
+        nextInterface:;
+            }
             else if (idx >= 0) {
                 std::string fname = ret.substr(0, idx);
                 Function *func = globalMod->getFunction(fname);
