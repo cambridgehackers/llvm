@@ -150,6 +150,7 @@ II->dump();
  */
 static void processMethodInlining(Function *thisFunc, Function *parentFunc)
 {
+    processAlloca(thisFunc);
 restart: // restart here after inlining function.... basic block structure might change
     for (auto BB = thisFunc->begin(), BE = thisFunc->end(); BB != BE; ++BB) {
         for (auto II = BB->begin(), IE = BB->end(); II != IE;) {
@@ -181,7 +182,6 @@ restart: // restart here after inlining function.... basic block structure might
                 if (parentFunc != func && thisFunc != func)
                 if (callingSTy == STy || endswith(calledName, "C2Ev") || endswith(calledName, "D2Ev")) {
                     //fprintf(stdout,"callProcess: %s cName %s single!!!!\n", callingName.c_str(), calledName.c_str());
-                    processAlloca(func);
                     processMethodInlining(func, parentFunc);
                     InlineFunctionInfo IFI;
 //printf("[%s:%d] beforeInline thisFunc %p func %p\n", __FUNCTION__, __LINE__, thisFunc, func);
@@ -197,7 +197,7 @@ restart: // restart here after inlining function.... basic block structure might
     }
 }
 
-std::map<Function *, int> paramAdjustDone;
+static std::map<Function *, int> paramAdjustDone;
 /*
  * Add a function to the processing list for generation of cpp and verilog.
  */
@@ -210,11 +210,10 @@ static void pushWork(Function *func, std::string mName)
     if (!paramAdjustDone[func])
     for (; AI != AE; AI++) {
         std::string aname = mName.substr(0, mName.length() - 5) + MODULE_SEPARATOR + AI->getName().str();
-printf("[%s:%d] aname %s\n", __FUNCTION__, __LINE__, aname.c_str());
+//printf("[%s:%d] aname %s\n", __FUNCTION__, __LINE__, aname.c_str());
         AI->setName(aname);
     }
     paramAdjustDone[func] = 1;
-    processAlloca(func);
     // inline intra-class method call bodies
     processMethodInlining(func, func);
 }
@@ -248,9 +247,7 @@ extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
         printf("[%s:%d] BEFORECLONE func %p\n", __FUNCTION__, __LINE__, argFunc);
         argFunc->dump();
     }
-    PointerType *thisType = dyn_cast<PointerType>(argFunc->arg_begin()->getType());
-
-    Type *Params[] = {thisType};
+    Type *Params[] = {argFunc->arg_begin()->getType()};
     Function *func = Function::Create(FunctionType::get(argFunc->getReturnType(),
         ArrayRef<Type*>(Params, 1), false), GlobalValue::LinkOnceODRLinkage,
         "ActualTargetFunction", argFunc->getParent());
@@ -357,28 +354,6 @@ extern "C" void atomiccSchedulePriority(const char *rule, const char *priority, 
 /*
  * Called from user constructors to set interface methods
  */
-static void replaceFunc(Function *target, Function *source)
-{
-    auto bb = target->begin();
-    Instruction *TI = bb->getTerminator();
-    if (source) {
-        for (auto II = bb->begin(), IE = bb->end(); II != IE;II++)
-            if (II->getOpcode() == Instruction::Call) {
-                cast<CallInst>(&*II)->setCalledFunction(source);
-                return;
-            }
-    }
-    else if (TI->getOpcode() == Instruction::Ret) {
-        IRBuilder<> builder(&*bb);
-        builder.SetInsertPoint(TI);
-        Value *oldI = TI->getOperand(0);
-        Value *newI = builder.getInt1(1);
-        if (oldI != newI) {
-            oldI->replaceAllUsesWith(newI);
-            recursiveDelete(oldI);
-        }
-    }
-}
 extern "C" void connectInterfaceNew(const char *target, const char *source, const StructType *STy)
 {
     ClassMethodTable *table = getClass(STy);
