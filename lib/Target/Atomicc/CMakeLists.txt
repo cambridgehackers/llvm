@@ -8,6 +8,7 @@ add_llvm_target(AtomiccCodeGen
   AtomiccRuntime.cpp
   AtomiccUtil.cpp
   AtomiccVerilog.cpp
+  AtomiccIR.cpp
   )
 
 add_subdirectory(TargetInfo)

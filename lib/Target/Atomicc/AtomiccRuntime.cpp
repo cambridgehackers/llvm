@@ -334,7 +334,7 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
     // if necessary to avoid conflicts, generate unique rule names
     while (table->method[enaName + "__ENA"])
         enaName = tempName + "$" + utostr(counter++);
-    table->ruleFunctions[enaName] = enaFunc;
+    table->IR->ruleFunctions[enaName] = true;
     if (trace_pair)
         printf("[%s:%d] name %s size %d ena %s rdy %s\n", __FUNCTION__, __LINE__, enaName.c_str(), aenaFunc->arg_size(), enaFunc->getName().str().c_str(), rdyFunc->getName().str().c_str());
     pushPair(enaFunc, enaName + "__ENA", rdyFunc, enaName + "__RDY");
@@ -348,5 +348,5 @@ extern "C" void atomiccSchedulePriority(const char *rule, const char *priority, 
     ClassMethodTable *table = getClass(STy);
     printf("%s: %s %s %p\n", __FUNCTION__, rule, priority, STy);
     STy->dump();
-    table->priority[rule] = priority;
+    table->IR->priority[rule] = priority;
 }

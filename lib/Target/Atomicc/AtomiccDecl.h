@@ -51,7 +51,7 @@ typedef struct {
 typedef struct {
     std::string target;
     std::string source;
-    const StructType *STy;
+    struct ModuleIR *IR;
 } InterfaceConnectType;
 
 typedef std::map<std::string,std::set<std::string>> MetaRef;
@@ -63,33 +63,6 @@ typedef struct {
     std::string fname;
     Function   *func;
 } FuncInfo;
-
-class ClassMethodTable {
-public:
-    const StructType                  *STy;
-    std::map<std::string, const Function *> method;
-    std::map<int, const Type *>       replaceType;
-    std::map<int, uint64_t>           replaceCount;
-    std::map<int, bool>               allocateLocally;
-    std::map<std::string, const Function *> ruleFunctions;
-    std::list<InterfaceConnectType>   interfaceConnect;
-    std::string                       instance;
-    std::list<std::string>            metaList;
-    std::map<const Function *, std::string> guard;
-    std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
-    std::map<std::string, FuncInfo>   funcMap;
-    std::map<int, std::string>        fieldName;
-    std::map<std::string, int>        softwareName;
-    ClassMethodTable() {}
-};
-
-typedef  struct {
-    void *p;
-    size_t size;
-    Type *type;
-    const StructType *STy;
-    uint64_t   vecCount;
-} MEMORY_REGION;
 
 typedef struct {
     std::string dest;
@@ -104,6 +77,73 @@ typedef struct {
     bool isAction;
 } CallListElement;
 
+typedef struct {
+    std::string arrRange;
+    std::string name;
+} ParamElement;
+
+typedef struct {
+    std::string guard;
+    std::list<StoreListElement> storeList;
+    std::list<const Instruction *> functionList;
+    std::list<CallListElement> callList;
+    std::string retArrRange;
+    bool        action;
+    std::list<ParamElement> params;
+} MethodInfo;
+
+typedef struct {
+    std::string elementName;
+    struct ModuleIR *IR;
+} OutcallInterface;
+
+typedef struct {
+    std::string fldName;
+    int64_t     vecCount;
+    std::string structName;
+    std::string arrRange;
+    struct ModuleIR *iIR;
+    std::string typeStr;
+} FieldElement;
+
+class ClassMethodTable;
+typedef struct ModuleIR {
+    std::string name;
+    ClassMethodTable *table;
+    std::list<std::string>            metaList;
+    std::map<int, std::string>        fieldName;
+    std::map<std::string, int>        softwareName;
+    std::map<std::string, MethodInfo *> method;
+    std::map<std::string, std::list<OutcallInterface>> outcall;
+    std::map<std::string, bool> ruleFunctions;
+    std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
+    std::string                       instance;
+    std::map<int, uint64_t>           replaceCount;
+    std::map<int, bool>               allocateLocally;
+    std::list<FieldElement>           fields;
+    std::list<InterfaceConnectType>   interfaceConnect;
+} ModuleIR;
+
+class ClassMethodTable {
+public:
+    const StructType                  *STy;
+    std::map<std::string, const Function *> method;
+    std::map<int, const Type *>       replaceType;
+    std::map<std::string, FuncInfo>   funcMap;
+    ModuleIR* IR;
+    ClassMethodTable() {}
+};
+
+typedef  struct {
+    void *p;
+    size_t size;
+    Type *type;
+    const StructType *STy;
+    uint64_t   vecCount;
+} MEMORY_REGION;
+
+extern std::map<const StructType *, ModuleIR *> moduleMap;
+
 typedef std::map<std::string, int> StringMapType;
 
 extern ExecutionEngine *EE;
@@ -113,9 +153,6 @@ extern std::list<MEMORY_REGION> memoryRegion;
 extern int trace_pair;
 extern Module *globalMod;
 extern std::map<const Function *, MetaData> funcMetaMap;
-extern std::map<const Function *,std::list<StoreListElement>> storeList;
-extern std::map<const Function *,std::list<const Instruction *>> functionList;
-extern std::map<const Function *,std::list<CallListElement>> callList;
 
 void constructAddressMap(Module *Mod);
 std::string fieldName(const StructType *STy, uint64_t ind);
@@ -133,7 +170,6 @@ void prepareClone(Instruction *TI, const Function *SourceF);
 std::string printString(std::string arg);
 std::string getMethodName(const Function *func);
 bool endswith(std::string str, std::string suffix);
-void generateModuleDef(const StructType *STy, FILE *OStr);
 const StructType *findThisArgument(const Function *func);
 void preprocessModule(Module *Mod);
 std::string GetValueName(const Value *Operand);
@@ -143,8 +179,9 @@ void recursiveDelete(Value *V);
 void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName);
 void dumpMemoryRegions(int arg);
 void generateClasses(FILE *OStrV, FILE *OStrVH);
-void metaGenerate(const StructType *STy, FILE *OStr);
+void metaGenerate(ModuleIR *IR, FILE *OStr);
 bool isActionMethod(const Function *func);
 ClassMethodTable *getClass(const StructType *STy);
 bool isInterface(const StructType *STy);
-std::string cleanupValue(std::string arg);
+void generateModuleDef(ModuleIR *IR, FILE *OStr);
+void generateModuleIR(ModuleIR *IR, const StructType *STy);

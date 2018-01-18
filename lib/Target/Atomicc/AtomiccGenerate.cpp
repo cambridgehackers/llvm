@@ -25,6 +25,7 @@ using namespace llvm;
 #define MODULE_ARROW MODULE_SEPARATOR
 #define MODULE_DOT   MODULE_SEPARATOR
 
+std::map<const StructType *, ModuleIR *> moduleMap;
 static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
@@ -38,9 +39,6 @@ static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
-std::map<const Function *,std::list<StoreListElement>> storeList;
-std::map<const Function *,std::list<const Instruction *>> functionList;
-std::map<const Function *,std::list<CallListElement>> callList;
 static std::string globalMethodName;
 
 static INTMAP_TYPE predText[] = {
@@ -114,7 +112,7 @@ static bool isAddressExposed(const Value *V)
  */
 std::string fieldName(const StructType *STy, uint64_t ind)
 {
-    return getClass(STy)->fieldName[ind];
+    return getClass(STy)->IR->fieldName[ind];
 }
 
 bool isInterface(const StructType *STy)
@@ -130,7 +128,6 @@ bool isActionMethod(const Function *func)
 static void checkClass(const StructType *STy, const StructType *ActSTy)
 {
     ClassMethodTable *table = getClass(STy);
-    //ClassMethodTable *atable = getClass(ActSTy);
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
         const Type *element = *I;
@@ -152,6 +149,11 @@ ClassMethodTable *getClass(const StructType *STy)
         ClassMethodTable *table = new ClassMethodTable;
         classCreate[STy] = table;
         classCreate[STy]->STy = STy;
+        ModuleIR *IR = new ModuleIR;
+        moduleMap[STy] = IR;
+        table->IR = IR;
+        IR->table = table;
+        IR->name = getStructName(STy);
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
         int processSequence = 0; // seq=0 -> fields
@@ -179,9 +181,9 @@ ClassMethodTable *getClass(const StructType *STy)
             idx = ret.find(':');
 //printf("[%s:%d] sequence %d ret %s idx %d\n", __FUNCTION__, __LINE__, processSequence, ret.c_str(), idx);
             if (processSequence == 0)
-                table->fieldName[fieldSub++] = ret;
+                IR->fieldName[fieldSub++] = ret;
             else if (processSequence == 2)
-                table->softwareName[ret] = 1;
+                IR->softwareName[ret] = 1;
             else if (processSequence == 3) {
                 int ind = ret.find(":");
                 std::string source = ret.substr(ind+1);
@@ -202,7 +204,7 @@ ClassMethodTable *getClass(const StructType *STy)
                             if (const StructType *STyI = dyn_cast<StructType>(PTy->getElementType()))
                             if (targetInterface == fieldName(STyE, Idx)) {
 printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
-                                table->interfaceConnect.push_back(InterfaceConnectType{target, source, STyI});
+                                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyI)->IR});
                                 goto nextInterface;
                             }
                         }
@@ -1013,7 +1015,7 @@ restart:
                                 if (Idx == eleIndex)
                                 if (ClassMethodTable *table = getClass(STy))
                                     if (table->replaceType[Idx]) {
-                                        Values_size = table->replaceCount[Idx];
+                                        Values_size = table->IR->replaceCount[Idx];
 printf("[%s:%d] get dyn size (static not handled) %d\n", __FUNCTION__, __LINE__, Values_size);
 if (Values_size < 0 || Values_size > 100) Values_size = 2;
                                         //II->getParent()->dump();
@@ -1063,8 +1065,9 @@ if (Values_size < 0 || Values_size > 100) Values_size = 2;
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processClass(ClassMethodTable *table)
+static void processClass(ModuleIR *IR)
 {
+ClassMethodTable *table = IR->table;
     for (auto FI : table->method) {
         globalMethodName = FI.first;
         const Function *func = FI.second;
@@ -1097,7 +1100,7 @@ static void processClass(ClassMethodTable *table)
                     std::string dest = printOperand(SI->getPointerOperand(), true);
                     if (dest[0] == '&')
                         dest = dest.substr(1);
-                    storeList[func].push_back(StoreListElement{dest, value, tempCond,
+                    IR->method[globalMethodName]->storeList.push_back(StoreListElement{dest, value, tempCond,
                          isAlloca(SI->getPointerOperand())});
                     std::string pdest = printOperand(SI->getPointerOperand(), true);
                     if (pdest[0] == '&')
@@ -1110,7 +1113,7 @@ static void processClass(ClassMethodTable *table)
                 case Instruction::Ret:
                     if (!II->getNumOperands())
                         break;
-                    functionList[func].push_back(II);
+                    IR->method[globalMethodName]->functionList.push_back(II);
                     temp += valsep;
                     valsep = "";
                     if (tempCond != "")
@@ -1126,14 +1129,14 @@ static void processClass(ClassMethodTable *table)
                         condStr = " & " + tempCond;
                     appendList(MetaInvoke, value.substr(0,value.find("{")));
                     if (II->getType() == Type::getVoidTy(II->getContext()))
-                        callList[func].push_back(CallListElement{value, condStr,
+                        IR->method[globalMethodName]->callList.push_back(CallListElement{value, condStr,
                             isActionMethod(cast<CallInst>(II)->getCalledFunction())});
                     break;
                     }
                 }
             }
         }
-        table->guard[func] = temp;
+        table->IR->method[globalMethodName]->guard = temp;
     }
 }
 
@@ -1195,14 +1198,37 @@ void generateClasses(FILE *OStrV, FILE *OStrVH)
         structAlpha[getStructName(current.first)] = current.first;
     for (auto item : structAlpha)
         if (item.second)
+{
+auto STy = item.second;
+        if (STy->getName().substr(0, 6) == "module"
+        || STy->getName().substr(0, 7) == "emodule"
+        || STy->getName().substr(0, 9) == "interface") {
+            ClassMethodTable *table = getClass(STy);
+        }
             getDepend(item.second);
+}
     for (auto STy : structSeq) {
+        ClassMethodTable *table = getClass(STy);
+        for (auto FI : table->method) {
+            globalMethodName = FI.first;
+            const Function *func = FI.second;
+            MethodInfo *MI = new MethodInfo{""};
+            table->IR->method[globalMethodName] = MI;
+            if (!table->IR->ruleFunctions[globalMethodName.substr(0, globalMethodName.length()-5)]) {
+                MI->retArrRange = verilogArrRange(func->getReturnType());
+                MI->action = isActionMethod(func);
+                auto AI = func->arg_begin(), AE = func->arg_end();
+                for (AI++; AI != AE; ++AI)
+                    MI->params.push_back(ParamElement{verilogArrRange(AI->getType()), AI->getName()});
+            }
+        }
         if (STy->getName().substr(0, 6) == "module") {
-            processClass(getClass(STy));
+            processClass(table->IR);
+            generateModuleIR(table->IR, STy);
             // now generate the verilog header file '.vh'
-            metaGenerate(STy, OStrVH);
+            metaGenerate(table->IR, OStrVH);
             // Only generate verilog for modules derived from Module
-            generateModuleDef(STy, OStrV);
+            generateModuleDef(table->IR, OStrV);
         }
     }
 }

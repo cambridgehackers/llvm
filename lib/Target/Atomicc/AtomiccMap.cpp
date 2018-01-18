@@ -214,11 +214,11 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                     if (p >= info.p && (size_t)p < ((size_t)info.p + info.size)) {
                     if (checkDerived(info.type, PTy)) {
                         getClass(STy)->replaceType[Idx] = info.type;
-                        getClass(STy)->replaceCount[Idx] = info.vecCount;
+                        getClass(STy)->IR->replaceCount[Idx] = info.vecCount;
                         //if (trace_map)
                             printf("%s: pointerFound %p info.STy %s count %d\n", __FUNCTION__, p, info.STy->getName().str().c_str(), (int)info.vecCount);
                         if (STy == info.STy) {
-                            getClass(STy)->allocateLocally[Idx] = true;
+                            getClass(STy)->IR->allocateLocally[Idx] = true;
                             inlineReferences(Mod, STy, Idx, info.type);
                             getClass(STy)->replaceType[Idx] = cast<PointerType>(info.type)->getElementType();
                             setInterface = 0;
