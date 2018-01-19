@@ -108,17 +108,14 @@ typedef struct {
 } FieldElement;
 
 typedef struct ModuleIR {
-    std::string name;
+    int                               sequence;
+    std::string                       name;
     std::list<std::string>            metaList;
-    std::map<int, std::string>        fieldName;
     std::map<std::string, int>        softwareName;
     std::map<std::string, MethodInfo *> method;
     std::list<OutcallInterface>       outcall;
     std::map<std::string, bool>       ruleFunctions;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
-    std::string                       instance;
-    std::map<int, uint64_t>           replaceCount;
-    std::map<int, bool>               allocateLocally;
     std::list<FieldElement>           fields;
     std::list<InterfaceConnectType>   interfaceConnect;
 } ModuleIR;
@@ -126,8 +123,10 @@ typedef struct ModuleIR {
 class ClassMethodTable {
 public:
     const StructType                  *STy;
+    std::map<int, std::string>        fieldName;
     std::map<std::string, const Function *> method;
     std::map<int, const Type *>       replaceType;
+    std::map<int, uint64_t>           replaceCount;
     std::map<std::string, FuncInfo>   funcMap;
     ModuleIR* IR;
     ClassMethodTable() {}
@@ -182,5 +181,5 @@ bool isActionMethod(const Function *func);
 ClassMethodTable *getClass(const StructType *STy);
 bool isInterface(const StructType *STy);
 void generateModuleDef(ModuleIR *IR, FILE *OStr);
-void generateModuleIR(ModuleIR *IR, const StructType *STy);
+void generateModuleIR(ModuleIR *IR, FILE *OStr);
 std::string cleanupValue(std::string arg);

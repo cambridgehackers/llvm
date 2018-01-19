@@ -11,100 +11,53 @@
 //
 //===----------------------------------------------------------------------===//
 #include <stdio.h>
-#include "llvm/IR/Instructions.h"
 #include "llvm/ADT/StringExtras.h"
 
 using namespace llvm;
 
 #include "AtomiccDecl.h"
 
-
-static uint64_t sizeType(const Type *Ty)
-{
-    //const DataLayout *TD = EE->getDataLayout();
-    switch (Ty->getTypeID()) {
-    case Type::IntegerTyID:
-        return cast<IntegerType>(Ty)->getBitWidth();
-    case Type::StructTyID: {
-        //unsigned NumBits = TD->getTypeAllocSize(Ty) * 8;
-        const StructType *STy = cast<StructType>(Ty);
-        uint64_t len = 0;
-        int Idx = 0;
-        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-            if (fieldName(STy, Idx) != "")
-                len += sizeType(*I);
-        }
-        return len;
-        }
-    case Type::ArrayTyID: {
-        const ArrayType *ATy = cast<ArrayType>(Ty);
-        unsigned len = ATy->getNumElements();
-        if (len == 0) len = 1;
-        return len * sizeType(ATy->getElementType());
-        }
-    case Type::PointerTyID:
-        return sizeType(cast<PointerType>(Ty)->getElementType());
-    case Type::VoidTyID:
-        return 0;
-    case Type::FunctionTyID:
-    default:
-        llvm_unreachable("Unhandled case in sizeType!");
-    }
-}
-
-std::string verilogArrRange(const Type *Ty)
-{
-    uint64_t NumBits = sizeType(Ty);
-
-    if (NumBits > 1)
-        return "[" + utostr(NumBits - 1) + ":0]";
-    return "";
-}
-
 /*
  * Generate Module info into IR
  */
-void generateModuleIR(ModuleIR *IR, const StructType *STy)
+void generateModuleIR(ModuleIR *IR, FILE *OStr)
 {
-    ClassMethodTable *table = getClass(STy);
-
-    for (auto FI : table->method) {
-        std::string methodName = FI.first;
-        const Function *func = FI.second;
-        MethodInfo *MI = new MethodInfo{""};
-        IR->method[methodName] = MI;
-        if (!IR->ruleFunctions[methodName.substr(0, methodName.length()-5)]) {
-            MI->retArrRange = verilogArrRange(func->getReturnType());
-            MI->action = isActionMethod(func);
-            auto AI = func->arg_begin(), AE = func->arg_end();
-            for (AI++; AI != AE; ++AI)
-                MI->params.push_back(ParamElement{verilogArrRange(AI->getType()), AI->getName()});
-        }
+    static const char *metaName[] = {"METANONE", "METAREAD", "METAWRITE", "METAINVOKE"};
+    fprintf(OStr, "MODULE %s = %d (\n", IR->name.c_str(), IR->sequence);
+    for (auto item: IR->softwareName)
+        if (item.second)
+            fprintf(OStr, "    SOFTWARE %s\n", item.first.c_str());
+    for (auto item: IR->outcall)
+        fprintf(OStr, "    OUTCALL %s = %d\n", item.fldName.c_str(), item.IR->sequence);
+    for (auto item: IR->ruleFunctions)
+        if (item.second)
+            fprintf(OStr, "    RULE %s\n", item.first.c_str());
+    for (auto item: IR->priority)
+        fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
+    for (auto item: IR->interfaceConnect)
+        fprintf(OStr, "    INTERFACECONNECT %s=%s, IR=%d\n", item.target.c_str(), item.source.c_str(), item.IR->sequence);
+    for (auto item: IR->fields)
+        fprintf(OStr, "    FIELD %s VEC %lld RANGE %s IR %d PTR %d TYPE %s\n", item.fldName.c_str(),
+            item.vecCount, item.arrRange.c_str(), item.iIR ? item.iIR->sequence : -1,
+            item.isPtr, item.typeStr.c_str());
+    for (auto item: IR->method) {
+        MethodInfo *MI = item.second;
+        fprintf(OStr, "    METHOD %s %d %s = %s(\n", item.first.c_str(), MI->action,
+             MI->retArrRange.c_str(), MI->guard.c_str());
+        for (auto litem: MI->params)
+            fprintf(OStr, "        PARAM %s %s\n",
+                litem.name.c_str(), litem.arrRange.c_str());
+        for (auto litem: MI->storeList)
+            fprintf(OStr, "        STORE %s, %s, %s\n",
+                litem.dest.c_str(), litem.value.c_str(), litem.cond.c_str());
+        for (auto litem: MI->callList)
+            fprintf(OStr, "        CALL %s, %s, %d\n",
+                litem.value.c_str(), litem.cond.c_str(), litem.isAction);
+        for (int index = MetaRead; index != MetaMax; index++)
+            for (auto litem: MI->meta.list[index])
+                for (auto sitem: litem.second)
+                    fprintf(OStr, "        %s %s %s\n", metaName[index], litem.first.c_str(), sitem.c_str());
+        fprintf(OStr, "    )\n");
     }
-    // generate local state element declarations
-    int Idx = 0;
-    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        std::string fldName = fieldName(STy, Idx);
-        const Type *element = *I;
-        int64_t vecCount = -1;
-        int dimIndex = 0;
-        if (const Type *newType = table->replaceType[Idx]) {
-            element = newType;
-            vecCount = IR->replaceCount[Idx];
-        }
-        if (fldName == "")
-            continue;
-        if (const PointerType *PTy = dyn_cast<PointerType>(element))
-        if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
-        if (isInterface(iSTy))
-            IR->outcall.push_back(OutcallInterface{fldName, getClass(iSTy)->IR});
-        if (const StructType *STy = dyn_cast<StructType>(element))
-            IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, "", false});
-        else if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
-            if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
-                IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, "", true});
-        }
-        else
-            IR->fields.push_back(FieldElement{fldName, vecCount, "", nullptr, printType(element, false, "@", "", "", false), false});
-    }
+    fprintf(OStr, ")\n");
 }

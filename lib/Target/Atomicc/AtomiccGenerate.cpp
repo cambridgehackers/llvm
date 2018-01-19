@@ -25,7 +25,6 @@ using namespace llvm;
 #define MODULE_ARROW MODULE_SEPARATOR
 #define MODULE_DOT   MODULE_SEPARATOR
 
-std::map<const StructType *, ModuleIR *> moduleMap;
 static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
@@ -111,7 +110,7 @@ static bool isAddressExposed(const Value *V)
  */
 std::string fieldName(const StructType *STy, uint64_t ind)
 {
-    return getClass(STy)->IR->fieldName[ind];
+    return getClass(STy)->fieldName[ind];
 }
 
 bool isInterface(const StructType *STy)
@@ -141,6 +140,7 @@ static void checkClass(const StructType *STy, const StructType *ActSTy)
     }
 }
 
+static int moduleSequence = 1;
 ClassMethodTable *getClass(const StructType *STy)
 {
     int fieldSub = 0;
@@ -149,7 +149,7 @@ ClassMethodTable *getClass(const StructType *STy)
         classCreate[STy] = table;
         classCreate[STy]->STy = STy;
         ModuleIR *IR = new ModuleIR;
-        moduleMap[STy] = IR;
+        IR->sequence = moduleSequence++;
         table->IR = IR;
         IR->name = getStructName(STy);
         int len = STy->structFieldMap.length();
@@ -179,7 +179,7 @@ ClassMethodTable *getClass(const StructType *STy)
             idx = ret.find(':');
 //printf("[%s:%d] sequence %d ret %s idx %d\n", __FUNCTION__, __LINE__, processSequence, ret.c_str(), idx);
             if (processSequence == 0)
-                IR->fieldName[fieldSub++] = ret;
+                table->fieldName[fieldSub++] = ret;
             else if (processSequence == 2)
                 IR->softwareName[ret] = 1;
             else if (processSequence == 3) {
@@ -1013,7 +1013,7 @@ restart:
                                 if (Idx == eleIndex)
                                 if (ClassMethodTable *table = getClass(STy))
                                     if (table->replaceType[Idx]) {
-                                        Values_size = table->IR->replaceCount[Idx];
+                                        Values_size = table->replaceCount[Idx];
 printf("[%s:%d] get dyn size (static not handled) %d\n", __FUNCTION__, __LINE__, Values_size);
 if (Values_size < 0 || Values_size > 100) Values_size = 2;
                                         //II->getParent()->dump();
@@ -1067,6 +1067,48 @@ std::string cleanupValue(std::string arg)
     return arg;
 }
 
+static uint64_t sizeType(const Type *Ty)
+{
+    //const DataLayout *TD = EE->getDataLayout();
+    switch (Ty->getTypeID()) {
+    case Type::IntegerTyID:
+        return cast<IntegerType>(Ty)->getBitWidth();
+    case Type::StructTyID: {
+        //unsigned NumBits = TD->getTypeAllocSize(Ty) * 8;
+        const StructType *STy = cast<StructType>(Ty);
+        uint64_t len = 0;
+        int Idx = 0;
+        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+            if (fieldName(STy, Idx) != "")
+                len += sizeType(*I);
+        }
+        return len;
+        }
+    case Type::ArrayTyID: {
+        const ArrayType *ATy = cast<ArrayType>(Ty);
+        unsigned len = ATy->getNumElements();
+        if (len == 0) len = 1;
+        return len * sizeType(ATy->getElementType());
+        }
+    case Type::PointerTyID:
+        return sizeType(cast<PointerType>(Ty)->getElementType());
+    case Type::VoidTyID:
+        return 0;
+    case Type::FunctionTyID:
+    default:
+        llvm_unreachable("Unhandled case in sizeType!");
+    }
+}
+
+std::string verilogArrRange(const Type *Ty)
+{
+    uint64_t NumBits = sizeType(Ty);
+
+    if (NumBits > 1)
+        return "[" + utostr(NumBits - 1) + ":0]";
+    return "";
+}
+
 /*
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
@@ -1075,8 +1117,9 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
 {
     for (auto FI : table->method) {
         std::string methodName = FI.first;
-        MethodInfo *MI = IR->method[methodName];
         const Function *func = FI.second;
+        MethodInfo *MI = new MethodInfo{""};
+        IR->method[methodName] = MI;
         // promote guards from contained calls to be guards for this function
         processPromote(const_cast<Function *>(func));
         NextAnonValueNumber = 0;
@@ -1143,6 +1186,38 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
             }
         }
         MI->guard = cleanupValue(temp);
+        //if (!IR->ruleFunctions[methodName.substr(0, methodName.length()-5)]) {
+            MI->retArrRange = verilogArrRange(func->getReturnType());
+            MI->action = isActionMethod(func);
+            auto AI = func->arg_begin(), AE = func->arg_end();
+            for (AI++; AI != AE; ++AI)
+                MI->params.push_back(ParamElement{verilogArrRange(AI->getType()), AI->getName()});
+        //}
+    }
+    // generate local state element declarations
+    int Idx = 0;
+    for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
+        std::string fldName = fieldName(table->STy, Idx);
+        const Type *element = *I;
+        int64_t vecCount = -1;
+        if (const Type *newType = table->replaceType[Idx]) {
+            element = newType;
+            vecCount = table->replaceCount[Idx];
+        }
+        if (fldName == "")
+            continue;
+        if (const PointerType *PTy = dyn_cast<PointerType>(element))
+        if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
+        if (isInterface(iSTy))
+            IR->outcall.push_back(OutcallInterface{fldName, getClass(iSTy)->IR});
+        if (const StructType *STy = dyn_cast<StructType>(element))
+            IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, "", false});
+        else if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
+            if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
+                IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, "", true});
+        }
+        else
+            IR->fields.push_back(FieldElement{fldName, vecCount, "", nullptr, printType(element, false, "@", "", "", false), false});
     }
 }
 
@@ -1207,9 +1282,10 @@ void generateClasses(FILE *OStrV, FILE *OStrVH)
             getDepend(item.second);
     for (auto STy : structSeq) {
         ClassMethodTable *table = getClass(STy);
-        generateModuleIR(table->IR, STy);
-        if (STy->getName().substr(0, 6) == "module") {
-            processClass(table, table->IR);
+        processClass(table, table->IR);
+        if (0)
+            generateModuleIR(table->IR, OStrV);
+        else if (STy->getName().substr(0, 6) == "module") {
             // now generate the verilog header file '.vh'
             metaGenerate(table->IR, OStrVH);
             // Only generate verilog for modules derived from Module
