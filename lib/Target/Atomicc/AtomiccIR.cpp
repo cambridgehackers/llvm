@@ -62,115 +62,50 @@ std::string verilogArrRange(const Type *Ty)
 }
 
 /*
- * Generate verilog module header for class definition or reference
- */
-static void generateModuleSignature(const StructType *STy, std::string instance)
-{
-    ClassMethodTable *table = getClass(STy);
-    int Idx = 0;
-    for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-        std::string fldName = fieldName(STy, Idx);
-        const Type *element = *I;
-        if (const Type *newType = table->replaceType[Idx])
-            element = newType;
-        const PointerType *PTy = dyn_cast<PointerType>(element);
-        if (fldName == "" || !PTy)
-            continue;
-        const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType());
-        if (isInterface(iSTy))
-            table->IR->outcall[instance].push_back(OutcallInterface{fldName + MODULE_SEPARATOR, getClass(iSTy)->IR});
-    }
-}
-
-static std::string cleanupValue(std::string arg)
-{
-    int ind;
-    while((ind = arg.find("{}")) > 0)
-        arg = arg.substr(0, ind) + arg.substr(ind+2); // remove '{}'
-    return arg;
-}
-
-/*
  * Generate Module info into IR
  */
 void generateModuleIR(ModuleIR *IR, const StructType *STy)
 {
-    std::list<std::string> alwaysLines, resetList;
-    ClassMethodTable *table = IR->table;
-    for (auto FI : IR->method) {
-        FI.second->guard = cleanupValue(FI.second->guard);
-    }
+    ClassMethodTable *table = getClass(STy);
 
-    generateModuleSignature(STy, "");
-    // generate local state element declarations
-    // generate wires for internal methods RDY/ENA.  Collect state element assignments
-    // from each method
     for (auto FI : table->method) {
         std::string methodName = FI.first;
-        MethodInfo *MI = table->IR->method[methodName];
-        std::string rdyName = methodName.substr(0, methodName.length()-5) + "__RDY";
-        if (endswith(methodName, "__VALID"))
-            rdyName = methodName.substr(0, methodName.length()-7) + "__READY";
-        for (auto info: MI->callList) {
-            std::string tempCond = methodName + "_internal" + info.cond;
-            std::string rval = info.value; // get call info
-            int ind = rval.find("{");
-            std::string calledName = rval.substr(0, ind);
-            rval = rval.substr(ind+1);
-            rval = cleanupValue(rval.substr(0, rval.length()-1));
-            //if (info.isAction)
-                //muxEnableList.push_back(MuxEnableEntry{tempCond, calledName});
-            while(rval.length()) {
-                std::string rest;
-                int ind = rval.find(",");
-                if (ind > 0) {
-                    rest = rval.substr(ind+1);
-                    rval = rval.substr(0, ind);
-                }
-                ind = rval.find(";");
-                std::string paramValue;
-                if (ind > 0) {
-                    paramValue = rval.substr(ind+1);
-                    rval = rval.substr(0, ind);
-                }
-                //muxValueList[rval].push_back(MuxValueEntry{tempCond, paramValue});
-                rval = rest;
-            }
+        const Function *func = FI.second;
+        MethodInfo *MI = new MethodInfo{""};
+        IR->method[methodName] = MI;
+        if (!IR->ruleFunctions[methodName.substr(0, methodName.length()-5)]) {
+            MI->retArrRange = verilogArrRange(func->getReturnType());
+            MI->action = isActionMethod(func);
+            auto AI = func->arg_begin(), AE = func->arg_end();
+            for (AI++; AI != AE; ++AI)
+                MI->params.push_back(ParamElement{verilogArrRange(AI->getType()), AI->getName()});
         }
     }
     // generate local state element declarations
     int Idx = 0;
     for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+        std::string fldName = fieldName(STy, Idx);
         const Type *element = *I;
         int64_t vecCount = -1;
         int dimIndex = 0;
         std::string vecDim;
         if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
-            vecCount = table->IR->replaceCount[Idx];
+            vecCount = IR->replaceCount[Idx];
         }
+        if (const PointerType *PTy = dyn_cast<PointerType>(element))
+        if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
+        if (fldName != "" && isInterface(iSTy))
+            IR->outcall.push_back(OutcallInterface{fldName, getClass(iSTy)->IR});
         do {
         std::string fldName = fieldName(STy, Idx);
         if (fldName != "") {
             if (vecCount != -1)
                 fldName += utostr(dimIndex++);
-            if (const StructType *STy = dyn_cast<StructType>(element)) {
-                std::string structName = getStructName(STy);
-                if (structName.substr(0,12) == "l_struct_OC_") {
-                    IR->fields.push_back(FieldElement{fldName, vecCount, structName, verilogArrRange(element), nullptr, ""});
-                    //fprintf(OStr, "    reg%s %s;\n", verilogArrRange(element).c_str(), fldName.c_str());
-                    //resetList.push_back(fldName);
-                }
-                else if (!isInterface(STy)) {
-                    IR->fields.push_back(FieldElement{fldName, vecCount, structName, "", getClass(STy)->IR, ""});
-                    generateModuleSignature(STy, fldName);
-                }
-            }
-            else if (!dyn_cast<PointerType>(element)) {
-                IR->fields.push_back(FieldElement{fldName, vecCount, "", "", nullptr, printType(element, false, fldName, "", "", false)});
-                //fprintf(OStr, "    %s;\n", printType(element, false, fldName, "", "", false).c_str());
-                //resetList.push_back(fldName);
-            }
+            if (const StructType *STy = dyn_cast<StructType>(element))
+                IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, ""});
+            else if (!dyn_cast<PointerType>(element))
+                IR->fields.push_back(FieldElement{fldName, vecCount, "", nullptr, printType(element, false, fldName, "", "", false)});
         }
         } while(vecCount-- > 0);
     }

@@ -39,7 +39,6 @@ static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 Module *globalMod;
-static std::string globalMethodName;
 
 static INTMAP_TYPE predText[] = {
     {FCmpInst::FCMP_FALSE, "false"}, {FCmpInst::FCMP_OEQ, "oeq"},
@@ -152,7 +151,6 @@ ClassMethodTable *getClass(const StructType *STy)
         ModuleIR *IR = new ModuleIR;
         moduleMap[STy] = IR;
         table->IR = IR;
-        IR->table = table;
         IR->name = getStructName(STy);
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
@@ -573,13 +571,13 @@ return "";
         prefix = "";
     }
     if (trace_call || fname == "")
-        printf("CALL: CALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+        printf("CALL: CALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
         fname = "[ERROR_" + calledName + "_ERROR]";
         //exit(-1);
     }
     if (calledName == "printf") {
-        //printf("CALL: PRINTFCALLER %s func %s[%p] pcalledFunction '%s' fname %s\n", globalMethodName.c_str(), calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+        //printf("CALL: PRINTFCALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf{" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ",";
     }
@@ -1061,15 +1059,23 @@ if (Values_size < 0 || Values_size > 100) Values_size = 2;
     }
 }
 
+std::string cleanupValue(std::string arg)
+{
+    int ind;
+    while((ind = arg.find("{}")) > 0)
+        arg = arg.substr(0, ind) + arg.substr(ind+2); // remove '{}'
+    return arg;
+}
+
 /*
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processClass(ModuleIR *IR)
+static void processClass(ClassMethodTable *table, ModuleIR *IR)
 {
-ClassMethodTable *table = IR->table;
     for (auto FI : table->method) {
-        globalMethodName = FI.first;
+        std::string methodName = FI.first;
+        MethodInfo *MI = IR->method[methodName];
         const Function *func = FI.second;
         // promote guards from contained calls to be guards for this function
         processPromote(const_cast<Function *>(func));
@@ -1100,7 +1106,7 @@ ClassMethodTable *table = IR->table;
                     std::string dest = printOperand(SI->getPointerOperand(), true);
                     if (dest[0] == '&')
                         dest = dest.substr(1);
-                    IR->method[globalMethodName]->storeList.push_back(StoreListElement{dest, value, tempCond,
+                    MI->storeList.push_back(StoreListElement{dest, value, tempCond,
                          isAlloca(SI->getPointerOperand())});
                     std::string pdest = printOperand(SI->getPointerOperand(), true);
                     if (pdest[0] == '&')
@@ -1113,7 +1119,7 @@ ClassMethodTable *table = IR->table;
                 case Instruction::Ret:
                     if (!II->getNumOperands())
                         break;
-                    IR->method[globalMethodName]->functionList.push_back(II);
+                    MI->functionList.push_back(II);
                     temp += valsep;
                     valsep = "";
                     if (tempCond != "")
@@ -1129,14 +1135,14 @@ ClassMethodTable *table = IR->table;
                         condStr = " & " + tempCond;
                     appendList(MetaInvoke, value.substr(0,value.find("{")));
                     if (II->getType() == Type::getVoidTy(II->getContext()))
-                        IR->method[globalMethodName]->callList.push_back(CallListElement{value, condStr,
+                        MI->callList.push_back(CallListElement{value, condStr,
                             isActionMethod(cast<CallInst>(II)->getCalledFunction())});
                     break;
                     }
                 }
             }
         }
-        table->IR->method[globalMethodName]->guard = temp;
+        MI->guard = cleanupValue(temp);
     }
 }
 
@@ -1198,35 +1204,14 @@ void generateClasses(FILE *OStrV, FILE *OStrVH)
         structAlpha[getStructName(current.first)] = current.first;
     for (auto item : structAlpha)
         if (item.second)
-{
-auto STy = item.second;
-        if (STy->getName().substr(0, 6) == "module"
-        || STy->getName().substr(0, 7) == "emodule"
-        || STy->getName().substr(0, 9) == "interface") {
-            ClassMethodTable *table = getClass(STy);
-        }
             getDepend(item.second);
-}
     for (auto STy : structSeq) {
         ClassMethodTable *table = getClass(STy);
-        for (auto FI : table->method) {
-            globalMethodName = FI.first;
-            const Function *func = FI.second;
-            MethodInfo *MI = new MethodInfo{""};
-            table->IR->method[globalMethodName] = MI;
-            if (!table->IR->ruleFunctions[globalMethodName.substr(0, globalMethodName.length()-5)]) {
-                MI->retArrRange = verilogArrRange(func->getReturnType());
-                MI->action = isActionMethod(func);
-                auto AI = func->arg_begin(), AE = func->arg_end();
-                for (AI++; AI != AE; ++AI)
-                    MI->params.push_back(ParamElement{verilogArrRange(AI->getType()), AI->getName()});
-            }
-        }
+        generateModuleIR(table->IR, STy);
         if (STy->getName().substr(0, 6) == "module") {
-            processClass(table->IR);
-            generateModuleIR(table->IR, STy);
+            processClass(table, table->IR);
             // now generate the verilog header file '.vh'
-            metaGenerate(table->IR, OStrVH);
+            metaGenerate(table, table->IR, OStrVH);
             // Only generate verilog for modules derived from Module
             generateModuleDef(table->IR, OStrV);
         }

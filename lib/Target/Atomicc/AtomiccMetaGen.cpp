@@ -26,9 +26,9 @@ static std::string gatherList(MetaData *bm, int listIndex)
     return temp;
 }
 
-void metaGenerate(ModuleIR *IR, FILE *OStr)
+void metaGenerate(ClassMethodTable *table, ModuleIR *IR, FILE *OStr)
 {
-    const StructType *STy = IR->table->STy;
+    const StructType *STy = table->STy;
     //std::string name = IR->name;
     std::map<std::string, int> exclusiveSeen;
 
@@ -40,7 +40,7 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
         int64_t vecCount = -1;
         int dimIndex = 0;
         std::string vecDim;
-        if (const Type *newType = IR->table->replaceType[Idx]) {
+        if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = IR->replaceCount[Idx];
         }
@@ -62,7 +62,7 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
         }
         } while(vecCount-- > 0);
     }
-    for (auto FI : IR->table->method) {
+    for (auto FI : table->method) {
         std::string mname = FI.first;
         const Function *func = FI.second;
         std::string temp = IR->method[mname]->guard;
@@ -80,9 +80,9 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
             std::map<std::string,std::string> metaBefore;
             std::map<std::string,std::string> metaConflict;
             std::map<const Function *, std::string> methodArray;
-            for (auto innerFI : IR->table->method)
+            for (auto innerFI : table->method)
                 methodArray[innerFI.second] = innerFI.first;
-            for (auto innerFI : IR->table->method) {
+            for (auto innerFI : table->method) {
                 const Function *innerfunc = innerFI.second;
                 std::string innermname = methodArray[innerfunc];
                 MetaData *innerbm = &funcMetaMap[innerfunc];
@@ -141,6 +141,7 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
         std::string tname = item.target;
         std::string sname = item.source;
 printf("[%s:%d] METACONNECT %s %s\n", __FUNCTION__, __LINE__, tname.c_str(), sname.c_str());
+#if 0
         int Idx = 0;
         const StructType *SS = item.IR->table->STy;
         for (auto I = SS->element_begin(), E = SS->element_end(); I != E; ++I, Idx++) {
@@ -156,6 +157,7 @@ printf("[%s:%d] METACONNECT %s %s\n", __FUNCTION__, __LINE__, tname.c_str(), sna
                 IR->metaList.push_back("//METACONNECT; " + tname + MODULE_SEPARATOR + fname + "; " + sname + MODULE_SEPARATOR + fname);
             }
         }
+#endif
     }
     for (auto item : IR->priority)
         IR->metaList.push_back("//METAPRIORITY; " + item.first + "; " + item.second);

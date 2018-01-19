@@ -93,29 +93,26 @@ typedef struct {
 } MethodInfo;
 
 typedef struct {
-    std::string elementName;
+    std::string      fldName;
     struct ModuleIR *IR;
 } OutcallInterface;
 
 typedef struct {
     std::string fldName;
     int64_t     vecCount;
-    std::string structName;
     std::string arrRange;
     struct ModuleIR *iIR;
     std::string typeStr;
 } FieldElement;
 
-class ClassMethodTable;
 typedef struct ModuleIR {
     std::string name;
-    ClassMethodTable *table;
     std::list<std::string>            metaList;
     std::map<int, std::string>        fieldName;
     std::map<std::string, int>        softwareName;
     std::map<std::string, MethodInfo *> method;
-    std::map<std::string, std::list<OutcallInterface>> outcall;
-    std::map<std::string, bool> ruleFunctions;
+    std::list<OutcallInterface>       outcall;
+    std::map<std::string, bool>       ruleFunctions;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::string                       instance;
     std::map<int, uint64_t>           replaceCount;
@@ -179,9 +176,10 @@ void recursiveDelete(Value *V);
 void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName);
 void dumpMemoryRegions(int arg);
 void generateClasses(FILE *OStrV, FILE *OStrVH);
-void metaGenerate(ModuleIR *IR, FILE *OStr);
+void metaGenerate(ClassMethodTable *table, ModuleIR *IR, FILE *OStr);
 bool isActionMethod(const Function *func);
 ClassMethodTable *getClass(const StructType *STy);
 bool isInterface(const StructType *STy);
 void generateModuleDef(ModuleIR *IR, FILE *OStr);
 void generateModuleIR(ModuleIR *IR, const StructType *STy);
+std::string cleanupValue(std::string arg);

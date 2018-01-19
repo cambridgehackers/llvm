@@ -11,7 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 #include <stdio.h>
-#include "llvm/IR/Instructions.h"
 #include "llvm/ADT/StringExtras.h"
 
 using namespace llvm;
@@ -90,15 +89,14 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
         if (IR->ruleFunctions[methodName.substr(0, methodName.length()-5)])
             continue;
         std::string wparam = inp + methodName;
-        std::string arrRange = MI->retArrRange;
         if (instance != "") {
             // define 'wire' elements before instantiating instance
             if (inlineValue(wparam, false) == "")
-                wireList.push_back(arrRange + wparam);
+                wireList.push_back(MI->retArrRange + wparam);
             wparam = inlineValue(wparam, true);
         }
         else if (!MI->action)
-            wparam = outp + arrRange + methodName;
+            wparam = outp + MI->retArrRange + methodName;
         modulePortList.push_back(wparam);
         for (auto item: MI->params) {
             if (instance != "") {
@@ -115,21 +113,15 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     }
 
     // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
-    for (auto oitem: IR->outcall[instance]) {
-std::string elementName = oitem.elementName;
+    for (auto oitem: IR->outcall)
         for (auto FI : oitem.IR->method) {
             MethodInfo *MI = oitem.IR->method[FI.first];
-            std::string wparam = outp;
-//printf("[%s:%d] outcall methodName %s\n", __FUNCTION__, __LINE__, FI.first.c_str());
-            if (!MI->action)
-                wparam = inp + (instance == "" ? MI->retArrRange :"");
-            modulePortList.push_back(wparam + elementName + FI.first);
-            for (auto item: MI->params) {
+            modulePortList.push_back((MI->action ? outp : inp + (instance == "" ? MI->retArrRange :""))
+                + oitem.fldName + MODULE_SEPARATOR + FI.first);
+            for (auto item: MI->params)
                 modulePortList.push_back(outp + (instance == "" ? item.arrRange :"")
-                   + elementName + item.name);
-            }
+                   + oitem.fldName + MODULE_SEPARATOR + item.name);
         }
-    }
 
     // now write actual module signature to output file
     for (auto wname: wireList)
@@ -150,14 +142,6 @@ std::string elementName = oitem.elementName;
     for (auto item: IR->softwareName) {
         fprintf(OStr, "// software: %s\n", item.first.c_str());
     }
-}
-
-static std::string cleanupValue(std::string arg)
-{
-    int ind;
-    while((ind = arg.find("{}")) > 0)
-        arg = arg.substr(0, ind) + arg.substr(ind+2); // remove '{}'
-    return arg;
 }
 
 typedef struct {
@@ -273,16 +257,17 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     }
     // generate local state element declarations
     for (auto item: IR->fields) {
-         if (item.structName.substr(0,12) == "l_struct_OC_") {
-             fprintf(OStr, "    reg%s %s;\n", item.arrRange.c_str(), item.fldName.c_str());
+         if (item.typeStr != "") {
+             fprintf(OStr, "    %s;\n", item.typeStr.c_str());
              resetList.push_back(item.fldName);
          }
          else if (item.iIR) {
-             generateModuleSignature(OStr, item.iIR, item.fldName);
-         }
-         else if (item.typeStr != "") {
-             fprintf(OStr, "    %s;\n", item.typeStr.c_str());
-             resetList.push_back(item.fldName);
+             if (item.iIR->name.substr(0,12) == "l_struct_OC_") {
+                 fprintf(OStr, "    reg%s %s;\n", item.arrRange.c_str(), item.fldName.c_str());
+                 resetList.push_back(item.fldName);
+             }
+             else if (item.iIR->name.substr(0, 12) != "l_ainterface")
+                 generateModuleSignature(OStr, item.iIR, item.fldName);
          }
     }
     // generate 'assign' items
