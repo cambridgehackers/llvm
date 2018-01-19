@@ -83,13 +83,14 @@ typedef struct {
 } ParamElement;
 
 typedef struct {
-    std::string guard;
+    std::string                guard;
     std::list<StoreListElement> storeList;
     std::list<const Instruction *> functionList;
     std::list<CallListElement> callList;
-    std::string retArrRange;
-    bool        action;
-    std::list<ParamElement> params;
+    std::string                retArrRange;
+    bool                       action;
+    std::list<ParamElement>    params;
+    MetaData                   meta;
 } MethodInfo;
 
 typedef struct {
@@ -103,6 +104,7 @@ typedef struct {
     std::string arrRange;
     struct ModuleIR *iIR;
     std::string typeStr;
+    bool        isPtr;
 } FieldElement;
 
 typedef struct ModuleIR {
@@ -149,7 +151,6 @@ extern std::map<const Function *, const Function *> ruleENAFunction;
 extern std::list<MEMORY_REGION> memoryRegion;
 extern int trace_pair;
 extern Module *globalMod;
-extern std::map<const Function *, MetaData> funcMetaMap;
 
 void constructAddressMap(Module *Mod);
 std::string fieldName(const StructType *STy, uint64_t ind);
@@ -176,7 +177,7 @@ void recursiveDelete(Value *V);
 void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName);
 void dumpMemoryRegions(int arg);
 void generateClasses(FILE *OStrV, FILE *OStrVH);
-void metaGenerate(ClassMethodTable *table, ModuleIR *IR, FILE *OStr);
+void metaGenerate(ModuleIR *IR, FILE *OStr);
 bool isActionMethod(const Function *func);
 ClassMethodTable *getClass(const StructType *STy);
 bool isInterface(const StructType *STy);

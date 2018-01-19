@@ -257,18 +257,27 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     }
     // generate local state element declarations
     for (auto item: IR->fields) {
-         if (item.typeStr != "") {
-             fprintf(OStr, "    %s;\n", item.typeStr.c_str());
-             resetList.push_back(item.fldName);
-         }
-         else if (item.iIR) {
-             if (item.iIR->name.substr(0,12) == "l_struct_OC_") {
-                 fprintf(OStr, "    reg%s %s;\n", item.arrRange.c_str(), item.fldName.c_str());
-                 resetList.push_back(item.fldName);
-             }
-             else if (item.iIR->name.substr(0, 12) != "l_ainterface")
-                 generateModuleSignature(OStr, item.iIR, item.fldName);
-         }
+        int64_t vecCount = item.vecCount;
+        int dimIndex = 0;
+        do {
+            std::string fldName = item.fldName;
+            if (vecCount != -1)
+                fldName += utostr(dimIndex++);
+            if (item.typeStr != "") {
+                int ind = item.typeStr.find("@");
+                fprintf(OStr, "    %s;\n",
+                    (item.typeStr.substr(0, ind) + fldName + item.typeStr.substr(ind+1)).c_str());
+                resetList.push_back(fldName);
+            }
+            else if (item.iIR && !item.isPtr) {
+                if (item.iIR->name.substr(0,12) == "l_struct_OC_") {
+                    fprintf(OStr, "    reg%s %s;\n", item.arrRange.c_str(), fldName.c_str());
+                    resetList.push_back(fldName);
+                }
+                else if (item.iIR->name.substr(0, 12) != "l_ainterface")
+                    generateModuleSignature(OStr, item.iIR, fldName);
+            }
+        } while(vecCount-- > 0);
     }
     // generate 'assign' items
     for (auto item: assignList)

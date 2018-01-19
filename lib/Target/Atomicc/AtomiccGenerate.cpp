@@ -1088,8 +1088,8 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
             std::string tempCond = getCondStr(const_cast<BasicBlock *>(&*BI));
             auto appendList = [&](int listIndex, std::string item) -> void {
                   if (tempCond == "")
-                      funcMetaMap[func].list[listIndex][item].clear();
-                  funcMetaMap[func].list[listIndex][item].insert(tempCond);
+                      MI->meta.list[listIndex][item].clear();
+                  MI->meta.list[listIndex][item].insert(tempCond);
               };
             for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
                 const Instruction *II = &*IIb;
@@ -1211,7 +1211,7 @@ void generateClasses(FILE *OStrV, FILE *OStrVH)
         if (STy->getName().substr(0, 6) == "module") {
             processClass(table, table->IR);
             // now generate the verilog header file '.vh'
-            metaGenerate(table, table->IR, OStrVH);
+            metaGenerate(table->IR, OStrVH);
             // Only generate verilog for modules derived from Module
             generateModuleDef(table->IR, OStrV);
         }

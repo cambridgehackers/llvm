@@ -88,25 +88,23 @@ void generateModuleIR(ModuleIR *IR, const StructType *STy)
         const Type *element = *I;
         int64_t vecCount = -1;
         int dimIndex = 0;
-        std::string vecDim;
         if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = IR->replaceCount[Idx];
         }
+        if (fldName == "")
+            continue;
         if (const PointerType *PTy = dyn_cast<PointerType>(element))
         if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
-        if (fldName != "" && isInterface(iSTy))
+        if (isInterface(iSTy))
             IR->outcall.push_back(OutcallInterface{fldName, getClass(iSTy)->IR});
-        do {
-        std::string fldName = fieldName(STy, Idx);
-        if (fldName != "") {
-            if (vecCount != -1)
-                fldName += utostr(dimIndex++);
-            if (const StructType *STy = dyn_cast<StructType>(element))
-                IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, ""});
-            else if (!dyn_cast<PointerType>(element))
-                IR->fields.push_back(FieldElement{fldName, vecCount, "", nullptr, printType(element, false, fldName, "", "", false)});
+        if (const StructType *STy = dyn_cast<StructType>(element))
+            IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, "", false});
+        else if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
+            if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
+                IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, "", true});
         }
-        } while(vecCount-- > 0);
+        else
+            IR->fields.push_back(FieldElement{fldName, vecCount, "", nullptr, printType(element, false, "@", "", "", false), false});
     }
 }
