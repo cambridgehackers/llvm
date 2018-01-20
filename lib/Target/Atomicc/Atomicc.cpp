@@ -83,17 +83,7 @@ bool AtomiccWriter::runOnModule(Module &M)
 
     // Walk the list of all classes referenced in the IR image,
     // recursively generating cpp class and verilog module definitions
-    std::string myName = OutputDir;
-    int ind = myName.rfind('/');
-    if (ind > 0)
-        myName = myName.substr(0, ind);
-    myName += "_GENERATED_";
-    FILE *OStrV = fopen((OutputDir + ".generated.v").c_str(), "w");
-    FILE *OStrVH = fopen((OutputDir + ".generated.vh").c_str(), "w");
-    fprintf(OStrV, "`include \"%s.generated.vh\"\n\n", OutputDir.c_str());
-    fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
-    generateClasses(OStrV, OStrVH);
-    fprintf(OStrVH, "`endif\n");
+    generateClasses(OutputDir);
     return false;
 }
 

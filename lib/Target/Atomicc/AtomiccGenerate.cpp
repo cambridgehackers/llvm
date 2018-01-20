@@ -1273,8 +1273,18 @@ static void getDepend(const StructType *STy)
     }
 }
 
-void generateClasses(FILE *OStrV, FILE *OStrVH)
+void generateClasses(std::string OutputDir)
 {
+    std::string myName = OutputDir;
+    int ind = myName.rfind('/');
+    if (ind > 0)
+        myName = myName.substr(0, ind);
+    myName += "_GENERATED_";
+    FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
+    FILE *OStrV = fopen((OutputDir + ".generated.v").c_str(), "w");
+    FILE *OStrVH = fopen((OutputDir + ".generated.vh").c_str(), "w");
+    fprintf(OStrV, "`include \"%s.generated.vh\"\n\n", OutputDir.c_str());
+    fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
     for (auto current : classCreate)
         structAlpha[getStructName(current.first)] = current.first;
     for (auto item : structAlpha)
@@ -1283,13 +1293,13 @@ void generateClasses(FILE *OStrV, FILE *OStrVH)
     for (auto STy : structSeq) {
         ClassMethodTable *table = getClass(STy);
         processClass(table, table->IR);
-        if (0)
-            generateModuleIR(table->IR, OStrV);
-        else if (STy->getName().substr(0, 6) == "module") {
+        generateModuleIR(table->IR, OStrIR);
+        if (STy->getName().substr(0, 6) == "module") {
             // now generate the verilog header file '.vh'
             metaGenerate(table->IR, OStrVH);
             // Only generate verilog for modules derived from Module
             generateModuleDef(table->IR, OStrV);
         }
     }
+    fprintf(OStrVH, "`endif\n");
 }

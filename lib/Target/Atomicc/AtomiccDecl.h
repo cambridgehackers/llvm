@@ -175,7 +175,7 @@ void prepareReplace(const Value *olda, Value *newa);
 void recursiveDelete(Value *V);
 void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName);
 void dumpMemoryRegions(int arg);
-void generateClasses(FILE *OStrV, FILE *OStrVH);
+void generateClasses(std::string OutputDir);
 void metaGenerate(ModuleIR *IR, FILE *OStr);
 bool isActionMethod(const Function *func);
 ClassMethodTable *getClass(const StructType *STy);
