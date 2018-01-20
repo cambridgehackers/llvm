@@ -22,7 +22,7 @@ using namespace llvm;
  */
 void generateModuleIR(ModuleIR *IR, FILE *OStr)
 {
-    static const char *metaName[] = {"METANONE", "METAREAD", "METAWRITE", "METAINVOKE"};
+    static std::string metaName[] = {"METANONE", "METAREAD ", "METAINVOKE "};
     fprintf(OStr, "MODULE %s = %d (\n", IR->name.c_str(), IR->sequence);
     for (auto item: IR->softwareName)
         if (item.second)
@@ -36,28 +36,52 @@ void generateModuleIR(ModuleIR *IR, FILE *OStr)
         fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
     for (auto item: IR->interfaceConnect)
         fprintf(OStr, "    INTERFACECONNECT %s=%s, IR=%d\n", item.target.c_str(), item.source.c_str(), item.IR->sequence);
-    for (auto item: IR->fields)
-        fprintf(OStr, "    FIELD %s VEC %lld RANGE %s IR %d PTR %d TYPE %s\n", item.fldName.c_str(),
-            item.vecCount, item.arrRange.c_str(), item.iIR ? item.iIR->sequence : -1,
-            item.isPtr, item.typeStr.c_str());
+    for (auto item: IR->fields) {
+        std::string temp;
+        if (item.IR)
+            temp = utostr(item.IR->sequence) + ":";
+        std::string vecCount;
+        if (item.vecCount != -1)
+            vecCount = " VEC " + utostr(item.vecCount);
+        std::string range = item.arrRange;
+        if (range != "")
+            range = " RANGE " + range;
+        fprintf(OStr, "    FIELD %s%s %s%s%s FORMAT %s\n", temp.c_str(), item.fldName.c_str(),
+            item.isPtr ? "PTR ": "", vecCount.c_str(), range.c_str(), item.typeStr.c_str());
+    }
     for (auto item: IR->method) {
+        std::list<std::string> mlines;
         MethodInfo *MI = item.second;
-        fprintf(OStr, "    METHOD %s %d %s = %s(\n", item.first.c_str(), MI->action,
-             MI->retArrRange.c_str(), MI->guard.c_str());
+        std::string guard = MI->guard;
+        if (guard != "")
+            guard = " = (" + guard + ")";
+        std::string range = MI->retArrRange;
+        if (range != "")
+            range = "RANGE " + range;
+        fprintf(OStr, "    METHOD %s%s %s%s", MI->action ? "Action ":"", item.first.c_str(), range.c_str(), guard.c_str());
         for (auto litem: MI->params)
-            fprintf(OStr, "        PARAM %s %s\n",
-                litem.name.c_str(), litem.arrRange.c_str());
-        for (auto litem: MI->storeList)
-            fprintf(OStr, "        STORE %s, %s, %s\n",
-                litem.dest.c_str(), litem.value.c_str(), litem.cond.c_str());
+            mlines.push_back("PARAM " + litem.name + " " + litem.arrRange);
+        for (auto litem: MI->storeList) {
+            std::string alloc;
+            if (litem.isAlloca)
+                alloc = "Alloca ";
+            mlines.push_back("STORE " + alloc + litem.cond + ":" + litem.dest + " = " + litem.value);
+        }
         for (auto litem: MI->callList)
-            fprintf(OStr, "        CALL %s, %s, %d\n",
-                litem.value.c_str(), litem.cond.c_str(), litem.isAction);
+            mlines.push_back("CALL " + std::string(litem.isAction ? "Action ":"")
+                + litem.cond + ":" + litem.value);
+
         for (int index = MetaRead; index != MetaMax; index++)
-            for (auto litem: MI->meta.list[index])
+            for (auto litem: MI->meta[index])
                 for (auto sitem: litem.second)
-                    fprintf(OStr, "        %s %s %s\n", metaName[index], litem.first.c_str(), sitem.c_str());
-        fprintf(OStr, "    )\n");
+                    mlines.push_back(metaName[index] + litem.first + " " + sitem);
+        if (mlines.size())
+            fprintf(OStr, " (");
+        fprintf(OStr, "\n");
+        for (auto line: mlines)
+             fprintf(OStr, "        %s\n", line.c_str());
+        if (mlines.size())
+            fprintf(OStr, "    )\n");
     }
     fprintf(OStr, ")\n");
 }

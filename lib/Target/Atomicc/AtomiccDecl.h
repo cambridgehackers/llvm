@@ -41,8 +41,6 @@
 
 #define GIANT_SIZE 1024
 
-enum {MetaNone, MetaRead, MetaWrite, MetaInvoke, MetaMax};
-
 typedef struct {
     int value;
     const char *name;
@@ -54,15 +52,9 @@ typedef struct {
     struct ModuleIR *IR;
 } InterfaceConnectType;
 
-typedef std::map<std::string,std::set<std::string>> MetaRef;
-typedef struct {
-    MetaRef list[MetaMax];
-} MetaData;
+enum {MetaNone, MetaRead, MetaInvoke, MetaMax};
 
-typedef struct {
-    std::string fname;
-    Function   *func;
-} FuncInfo;
+typedef std::map<std::string,std::set<std::string>> MetaRef;
 
 typedef struct {
     std::string dest;
@@ -84,13 +76,12 @@ typedef struct {
 
 typedef struct {
     std::string                guard;
+    bool                       action;
     std::list<StoreListElement> storeList;
-    std::list<const Instruction *> functionList;
     std::list<CallListElement> callList;
     std::string                retArrRange;
-    bool                       action;
     std::list<ParamElement>    params;
-    MetaData                   meta;
+    MetaRef                    meta[MetaMax];
 } MethodInfo;
 
 typedef struct {
@@ -102,7 +93,7 @@ typedef struct {
     std::string fldName;
     int64_t     vecCount;
     std::string arrRange;
-    struct ModuleIR *iIR;
+    struct ModuleIR *IR;
     std::string typeStr;
     bool        isPtr;
 } FieldElement;
@@ -119,6 +110,11 @@ typedef struct ModuleIR {
     std::list<FieldElement>           fields;
     std::list<InterfaceConnectType>   interfaceConnect;
 } ModuleIR;
+
+typedef struct {
+    std::string fname;
+    Function   *func;
+} FuncInfo;
 
 class ClassMethodTable {
 public:

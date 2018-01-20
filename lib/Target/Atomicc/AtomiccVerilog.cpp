@@ -193,7 +193,10 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             }
         }
         for (auto info: IR->method[methodName]->callList) {
-            std::string tempCond = methodName + "_internal" + info.cond;
+            std::string tempCond = info.cond;
+            if (tempCond != "")
+                tempCond = " & " + tempCond;
+            tempCond = methodName + "_internal" + tempCond;
             std::string rval = info.value; // get call info
             int ind = rval.find("{");
             std::string calledName = rval.substr(0, ind);
@@ -269,13 +272,13 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
                     (item.typeStr.substr(0, ind) + fldName + item.typeStr.substr(ind+1)).c_str());
                 resetList.push_back(fldName);
             }
-            else if (item.iIR && !item.isPtr) {
-                if (item.iIR->name.substr(0,12) == "l_struct_OC_") {
+            else if (item.IR && !item.isPtr) {
+                if (item.IR->name.substr(0,12) == "l_struct_OC_") {
                     fprintf(OStr, "    reg%s %s;\n", item.arrRange.c_str(), fldName.c_str());
                     resetList.push_back(fldName);
                 }
-                else if (item.iIR->name.substr(0, 12) != "l_ainterface")
-                    generateModuleSignature(OStr, item.iIR, fldName);
+                else if (item.IR->name.substr(0, 12) != "l_ainterface")
+                    generateModuleSignature(OStr, item.IR, fldName);
             }
         } while(vecCount-- > 0);
     }

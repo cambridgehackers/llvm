@@ -1118,21 +1118,22 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
     for (auto FI : table->method) {
         std::string methodName = FI.first;
         const Function *func = FI.second;
+        if (trace_function || trace_call)
+            printf("PROCESSING %s %s\n", func->getName().str().c_str(), methodName.c_str());
         MethodInfo *MI = new MethodInfo{""};
         IR->method[methodName] = MI;
+        MI->action = isActionMethod(func);
         // promote guards from contained calls to be guards for this function
         processPromote(const_cast<Function *>(func));
         NextAnonValueNumber = 0;
-        if (trace_function || trace_call)
-            printf("PROCESSING %s %s\n", func->getName().str().c_str(), FI.first.c_str());
         /* Gather data for top level instructions in each basic block. */
         std::string temp, valsep;
         for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
             std::string tempCond = getCondStr(const_cast<BasicBlock *>(&*BI));
             auto appendList = [&](int listIndex, std::string item) -> void {
                   if (tempCond == "")
-                      MI->meta.list[listIndex][item].clear();
-                  MI->meta.list[listIndex][item].insert(tempCond);
+                      MI->meta[listIndex][item].clear();
+                  MI->meta[listIndex][item].insert(tempCond);
               };
             for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
                 const Instruction *II = &*IIb;
@@ -1151,18 +1152,11 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
                         dest = dest.substr(1);
                     MI->storeList.push_back(StoreListElement{dest, value, tempCond,
                          isAlloca(SI->getPointerOperand())});
-                    std::string pdest = printOperand(SI->getPointerOperand(), true);
-                    if (pdest[0] == '&')
-                        pdest = pdest.substr(1);
-                    if (!isAlloca(SI->getPointerOperand()))
-                        appendList(MetaWrite, pdest);
-                    printOperand(II->getOperand(0), false); // force evaluation to get metadata
                     break;
                     }
                 case Instruction::Ret:
                     if (!II->getNumOperands())
                         break;
-                    MI->functionList.push_back(II);
                     temp += valsep;
                     valsep = "";
                     if (tempCond != "")
@@ -1173,26 +1167,23 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
                 case Instruction::Call: { // can have value
                     if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
                         break;
-                    std::string condStr, value = printCall(II);
-                    if (tempCond != "")
-                        condStr = " & " + tempCond;
+                    std::string value = printCall(II);
                     appendList(MetaInvoke, value.substr(0,value.find("{")));
                     if (II->getType() == Type::getVoidTy(II->getContext()))
-                        MI->callList.push_back(CallListElement{value, condStr,
+                        MI->callList.push_back(CallListElement{value, tempCond,
                             isActionMethod(cast<CallInst>(II)->getCalledFunction())});
                     break;
                     }
                 }
             }
         }
+        if (table->STy->getName().substr(0, 6) != "module")
+            temp = "";
         MI->guard = cleanupValue(temp);
-        //if (!IR->ruleFunctions[methodName.substr(0, methodName.length()-5)]) {
-            MI->retArrRange = verilogArrRange(func->getReturnType());
-            MI->action = isActionMethod(func);
-            auto AI = func->arg_begin(), AE = func->arg_end();
-            for (AI++; AI != AE; ++AI)
-                MI->params.push_back(ParamElement{verilogArrRange(AI->getType()), AI->getName()});
-        //}
+        MI->retArrRange = verilogArrRange(func->getReturnType());
+        auto AI = func->arg_begin(), AE = func->arg_end();
+        for (AI++; AI != AE; ++AI)
+            MI->params.push_back(ParamElement{verilogArrRange(AI->getType()), AI->getName()});
     }
     // generate local state element declarations
     int Idx = 0;
