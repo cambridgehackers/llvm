@@ -290,91 +290,31 @@ const StructType *findThisArgument(const Function *func)
     return findThisArgumentType(func->getType(), false);
 }
 
-/*
- * Output type declarations.  Note that each case in the switch statement
- * is different for verilog and cpp.
- */
 std::string printType(const Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr)
 {
     std::string sep, cbuffer = prefix, sp = (isSigned?"signed":"unsigned");
     int thisId = Ty->getTypeID();
     switch (thisId) {
-    case Type::VoidTyID:
-        cbuffer += "VERILOG_void " + NameSoFar;
-        break;
     case Type::IntegerTyID: {
         unsigned NumBits = cast<IntegerType>(Ty)->getBitWidth();
-if (NumBits != 1 && NumBits != 8 && NumBits != 32 && NumBits != 64) {
-printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
-}
+        if (NumBits != 1 && NumBits != 8 && NumBits != 32 && NumBits != 64) {
+             printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
+        }
         assert(NumBits <= 128 && "Bit widths > 128 not implemented yet");
         if (NumBits == 1)
             cbuffer += "VERILOG_bool";
         else if (NumBits <= 8) {
-            if (ptr)
-                cbuffer += sp + " VERILOG_char";
-            else
                 cbuffer += "reg";
         }
-        else if (NumBits <= 16)
-            cbuffer += sp + " VERILOG_short";
-        else if (NumBits <= 32)
-            //cbuffer += sp + " VERILOG_int";
+        else
             cbuffer += "reg" + verilogArrRange(Ty);
-        else if (NumBits <= 64)
-            cbuffer += sp + " VERILOG_long long";
         cbuffer += " " + NameSoFar;
-        break;
-        }
-    case Type::FunctionTyID: {
-        const FunctionType *FTy = cast<FunctionType>(Ty);
-        const Type *retType = FTy->getReturnType();
-        auto AI = FTy->param_begin(), AE = FTy->param_end();
-        bool structRet = AI != AE && (*AI) != Type::getInt8PtrTy(globalMod->getContext());
-        if (structRet) {  //FTy->hasStructRetAttr()
-//printf("[%s:%d] structret\n", __FUNCTION__, __LINE__);
-//exit(-1);
-            if (auto PTy = dyn_cast<PointerType>(*AI))
-                retType = PTy->getElementType();
-            AI++;
-        }
-
-        std::string tstr = " (" + NameSoFar + ") (";
-        for (;AI != AE; ++AI) {
-            Type *element = *AI;
-            if (sep != "")
-            if (auto PTy = dyn_cast<PointerType>(element))
-                element = PTy->getElementType();
-            tstr += printType(element, /*isSigned=*/false, "", sep, "", false);
-            sep = ", ";
-        }
-        if (FTy->isVarArg()) {
-            if (!FTy->getNumParams())
-                tstr += " VERILOG_int"; //dummy argument for empty vaarg functs
-            tstr += ", ...";
-        } else if (!FTy->getNumParams())
-            tstr += "VERILOG_void";
-        cbuffer += printType(retType, /*isSigned=*/false, tstr + ')', "", "", false);
-        break;
-        }
-    case Type::StructTyID: {
-        const StructType *STy = cast<StructType>(Ty);
-        cbuffer += getStructName(STy) + " " + NameSoFar;
         break;
         }
     case Type::ArrayTyID: {
         const ArrayType *ATy = cast<ArrayType>(Ty);
         unsigned len = ATy->getNumElements();
-        if (len == 0) len = 1;
         cbuffer += printType(ATy->getElementType(), false, "", "", "", false) + NameSoFar + "[" + utostr(len) + "]";
-        break;
-        }
-    case Type::PointerTyID: {
-        const PointerType *PTy = cast<PointerType>(Ty);
-        std::string ptrName = "*" + NameSoFar;
-        if (PTy->getElementType()->isArrayTy() || PTy->getElementType()->isVectorTy())
-            ptrName = "(" + ptrName + ")";
-        cbuffer += printType(PTy->getElementType(), false, ptrName, "", "", true);
         break;
         }
     default:
@@ -427,8 +367,7 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
     std::string referstr = printOperand(Ptr, false);
 
     Total = getGEPOffset(&LastIndexIsVector, I, E);
-    if (LastIndexIsVector)
-        cbuffer += printType(PointerType::getUnqual(LastIndexIsVector->getElementType()), false, "", "((", ")(", false);
+    ERRORIF(LastIndexIsVector);
     if (trace_gep)
         printf("[%s:%d] referstr %s Total %ld\n", __FUNCTION__, __LINE__, referstr.c_str(), (unsigned long)Total);
     if (Total == -1) {
