@@ -336,7 +336,7 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
         enaName = tempName + "$" + utostr(counter++);
     table->IR->ruleFunctions[enaName] = true;
     if (trace_pair)
-        printf("[%s:%d] name %s size %d ena %s rdy %s\n", __FUNCTION__, __LINE__, enaName.c_str(), aenaFunc->arg_size(), enaFunc->getName().str().c_str(), rdyFunc->getName().str().c_str());
+        printf("[%s:%d] name %s size %ld ena %s rdy %s\n", __FUNCTION__, __LINE__, enaName.c_str(), aenaFunc->arg_size(), enaFunc->getName().str().c_str(), rdyFunc->getName().str().c_str());
     pushPair(enaFunc, enaName + "__ENA", rdyFunc, enaName + "__RDY");
 }
 

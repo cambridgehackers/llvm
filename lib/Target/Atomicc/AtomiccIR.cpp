@@ -37,38 +37,37 @@ void generateModuleIR(ModuleIR *IR, FILE *OStr)
     for (auto item: IR->interfaceConnect)
         fprintf(OStr, "    INTERFACECONNECT %s=%s, IR=%d\n", item.target.c_str(), item.source.c_str(), item.IR->sequence);
     for (auto item: IR->fields) {
-        std::string temp;
+        std::string irstr;
         if (item.IR)
-            temp = utostr(item.IR->sequence) + ":";
-        std::string vecCount;
+            irstr = utostr(item.IR->sequence) + ":";
+        std::string temp = item.fldName;
         if (item.vecCount != -1)
-            vecCount = " VEC " + utostr(item.vecCount);
-        std::string range = item.arrRange;
-        if (range != "")
-            range = " RANGE " + range;
-        fprintf(OStr, "    FIELD %s%s %s%s%s FORMAT %s\n", temp.c_str(), item.fldName.c_str(),
-            item.isPtr ? "PTR ": "", vecCount.c_str(), range.c_str(), item.typeStr.c_str());
+            temp += " VEC " + utostr(item.vecCount);
+        if (item.arrRange != "")
+            temp += " RANGE " + item.arrRange;
+        if (item.typeStr != "")
+            temp += " FORMAT " + item.typeStr;
+        fprintf(OStr, "    FIELD%s %s%s\n", item.isPtr ? "/PTR ": "", irstr.c_str(), temp.c_str());
     }
     for (auto item: IR->method) {
         std::list<std::string> mlines;
         MethodInfo *MI = item.second;
-        std::string guard = MI->guard;
-        if (guard != "")
-            guard = " = (" + guard + ")";
-        std::string range = MI->retArrRange;
-        if (range != "")
-            range = "RANGE " + range;
-        fprintf(OStr, "    METHOD %s%s %s%s", MI->action ? "Action ":"", item.first.c_str(), range.c_str(), guard.c_str());
+        std::string temp = item.first;
+        if (MI->retArrRange != "")
+            temp += " RANGE " + MI->retArrRange;
+        if (MI->guard != "")
+            temp += " = (" + MI->guard + ")";
+        fprintf(OStr, "    METHOD%s%s", MI->action ? "/Action ":" ", temp.c_str());
         for (auto litem: MI->params)
             mlines.push_back("PARAM " + litem.name + " " + litem.arrRange);
         for (auto litem: MI->storeList) {
-            std::string alloc;
+            std::string alloc = " ";
             if (litem.isAlloca)
-                alloc = "Alloca ";
-            mlines.push_back("STORE " + alloc + litem.cond + ":" + litem.dest + " = " + litem.value);
+                alloc = "/Alloca ";
+            mlines.push_back("STORE" + alloc + litem.cond + ":" + litem.dest + " = " + litem.value);
         }
         for (auto litem: MI->callList)
-            mlines.push_back("CALL " + std::string(litem.isAction ? "Action ":"")
+            mlines.push_back("CALL" + std::string(litem.isAction ? "/Action ":" ")
                 + litem.cond + ":" + litem.value);
 
         for (int index = MetaRead; index != MetaMax; index++)

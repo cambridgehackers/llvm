@@ -980,7 +980,7 @@ restart:
                 for (SwitchInst::CaseIt CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
                     BasicBlock *caseBB = CI->getCaseSuccessor();
                     int64_t val = CI->getCaseValue()->getZExtValue();
-                    printf("[%s:%d] [%ld] = %s\n", __FUNCTION__, __LINE__, val, caseBB?caseBB->getName().str().c_str():"NONE");
+                    printf("[%s:%d] [%lld] = %s\n", __FUNCTION__, __LINE__, val, caseBB?caseBB->getName().str().c_str():"NONE");
                     if (getCondStr(caseBB) == "") { // 'true' condition
                         IRBuilder<> cbuilder(caseBB);
                         Instruction *TI = caseBB->getTerminator();
