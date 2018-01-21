@@ -61,12 +61,6 @@ int i;
     printf("\n");
 }
 
-bool endswith(std::string str, std::string suffix)
-{
-    int skipl = str.length() - suffix.length();
-    return skipl >= 0 && str.substr(skipl) == suffix;
-}
-
 std::string ucName(std::string inname)
 {
     if (inname.length() && inname[0] >= 'a' && inname[0] <= 'z')

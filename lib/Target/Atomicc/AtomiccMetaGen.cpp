@@ -10,11 +10,7 @@
 // This file implements zzz
 //
 //===----------------------------------------------------------------------===//
-#include "llvm/IR/Instructions.h"
-
-using namespace llvm;
-
-#include "AtomiccDecl.h"
+#include "AtomiccIR.h"
 
 void metaGenerate(ModuleIR *IR, FILE *OStr)
 {
@@ -29,7 +25,7 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
         do {
             std::string fldName = item.fldName;
             if (vecCount != -1)
-                fldName += utostr(dimIndex++);
+                fldName += autostr(dimIndex++);
             if (item.isPtr)
                 metaList.push_back("//METAEXTERNAL; " + fldName + "; " + item.IR->name + ";");
             else if (item.IR->name.substr(0,12) != "l_struct_OC_"

@@ -10,12 +10,7 @@
 // This file implements zzz
 //
 //===----------------------------------------------------------------------===//
-#include <stdio.h>
-#include "llvm/ADT/StringExtras.h"
-
-using namespace llvm;
-
-#include "AtomiccDecl.h"
+#include "AtomiccIR.h"
 
 static int dontInlineValues;//=1;
 
@@ -265,7 +260,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
         do {
             std::string fldName = item.fldName;
             if (vecCount != -1)
-                fldName += utostr(dimIndex++);
+                fldName += autostr(dimIndex++);
             if (item.typeStr != "") {
                 int ind = item.typeStr.find("@");
                 fprintf(OStr, "    %s;\n",

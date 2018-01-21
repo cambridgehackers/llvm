@@ -998,14 +998,6 @@ if (Values_size < 0 || Values_size > 100) Values_size = 2;
     }
 }
 
-std::string cleanupValue(std::string arg)
-{
-    int ind;
-    while((ind = arg.find("{}")) > 0)
-        arg = arg.substr(0, ind) + arg.substr(ind+2); // remove '{}'
-    return arg;
-}
-
 static uint64_t sizeType(const Type *Ty)
 {
     //const DataLayout *TD = EE->getDataLayout();

@@ -180,7 +180,7 @@ static ModuleIR *lookupIR(std::string ind)
         return nullptr;
     int index = atoi(ind.c_str());
     ModuleIR *ret = mapIndex[index];
-    ParseCheck(ret != NULL, "lookupIR = " + utostr(index) + " not found");
+    ParseCheck(ret != NULL, "lookupIR = " + autostr(index) + " not found");
     return ret;
 }
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)

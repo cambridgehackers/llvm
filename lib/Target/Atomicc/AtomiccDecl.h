@@ -27,7 +27,7 @@
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/Instructions.h"
 
-#define MODULE_SEPARATOR "$"
+#include "AtomiccIR.h"
 
 #define MAX_BASIC_BLOCK_FLAGS 0x10
 #define MAX_CHAR_BUFFER 1000
@@ -40,77 +40,11 @@
       }}
 
 #define GIANT_SIZE 1024
-#define MAX_READ_LINE 1024
 
 typedef struct {
     int value;
     const char *name;
 } INTMAP_TYPE;
-
-typedef struct {
-    std::string target;
-    std::string source;
-    struct ModuleIR *IR;
-} InterfaceConnectType;
-
-enum {MetaNone, MetaRead, MetaInvoke, MetaMax};
-
-typedef std::map<std::string,std::set<std::string>> MetaRef;
-
-typedef struct {
-    std::string dest;
-    std::string value;
-    std::string cond;
-    bool        isAlloca;
-} StoreListElement;
-
-typedef struct {
-    std::string value;
-    std::string cond;
-    bool isAction;
-} CallListElement;
-
-typedef struct {
-    std::string arrRange;
-    std::string name;
-} ParamElement;
-
-typedef struct {
-    std::string                guard;
-    bool                       action;
-    std::list<StoreListElement> storeList;
-    std::list<CallListElement> callList;
-    std::string                retArrRange;
-    std::list<ParamElement>    params;
-    MetaRef                    meta[MetaMax];
-} MethodInfo;
-
-typedef struct {
-    std::string      fldName;
-    struct ModuleIR *IR;
-} OutcallInterface;
-
-typedef struct {
-    std::string fldName;
-    int64_t     vecCount;
-    std::string arrRange;
-    struct ModuleIR *IR;
-    std::string typeStr;
-    bool        isPtr;
-} FieldElement;
-
-typedef struct ModuleIR {
-    int                               sequence;
-    std::string                       name;
-    std::list<std::string>            metaList;
-    std::map<std::string, int>        softwareName;
-    std::map<std::string, MethodInfo *> method;
-    std::list<OutcallInterface>       outcall;
-    std::map<std::string, bool>       ruleFunctions;
-    std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
-    std::list<FieldElement>           fields;
-    std::list<InterfaceConnectType>   interfaceConnect;
-} ModuleIR;
 
 typedef struct {
     std::string fname;
@@ -137,8 +71,6 @@ typedef  struct {
     uint64_t   vecCount;
 } MEMORY_REGION;
 
-extern std::map<const StructType *, ModuleIR *> moduleMap;
-
 typedef std::map<std::string, int> StringMapType;
 
 extern ExecutionEngine *EE;
@@ -163,7 +95,6 @@ Instruction *cloneTree(const Instruction *I, Instruction *insertPoint);
 void prepareClone(Instruction *TI, const Function *SourceF);
 std::string printString(std::string arg);
 std::string getMethodName(const Function *func);
-bool endswith(std::string str, std::string suffix);
 const StructType *findThisArgument(const Function *func);
 void preprocessModule(Module *Mod);
 std::string GetValueName(const Value *Operand);
@@ -179,5 +110,4 @@ ClassMethodTable *getClass(const StructType *STy);
 bool isInterface(const StructType *STy);
 void generateModuleDef(ModuleIR *IR, FILE *OStr);
 void generateModuleIR(ModuleIR *IR, bool isModule, FILE *OStr);
-std::string cleanupValue(std::string arg);
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);
