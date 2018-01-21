@@ -1281,16 +1281,20 @@ void generateClasses(std::string OutputDir)
     for (auto item : structAlpha)
         if (item.second)
             getDepend(item.second);
+    std::list<ModuleIR *> irSeq;
     for (auto STy : structSeq) {
         ClassMethodTable *table = getClass(STy);
         processClass(table, table->IR);
-        generateModuleIR(table->IR, OStrIR);
-        if (STy->getName().substr(0, 6) == "module") {
-            // now generate the verilog header file '.vh'
-            metaGenerate(table->IR, OStrVH);
-            // Only generate verilog for modules derived from Module
-            generateModuleDef(table->IR, OStrV);
-        }
+        generateModuleIR(table->IR, STy->getName().substr(0, 6) == "module", OStrIR);
+    }
+    fclose(OStrIR);
+    FILE *OStrIRread = fopen((OutputDir + ".generated.IR").c_str(), "r");
+    readModuleIR(irSeq, OStrIRread);
+    for (auto irItem : irSeq) {
+        // now generate the verilog header file '.vh'
+        metaGenerate(irItem, OStrVH);
+        // Only generate verilog for modules derived from Module
+        generateModuleDef(irItem, OStrV);
     }
     fprintf(OStrVH, "`endif\n");
 }

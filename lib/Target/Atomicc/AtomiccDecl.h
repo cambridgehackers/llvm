@@ -40,6 +40,7 @@
       }}
 
 #define GIANT_SIZE 1024
+#define MAX_READ_LINE 1024
 
 typedef struct {
     int value;
@@ -177,5 +178,6 @@ bool isActionMethod(const Function *func);
 ClassMethodTable *getClass(const StructType *STy);
 bool isInterface(const StructType *STy);
 void generateModuleDef(ModuleIR *IR, FILE *OStr);
-void generateModuleIR(ModuleIR *IR, FILE *OStr);
+void generateModuleIR(ModuleIR *IR, bool isModule, FILE *OStr);
 std::string cleanupValue(std::string arg);
+void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);
