@@ -290,40 +290,6 @@ const StructType *findThisArgument(const Function *func)
     return findThisArgumentType(func->getType(), false);
 }
 
-std::string printType(const Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr)
-{
-    std::string sep, cbuffer = prefix, sp = (isSigned?"signed":"unsigned");
-    int thisId = Ty->getTypeID();
-    switch (thisId) {
-    case Type::IntegerTyID: {
-        unsigned NumBits = cast<IntegerType>(Ty)->getBitWidth();
-        if (NumBits != 1 && NumBits != 8 && NumBits != 32 && NumBits != 64) {
-             printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
-        }
-        assert(NumBits <= 128 && "Bit widths > 128 not implemented yet");
-        if (NumBits == 1)
-            cbuffer += "VERILOG_bool";
-        else if (NumBits <= 8) {
-                cbuffer += "reg";
-        }
-        else
-            cbuffer += "reg" + verilogArrRange(Ty);
-        cbuffer += " " + NameSoFar;
-        break;
-        }
-    case Type::ArrayTyID: {
-        const ArrayType *ATy = cast<ArrayType>(Ty);
-        unsigned len = ATy->getNumElements();
-        cbuffer += printType(ATy->getElementType(), false, "", "", "", false) + NameSoFar + "[" + utostr(len) + "]";
-        break;
-        }
-    default:
-        llvm_unreachable("Unhandled case in printType!");
-    }
-    cbuffer += postfix;
-    return cbuffer;
-}
-
 /*
  * Calculate offset from base pointer for GEP
  */
@@ -1000,44 +966,78 @@ if (Values_size < 0 || Values_size > 100) Values_size = 2;
 
 static uint64_t sizeType(const Type *Ty)
 {
-    //const DataLayout *TD = EE->getDataLayout();
     switch (Ty->getTypeID()) {
     case Type::IntegerTyID:
         return cast<IntegerType>(Ty)->getBitWidth();
     case Type::StructTyID: {
-        //unsigned NumBits = TD->getTypeAllocSize(Ty) * 8;
         const StructType *STy = cast<StructType>(Ty);
         uint64_t len = 0;
         int Idx = 0;
-        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++)
             if (fieldName(STy, Idx) != "")
                 len += sizeType(*I);
-        }
         return len;
         }
     case Type::ArrayTyID: {
         const ArrayType *ATy = cast<ArrayType>(Ty);
         unsigned len = ATy->getNumElements();
-        if (len == 0) len = 1;
+        if (len == 0) {
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+exit(-1);
+len = 1;
+}
         return len * sizeType(ATy->getElementType());
         }
     case Type::PointerTyID:
         return sizeType(cast<PointerType>(Ty)->getElementType());
     case Type::VoidTyID:
         return 0;
-    case Type::FunctionTyID:
     default:
         llvm_unreachable("Unhandled case in sizeType!");
     }
 }
 
-std::string verilogArrRange(const Type *Ty)
+static std::string verilogArrRange(const Type *Ty)
 {
     uint64_t NumBits = sizeType(Ty);
 
     if (NumBits > 1)
         return "[" + utostr(NumBits - 1) + ":0]";
     return "";
+}
+
+std::string printType(const Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr)
+{
+    std::string sep, cbuffer = prefix, sp = (isSigned?"signed":"unsigned");
+    int thisId = Ty->getTypeID();
+    switch (thisId) {
+    case Type::IntegerTyID: {
+        unsigned NumBits = sizeType(Ty);
+        if (NumBits != 1 && NumBits != 8 && NumBits != 32 && NumBits != 64) {
+             printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
+        }
+        assert(NumBits <= 128 && "Bit widths > 128 not implemented yet");
+        if (NumBits == 1)
+            cbuffer += "VERILOG_bool";
+        else if (NumBits <= 8) {
+                cbuffer += "reg";
+        }
+        else
+            cbuffer += "reg" + verilogArrRange(Ty);
+        cbuffer += " " + NameSoFar;
+        break;
+        }
+    case Type::ArrayTyID: {
+        const ArrayType *ATy = cast<ArrayType>(Ty);
+        unsigned len = ATy->getNumElements();
+        cbuffer += printType(ATy->getElementType(), false, "", "", "", false) + NameSoFar + "[" + utostr(len) + "]";
+        break;
+        }
+    default:
+        llvm_unreachable("Unhandled case in printType!");
+    }
+    cbuffer += postfix;
+    return cbuffer;
 }
 
 /*
@@ -1120,18 +1120,19 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
     int Idx = 0;
     for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
         std::string fldName = fieldName(table->STy, Idx);
+        if (fldName == "")
+            continue;
         const Type *element = *I;
         int64_t vecCount = -1;
         if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = table->replaceCount[Idx];
         }
-        if (fldName == "")
-            continue;
         if (const PointerType *PTy = dyn_cast<PointerType>(element))
         if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
         if (isInterface(iSTy))
             IR->outcall.push_back(OutcallInterface{fldName, getClass(iSTy)->IR});
+
         if (const StructType *STy = dyn_cast<StructType>(element))
             IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, "", false});
         else if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
@@ -1197,29 +1198,30 @@ static void getDepend(const StructType *STy)
 
 void generateClasses(std::string OutputDir)
 {
-    std::string myName = OutputDir;
-    int ind = myName.rfind('/');
-    if (ind > 0)
-        myName = myName.substr(0, ind);
-    myName += "_GENERATED_";
-    FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
-    FILE *OStrV = fopen((OutputDir + ".generated.v").c_str(), "w");
-    FILE *OStrVH = fopen((OutputDir + ".generated.vh").c_str(), "w");
-    fprintf(OStrV, "`include \"%s.generated.vh\"\n\n", OutputDir.c_str());
-    fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
     for (auto current : classCreate)
         structAlpha[getStructName(current.first)] = current.first;
     for (auto item : structAlpha)
         if (item.second)
             getDepend(item.second);
-    std::list<ModuleIR *> irSeq;
+    FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
     for (auto STy : structSeq) {
         ClassMethodTable *table = getClass(STy);
         processClass(table, table->IR);
         generateModuleIR(table->IR, STy->getName().substr(0, 6) == "module", OStrIR);
     }
     fclose(OStrIR);
+
     FILE *OStrIRread = fopen((OutputDir + ".generated.IR").c_str(), "r");
+    FILE *OStrV = fopen((OutputDir + ".generated.v").c_str(), "w");
+    FILE *OStrVH = fopen((OutputDir + ".generated.vh").c_str(), "w");
+    fprintf(OStrV, "`include \"%s.generated.vh\"\n\n", OutputDir.c_str());
+    std::string myName = OutputDir;
+    int ind = myName.rfind('/');
+    if (ind > 0)
+        myName = myName.substr(0, ind);
+    myName += "_GENERATED_";
+    fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
+    std::list<ModuleIR *> irSeq;
     readModuleIR(irSeq, OStrIRread);
     for (auto irItem : irSeq) {
         // now generate the verilog header file '.vh'

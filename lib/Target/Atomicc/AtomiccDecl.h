@@ -86,7 +86,6 @@ std::string printType(const Type *Ty, bool isSigned, std::string NameSoFar, std:
 std::string printOperand(const Value *Operand, bool Indirect);
 std::string getStructName(const StructType *STy);
 std::string CBEMangle(const std::string &S);
-std::string verilogArrRange(const Type *Ty);
 void memdump(unsigned char *p, int len, const char *title);
 void memdumpl(unsigned char *p, int len, const char *title);
 const Metadata *fetchType(const Metadata *arg);
@@ -104,10 +103,11 @@ void recursiveDelete(Value *V);
 void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName);
 void dumpMemoryRegions(int arg);
 void generateClasses(std::string OutputDir);
-void metaGenerate(ModuleIR *IR, FILE *OStr);
-bool isActionMethod(const Function *func);
 ClassMethodTable *getClass(const StructType *STy);
+bool isActionMethod(const Function *func);
 bool isInterface(const StructType *STy);
-void generateModuleDef(ModuleIR *IR, FILE *OStr);
+
 void generateModuleIR(ModuleIR *IR, bool isModule, FILE *OStr);
+void metaGenerate(ModuleIR *IR, FILE *OStr);
+void generateModuleDef(ModuleIR *IR, FILE *OStr);
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);

@@ -67,7 +67,7 @@ void generateModuleIR(ModuleIR *IR, bool isModule, FILE *OStr)
             mlines.push_back("STORE" + alloc + litem.cond + ":" + litem.dest + " = " + litem.value);
         }
         for (auto litem: MI->callList)
-            mlines.push_back("CALL" + std::string(litem.isAction ? "/Action ":" ")
+            mlines.push_back("CALL" + std::string(litem.isAction ? "/Action " : " ")
                 + litem.cond + ":" + litem.value);
 
         for (int index = MetaRead; index != MetaMax; index++)
