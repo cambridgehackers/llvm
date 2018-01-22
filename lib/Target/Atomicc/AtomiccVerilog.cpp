@@ -60,6 +60,13 @@ static void setAssign(std::string target, std::string value)
      assignList[target] = inlineValue(value, true);
 }
 
+static std::string sizeProcess(uint64_t val)
+{
+    if (val > 1)
+        return "[" + autostr(val - 1) + ":0]";
+    return "";
+}
+
 /*
  * Generate verilog module header for class definition or reference
  */
@@ -87,22 +94,22 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
         if (instance != "") {
             // define 'wire' elements before instantiating instance
             if (inlineValue(wparam, false) == "")
-                wireList.push_back(MI->retArrRange + wparam);
+                wireList.push_back(sizeProcess(MI->size) + wparam);
             wparam = inlineValue(wparam, true);
         }
         else if (!MI->action)
-            wparam = outp + MI->retArrRange + methodName;
+            wparam = outp + sizeProcess(MI->size) + methodName;
         modulePortList.push_back(wparam);
         for (auto item: MI->params) {
             if (instance != "") {
                 // define 'wire' elements before instantiating instance
                 wparam = inp + item.name;
                 if (inlineValue(wparam, false) == "")
-                    wireList.push_back(item.arrRange + wparam);
+                    wireList.push_back(sizeProcess(item.size) + wparam);
                 wparam = inlineValue(wparam, true);
             }
             else
-                wparam = inp + item.arrRange + item.name;
+                wparam = inp + sizeProcess(item.size) + item.name;
             modulePortList.push_back(wparam);
         }
     }
@@ -111,10 +118,10 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     for (auto oitem: IR->outcall)
         for (auto FI : oitem.IR->method) {
             MethodInfo *MI = oitem.IR->method[FI.first];
-            modulePortList.push_back((MI->action ? outp : inp + (instance == "" ? MI->retArrRange :""))
+            modulePortList.push_back((MI->action ? outp : inp + (instance == "" ? sizeProcess(MI->size) :""))
                 + oitem.fldName + MODULE_SEPARATOR + FI.first);
             for (auto item: MI->params)
-                modulePortList.push_back(outp + (instance == "" ? item.arrRange :"")
+                modulePortList.push_back(outp + (instance == "" ? sizeProcess(item.size) :"")
                    + oitem.fldName + MODULE_SEPARATOR + item.name);
         }
 
@@ -261,19 +268,24 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             std::string fldName = item.fldName;
             if (vecCount != -1)
                 fldName += autostr(dimIndex++);
-            if (item.typeStr != "") {
-                int ind = item.typeStr.find("@");
-                fprintf(OStr, "    %s;\n",
-                    (item.typeStr.substr(0, ind) + fldName + item.typeStr.substr(ind+1)).c_str());
-                resetList.push_back(fldName);
-            }
-            else if (item.IR && !item.isPtr) {
+            if (item.IR && !item.isPtr) {
                 if (item.IR->name.substr(0,12) == "l_struct_OC_") {
-                    fprintf(OStr, "    reg%s %s;\n", item.arrRange.c_str(), fldName.c_str());
+                    fprintf(OStr, "    reg%s %s;\n", sizeProcess(item.size).c_str(), fldName.c_str());
                     resetList.push_back(fldName);
                 }
                 else if (item.IR->name.substr(0, 12) != "l_ainterface")
                     generateModuleSignature(OStr, item.IR, fldName);
+            }
+            else if (item.size != 0) {
+                std::string temp = "    reg";
+                if (item.size > 8)
+                    temp += "[" + autostr(item.size - 1) + ":0]";
+                temp += " " + fldName;
+                if (item.arrayLen > 0)
+                    temp += "[" + autostr(item.arrayLen) + ":0]";
+                temp += ";\n";
+                fprintf(OStr, "%s", temp.c_str());
+                resetList.push_back(fldName);
             }
         } while(vecCount-- > 0);
     }

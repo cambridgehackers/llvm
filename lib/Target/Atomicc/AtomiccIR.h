@@ -81,8 +81,8 @@ typedef struct {
 } CallListElement;
 
 typedef struct {
-    std::string arrRange;
     std::string name;
+    uint64_t    size;
 } ParamElement;
 
 typedef struct {
@@ -90,7 +90,7 @@ typedef struct {
     bool                       action;
     std::list<StoreListElement> storeList;
     std::list<CallListElement> callList;
-    std::string                retArrRange;
+    uint64_t                size;
     std::list<ParamElement>    params;
     MetaRef                    meta[MetaMax];
 } MethodInfo;
@@ -103,9 +103,9 @@ typedef struct {
 typedef struct {
     std::string fldName;
     int64_t     vecCount;
-    std::string arrRange;
+    uint64_t    size;
     struct ModuleIR *IR;
-    std::string typeStr;
+    unsigned    arrayLen;
     bool        isPtr;
 } FieldElement;
 

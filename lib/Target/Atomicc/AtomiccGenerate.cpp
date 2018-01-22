@@ -1111,10 +1111,10 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
         if (table->STy->getName().substr(0, 6) != "module")
             temp = "";
         MI->guard = cleanupValue(temp);
-        MI->retArrRange = verilogArrRange(func->getReturnType());
+        MI->size = sizeType(func->getReturnType());
         auto AI = func->arg_begin(), AE = func->arg_end();
         for (AI++; AI != AE; ++AI)
-            MI->params.push_back(ParamElement{verilogArrRange(AI->getType()), AI->getName()});
+            MI->params.push_back(ParamElement{AI->getName(), sizeType(AI->getType())});
     }
     // generate local state element declarations
     int Idx = 0;
@@ -1134,13 +1134,19 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
             IR->outcall.push_back(OutcallInterface{fldName, getClass(iSTy)->IR});
 
         if (const StructType *STy = dyn_cast<StructType>(element))
-            IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, "", false});
+            IR->fields.push_back(FieldElement{fldName, vecCount, sizeType(element), getClass(STy)->IR, 0, false});
         else if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
             if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
-                IR->fields.push_back(FieldElement{fldName, vecCount, verilogArrRange(element), getClass(STy)->IR, "", true});
+                IR->fields.push_back(FieldElement{fldName, vecCount, sizeType(element), getClass(STy)->IR, 0, true});
         }
-        else
-            IR->fields.push_back(FieldElement{fldName, vecCount, "", nullptr, printType(element, false, "@", "", "", false), false});
+        else {
+            unsigned arrayLen = 0;
+            if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
+                arrayLen = ATy->getNumElements();
+                element = ATy->getElementType();
+            }
+            IR->fields.push_back(FieldElement{fldName, vecCount, sizeType(element), nullptr, arrayLen, false});
+        }
     }
 }
 

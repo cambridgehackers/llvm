@@ -37,29 +37,29 @@ void generateModuleIR(ModuleIR *IR, bool isModule, FILE *OStr)
     for (auto item: IR->interfaceConnect)
         fprintf(OStr, "    INTERFACECONNECT %s %s %d\n", item.target.c_str(), item.source.c_str(), item.IR->sequence);
     for (auto item: IR->fields) {
-        std::string irstr;
+        std::string temp;
         if (item.IR)
-            irstr = utostr(item.IR->sequence) + ":";
-        std::string temp = item.fldName;
+            temp = utostr(item.IR->sequence) + ":";
+        temp += item.fldName;
         if (item.vecCount != -1)
-            temp += " VEC " + utostr(item.vecCount);
-        if (item.arrRange != "")
-            temp += " RANGE " + item.arrRange;
-        if (item.typeStr != "")
-            temp += " FORMAT " + item.typeStr;
-        fprintf(OStr, "    FIELD%s %s%s\n", item.isPtr ? "/PTR ": "", irstr.c_str(), temp.c_str());
+            temp += " COUNT " + utostr(item.vecCount);
+        if (item.size != 0)
+            temp += " SIZE " + utostr(item.size);
+        if (item.arrayLen != 0)
+            temp += " ARRAY " + utostr(item.arrayLen);
+        fprintf(OStr, "    FIELD%s %s\n", item.isPtr ? "/PTR ": "", temp.c_str());
     }
     for (auto item: IR->method) {
         std::list<std::string> mlines;
         MethodInfo *MI = item.second;
         std::string temp = item.first;
-        if (MI->retArrRange != "")
-            temp += " RANGE " + MI->retArrRange;
+        if (MI->size != 0)
+            temp += " SIZE " + utostr(MI->size);
         if (MI->guard != "")
             temp += " = (" + MI->guard + ")";
         fprintf(OStr, "    METHOD%s%s", MI->action ? "/Action ":" ", temp.c_str());
         for (auto litem: MI->params)
-            mlines.push_back("PARAM " + litem.name + " " + litem.arrRange);
+            mlines.push_back("PARAM " + litem.name + " SIZE " + utostr(litem.size));
         for (auto litem: MI->storeList) {
             std::string alloc = " ";
             if (litem.isAlloca)
@@ -230,22 +230,22 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     fldName = fldName.substr(ind+1);
                 }
                 int64_t     vecCount = -1;
-                std::string arrRange;
-                std::string typeStr;
-                if (checkItem("VEC"))
+                unsigned arrayLen = 0;
+                uint64_t size = 0;
+                if (checkItem("COUNT"))
                     vecCount = atoi(getToken().c_str());
-                if (checkItem("RANGE"))
-                    arrRange = getToken();
-                if (checkItem("FORMAT"))
-                    typeStr = bufp;
-                IR->fields.push_back(FieldElement{fldName, vecCount, arrRange, lIR, typeStr, isPtr});
+                if (checkItem("SIZE"))
+                    size = atoi(getToken().c_str());
+                if (checkItem("ARRAY"))
+                    arrayLen = atoi(getToken().c_str());
+                IR->fields.push_back(FieldElement{fldName, vecCount, size, lIR, arrayLen, isPtr});
             }
             else if (checkItem("METHOD")) {
                 MethodInfo *MI = new MethodInfo{""};
                 MI->action = checkItem("/Action");
                 std::string methodName = getToken();
-                if (checkItem("RANGE"))
-                    MI->retArrRange = getToken();
+                if (checkItem("SIZE"))
+                    MI->size = atoi(getToken().c_str());
                 if (checkItem("="))
                     MI->guard = getExpression();
                 IR->method[methodName] = MI;
@@ -253,8 +253,9 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     while (readLine() && !checkItem(")")) {
                         if (checkItem("PARAM")) {
                             std::string name = getToken();
-                            std::string arrRange = getToken();
-                            MI->params.push_back(ParamElement{arrRange, name});
+                            ParseCheck(checkItem("SIZE"), "SIZE field missing");
+                            uint64_t size = atoi(getToken().c_str());
+                            MI->params.push_back(ParamElement{name, size});
                         }
                         else if (checkItem("STORE")) {
                             bool isAlloca = checkItem("/Alloca");
