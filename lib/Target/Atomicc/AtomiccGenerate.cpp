@@ -1044,78 +1044,21 @@ std::string printType(const Type *Ty, bool isSigned, std::string NameSoFar, std:
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processClass(ClassMethodTable *table, ModuleIR *IR)
+static void processClass(ClassMethodTable *table, bool isModule, FILE *OStr)
 {
-    for (auto FI : table->method) {
-        std::string methodName = FI.first;
-        const Function *func = FI.second;
-        if (trace_function || trace_call)
-            printf("PROCESSING %s %s\n", func->getName().str().c_str(), methodName.c_str());
-        MethodInfo *MI = new MethodInfo{""};
-        IR->method[methodName] = MI;
-        MI->action = isActionMethod(func);
-        // promote guards from contained calls to be guards for this function
-        processPromote(const_cast<Function *>(func));
-        NextAnonValueNumber = 0;
-        /* Gather data for top level instructions in each basic block. */
-        std::string temp, valsep;
-        for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
-            std::string tempCond = getCondStr(const_cast<BasicBlock *>(&*BI));
-            auto appendList = [&](int listIndex, std::string item) -> void {
-                  if (tempCond == "")
-                      MI->meta[listIndex][item].clear();
-                  MI->meta[listIndex][item].insert(tempCond);
-              };
-            for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
-                const Instruction *II = &*IIb;
-                switch(II->getOpcode()) {
-                case Instruction::Load:
-                    ERRORIF(dyn_cast<LoadInst>(II)->isVolatile());
-                    if (II->getType()->getTypeID() != Type::PointerTyID
-                     && !isAlloca(II->getOperand(0)) && !dyn_cast<Argument>(II->getOperand(0)))
-                        appendList(MetaRead, printOperand(II->getOperand(0), true));
-                    break;
-                case Instruction::Store: {
-                    const StoreInst *SI = cast<StoreInst>(II);
-                    std::string value = printOperand(SI->getOperand(0), false);
-                    std::string dest = printOperand(SI->getPointerOperand(), true);
-                    if (dest[0] == '&')
-                        dest = dest.substr(1);
-                    MI->storeList.push_back(StoreListElement{dest, value, tempCond,
-                         isAlloca(SI->getPointerOperand())});
-                    break;
-                    }
-                case Instruction::Ret:
-                    if (!II->getNumOperands())
-                        break;
-                    temp += valsep;
-                    valsep = "";
-                    if (tempCond != "")
-                        temp += tempCond + " ? ";
-                    valsep = " : ";
-                    temp += printOperand(II->getOperand(0), false);
-                    break;
-                case Instruction::Call: { // can have value
-                    if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
-                        break;
-                    std::string value = printCall(II);
-                    appendList(MetaInvoke, value.substr(0,value.find("{")));
-                    if (II->getType() == Type::getVoidTy(II->getContext()))
-                        MI->callList.push_back(CallListElement{value, tempCond,
-                            isActionMethod(cast<CallInst>(II)->getCalledFunction())});
-                    break;
-                    }
-                }
-            }
-        }
-        if (table->STy->getName().substr(0, 6) != "module")
-            temp = "";
-        MI->guard = cleanupValue(temp);
-        MI->size = sizeType(func->getReturnType());
-        auto AI = func->arg_begin(), AE = func->arg_end();
-        for (AI++; AI != AE; ++AI)
-            MI->params.push_back(ParamElement{AI->getName(), sizeType(AI->getType())});
-    }
+    static std::string metaName[] = {"METANONE", "METAREAD ", "METAINVOKE "};
+    ModuleIR *IR = table->IR;
+    fprintf(OStr, "%sMODULE %s = %d (\n", isModule ? "" : "E", IR->name.c_str(), IR->sequence);
+    for (auto item: IR->softwareName)
+        if (item.second)
+            fprintf(OStr, "    SOFTWARE %s\n", item.first.c_str());
+    for (auto item: IR->ruleFunctions)
+        if (item.second)
+            fprintf(OStr, "    RULE %s\n", item.first.c_str());
+    for (auto item: IR->priority)
+        fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
+    for (auto item: IR->interfaceConnect)
+        fprintf(OStr, "    INTERFACECONNECT %s %s %d\n", item.target.c_str(), item.source.c_str(), item.IR->sequence);
     // generate local state element declarations
     int Idx = 0;
     for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
@@ -1128,16 +1071,29 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
             element = newType;
             vecCount = table->replaceCount[Idx];
         }
+        auto pushField = [&](int lIRseq, unsigned arrayLen, bool isPtr) -> void {
+            std::string temp;
+            if (lIRseq)
+                temp = utostr(lIRseq) + ":";
+            temp += fldName;
+            if (vecCount != -1)
+                temp += " COUNT " + utostr(vecCount);
+            if (uint64_t size = sizeType(element))
+                temp += " SIZE " + utostr(size);
+            if (arrayLen != 0)
+                temp += " ARRAY " + utostr(arrayLen);
+            fprintf(OStr, "    FIELD%s %s\n", isPtr ? "/PTR ": "", temp.c_str());
+        };
         if (const PointerType *PTy = dyn_cast<PointerType>(element))
         if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
         if (isInterface(iSTy))
-            IR->outcall.push_back(OutcallInterface{fldName, getClass(iSTy)->IR});
+            fprintf(OStr, "    OUTCALL %s = %d\n", fldName.c_str(), getClass(iSTy)->IR->sequence);
 
         if (const StructType *STy = dyn_cast<StructType>(element))
-            IR->fields.push_back(FieldElement{fldName, vecCount, sizeType(element), getClass(STy)->IR, 0, false});
+            pushField(getClass(STy)->IR->sequence, 0, false);
         else if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
             if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
-                IR->fields.push_back(FieldElement{fldName, vecCount, sizeType(element), getClass(STy)->IR, 0, true});
+                pushField(getClass(STy)->IR->sequence, 0, true);
         }
         else {
             unsigned arrayLen = 0;
@@ -1145,9 +1101,91 @@ static void processClass(ClassMethodTable *table, ModuleIR *IR)
                 arrayLen = ATy->getNumElements();
                 element = ATy->getElementType();
             }
-            IR->fields.push_back(FieldElement{fldName, vecCount, sizeType(element), nullptr, arrayLen, false});
+            pushField(0, arrayLen, false);
         }
     }
+    for (auto FI : table->method) {
+        std::string methodName = FI.first;
+        const Function *func = FI.second;
+        if (trace_function || trace_call)
+            printf("PROCESSING %s %s\n", func->getName().str().c_str(), methodName.c_str());
+        std::list<std::string> mlines;
+        auto AI = func->arg_begin(), AE = func->arg_end();
+        for (AI++; AI != AE; ++AI)
+            mlines.push_back("PARAM " + AI->getName().str() + " SIZE " + utostr(sizeType(AI->getType())));
+        // promote guards from contained calls to be guards for this function
+        processPromote(const_cast<Function *>(func));
+        NextAnonValueNumber = 0;
+        /* Gather data for top level instructions in each basic block. */
+        std::string retGuard, valsep;
+        for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
+            std::string tempCond = getCondStr(const_cast<BasicBlock *>(&*BI));
+            for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
+                const Instruction *II = &*IIb;
+                switch(II->getOpcode()) {
+                case Instruction::Load:
+                    ERRORIF(dyn_cast<LoadInst>(II)->isVolatile());
+                    if (II->getType()->getTypeID() != Type::PointerTyID
+                     && !isAlloca(II->getOperand(0)) && !dyn_cast<Argument>(II->getOperand(0)))
+                        mlines.push_back(metaName[MetaRead] + printOperand(II->getOperand(0), true)
+                             + " " + tempCond);
+                    break;
+                case Instruction::Store: {
+                    const StoreInst *SI = cast<StoreInst>(II);
+                    std::string value = printOperand(SI->getOperand(0), false);
+                    std::string dest = printOperand(SI->getPointerOperand(), true);
+                    if (dest[0] == '&')
+                        dest = dest.substr(1);
+                    std::string alloc = " ";
+                    if (isAlloca(SI->getPointerOperand()))
+                        alloc = "/Alloca ";
+                    std::string temp;
+                    if (tempCond != "")
+                        temp = "(" + tempCond + ")";
+                    mlines.push_back("STORE" + alloc + temp + ":" + dest + " = " + value);
+                    break;
+                    }
+                case Instruction::Ret:
+                    if (!II->getNumOperands())
+                        break;
+                    retGuard += valsep;
+                    if (tempCond != "")
+                        retGuard += tempCond + " ? ";
+                    valsep = " : ";
+                    retGuard += printOperand(II->getOperand(0), false);
+                    break;
+                case Instruction::Call: { // can have value
+                    if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
+                        break;
+                    std::string value = printCall(II);
+                    mlines.push_back(metaName[MetaInvoke] + value.substr(0,value.find("{")) + " " + tempCond);
+                    std::string temp = isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ";
+                    if (tempCond != "")
+                        temp += "(" + tempCond + ")";
+                    if (II->getType() == Type::getVoidTy(II->getContext()))
+                        mlines.push_back("CALL" + temp + ":" + value);
+                    break;
+                    }
+                }
+            }
+        }
+        if (table->STy->getName().substr(0, 6) != "module")
+            retGuard = "";
+        retGuard = cleanupValue(retGuard);
+        std::string headerLine = methodName;
+        if (uint64_t size = sizeType(func->getReturnType()))
+            headerLine += " SIZE " + utostr(size);
+        if (retGuard != "")
+            headerLine += " = (" + retGuard + ")";
+        if (mlines.size())
+            headerLine += " (";
+        fprintf(OStr, "    METHOD %s\n", headerLine.c_str());
+        for (auto line: mlines)
+             fprintf(OStr, "        %s\n", line.c_str());
+        if (mlines.size())
+            fprintf(OStr, "    )\n");
+    }
+    fprintf(OStr, ")\n");
 }
 
 static std::list<const StructType *> structSeq;
@@ -1212,8 +1250,7 @@ void generateClasses(std::string OutputDir)
     FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
     for (auto STy : structSeq) {
         ClassMethodTable *table = getClass(STy);
-        processClass(table, table->IR);
-        generateModuleIR(table->IR, STy->getName().substr(0, 6) == "module", OStrIR);
+        processClass(table, STy->getName().substr(0, 6) == "module", OStrIR);
     }
     fclose(OStrIR);
 

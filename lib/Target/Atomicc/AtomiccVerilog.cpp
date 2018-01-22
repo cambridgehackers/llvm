@@ -97,7 +97,7 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
                 wireList.push_back(sizeProcess(MI->size) + wparam);
             wparam = inlineValue(wparam, true);
         }
-        else if (!MI->action)
+        else if (MI->size != 0) // !action
             wparam = outp + sizeProcess(MI->size) + methodName;
         modulePortList.push_back(wparam);
         for (auto item: MI->params) {
@@ -118,7 +118,7 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     for (auto oitem: IR->outcall)
         for (auto FI : oitem.IR->method) {
             MethodInfo *MI = oitem.IR->method[FI.first];
-            modulePortList.push_back((MI->action ? outp : inp + (instance == "" ? sizeProcess(MI->size) :""))
+            modulePortList.push_back((MI->size == 0/* action */ ? outp : inp + (instance == "" ? sizeProcess(MI->size) :""))
                 + oitem.fldName + MODULE_SEPARATOR + FI.first);
             for (auto item: MI->params)
                 modulePortList.push_back(outp + (instance == "" ? sizeProcess(item.size) :"")
@@ -223,7 +223,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
                 rval = rest;
             }
         }
-        if (!MI->action) {
+        if (MI->size != 0) { /* !action */
             if (methodName == rdyName)
                 assignList[methodName + "_internal"] = IR->method[methodName]->guard;  // collect the text of the return value into a single 'assign'
             else if (IR->method[methodName]->guard != "")

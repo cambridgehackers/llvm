@@ -10,80 +10,7 @@
 // This file implements zzz
 //
 //===----------------------------------------------------------------------===//
-#include <stdio.h>
-#include "llvm/ADT/StringExtras.h"
-
-using namespace llvm;
-
-#include "AtomiccDecl.h"
-
-/*
- * Generate Module info into IR
- */
-void generateModuleIR(ModuleIR *IR, bool isModule, FILE *OStr)
-{
-    static std::string metaName[] = {"METANONE", "METAREAD ", "METAINVOKE "};
-    fprintf(OStr, "%sMODULE %s = %d (\n", isModule ? "" : "E", IR->name.c_str(), IR->sequence);
-    for (auto item: IR->softwareName)
-        if (item.second)
-            fprintf(OStr, "    SOFTWARE %s\n", item.first.c_str());
-    for (auto item: IR->outcall)
-        fprintf(OStr, "    OUTCALL %s = %d\n", item.fldName.c_str(), item.IR->sequence);
-    for (auto item: IR->ruleFunctions)
-        if (item.second)
-            fprintf(OStr, "    RULE %s\n", item.first.c_str());
-    for (auto item: IR->priority)
-        fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
-    for (auto item: IR->interfaceConnect)
-        fprintf(OStr, "    INTERFACECONNECT %s %s %d\n", item.target.c_str(), item.source.c_str(), item.IR->sequence);
-    for (auto item: IR->fields) {
-        std::string temp;
-        if (item.IR)
-            temp = utostr(item.IR->sequence) + ":";
-        temp += item.fldName;
-        if (item.vecCount != -1)
-            temp += " COUNT " + utostr(item.vecCount);
-        if (item.size != 0)
-            temp += " SIZE " + utostr(item.size);
-        if (item.arrayLen != 0)
-            temp += " ARRAY " + utostr(item.arrayLen);
-        fprintf(OStr, "    FIELD%s %s\n", item.isPtr ? "/PTR ": "", temp.c_str());
-    }
-    for (auto item: IR->method) {
-        std::list<std::string> mlines;
-        MethodInfo *MI = item.second;
-        std::string temp = item.first;
-        if (MI->size != 0)
-            temp += " SIZE " + utostr(MI->size);
-        if (MI->guard != "")
-            temp += " = (" + MI->guard + ")";
-        fprintf(OStr, "    METHOD%s%s", MI->action ? "/Action ":" ", temp.c_str());
-        for (auto litem: MI->params)
-            mlines.push_back("PARAM " + litem.name + " SIZE " + utostr(litem.size));
-        for (auto litem: MI->storeList) {
-            std::string alloc = " ";
-            if (litem.isAlloca)
-                alloc = "/Alloca ";
-            mlines.push_back("STORE" + alloc + litem.cond + ":" + litem.dest + " = " + litem.value);
-        }
-        for (auto litem: MI->callList)
-            mlines.push_back("CALL" + std::string(litem.isAction ? "/Action " : " ")
-                + litem.cond + ":" + litem.value);
-
-        for (int index = MetaRead; index != MetaMax; index++)
-            for (auto litem: MI->meta[index])
-                for (auto sitem: litem.second)
-                    mlines.push_back(metaName[index] + litem.first + " " + sitem);
-        if (mlines.size())
-            fprintf(OStr, " (");
-        fprintf(OStr, "\n");
-        for (auto line: mlines)
-             fprintf(OStr, "        %s\n", line.c_str());
-        if (mlines.size())
-            fprintf(OStr, "    )\n");
-    }
-    fprintf(OStr, ")\n");
-}
+#include "AtomiccIR.h"
 
 static char buf[MAX_READ_LINE];
 static char *bufp;
@@ -131,17 +58,6 @@ static std::string getToken()
         bufp++;
     return ret;
 }
-static std::string getCondition()
-{
-    char *startp = bufp;
-    while (*bufp == ' ')
-        bufp++;
-    while (*bufp && *bufp != ':')
-        bufp++;
-    std::string ret = std::string(startp, bufp);
-    bufp++; // skip ':'
-    return ret;
-}
 static std::string trimStr(std::string arg)
 {
     const char *start = arg.c_str(), *end = start + arg.length() - 1;
@@ -158,7 +74,7 @@ static std::string getExpression()
     int level = 0;
     while (*bufp == ' ')
         bufp++;
-    while (*bufp && (*bufp != ' ' || level != 0)) {
+    while (*bufp && ((*bufp != ' ' && *bufp != ':') || level != 0)) {
         if (*bufp == '(')
             level++;
         else if (*bufp == ')')
@@ -171,6 +87,10 @@ static std::string getExpression()
     while (*bufp == ' ')
         bufp++;
     return ret;
+}
+static uint64_t getSize()
+{
+    return atoi(getToken().c_str());
 }
 static std::map<int, ModuleIR *> mapIndex;
 static ModuleIR *lookupIR(std::string ind)
@@ -194,7 +114,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             irSeq.push_back(IR);
         IR->name = getToken();
         ParseCheck(checkItem("="), "Module = <sequence> missing");
-        IR->sequence = atoi(getToken().c_str());
+        IR->sequence = getSize();
         ParseCheck(checkItem("("), "Module '(' missing");
         mapIndex[IR->sequence] = IR;
         while (readLine() && !checkItem(")")) {
@@ -233,19 +153,18 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 unsigned arrayLen = 0;
                 uint64_t size = 0;
                 if (checkItem("COUNT"))
-                    vecCount = atoi(getToken().c_str());
+                    vecCount = getSize();
                 if (checkItem("SIZE"))
-                    size = atoi(getToken().c_str());
+                    size = getSize();
                 if (checkItem("ARRAY"))
-                    arrayLen = atoi(getToken().c_str());
+                    arrayLen = getSize();
                 IR->fields.push_back(FieldElement{fldName, vecCount, size, lIR, arrayLen, isPtr});
             }
             else if (checkItem("METHOD")) {
                 MethodInfo *MI = new MethodInfo{""};
-                MI->action = checkItem("/Action");
                 std::string methodName = getToken();
                 if (checkItem("SIZE"))
-                    MI->size = atoi(getToken().c_str());
+                    MI->size = getSize();
                 if (checkItem("="))
                     MI->guard = getExpression();
                 IR->method[methodName] = MI;
@@ -254,22 +173,21 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                         if (checkItem("PARAM")) {
                             std::string name = getToken();
                             ParseCheck(checkItem("SIZE"), "SIZE field missing");
-                            uint64_t size = atoi(getToken().c_str());
-                            MI->params.push_back(ParamElement{name, size});
+                            MI->params.push_back(ParamElement{name, getSize()});
                         }
                         else if (checkItem("STORE")) {
                             bool isAlloca = checkItem("/Alloca");
-                            std::string cond = getCondition();
+                            std::string cond = getExpression();
+                            ParseCheck(checkItem(":"), "':' missing");
                             std::string dest = getExpression();
                             ParseCheck(checkItem("="), "store = missing");
-                            std::string value = bufp;
-                            MI->storeList.push_back(StoreListElement{dest, value, cond, isAlloca});
+                            MI->storeList.push_back(StoreListElement{dest, bufp, cond, isAlloca});
                         }
                         else if (checkItem("CALL")) {
                             bool isAction = checkItem("/Action");
-                            std::string cond = getCondition();
-                            std::string value = bufp;
-                            MI->callList.push_back(CallListElement{value, cond, isAction});
+                            std::string cond = getExpression();
+                            ParseCheck(checkItem(":"), "':' missing");
+                            MI->callList.push_back(CallListElement{bufp, cond, isAction});
                         }
                         else if (checkItem("METAREAD")) {
                             std::string mname = getExpression();

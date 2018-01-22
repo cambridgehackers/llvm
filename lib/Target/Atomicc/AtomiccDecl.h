@@ -107,7 +107,6 @@ ClassMethodTable *getClass(const StructType *STy);
 bool isActionMethod(const Function *func);
 bool isInterface(const StructType *STy);
 
-void generateModuleIR(ModuleIR *IR, bool isModule, FILE *OStr);
+void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);
 void metaGenerate(ModuleIR *IR, FILE *OStr);
 void generateModuleDef(ModuleIR *IR, FILE *OStr);
-void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);

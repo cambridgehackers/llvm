@@ -87,7 +87,6 @@ typedef struct {
 
 typedef struct {
     std::string                guard;
-    bool                       action;
     std::list<StoreListElement> storeList;
     std::list<CallListElement> callList;
     uint64_t                size;
