@@ -59,6 +59,8 @@ public:
     std::map<int, const Type *>       replaceType;
     std::map<int, uint64_t>           replaceCount;
     std::map<std::string, FuncInfo>   funcMap;
+    std::list<std::string>            softwareName;
+    std::map<std::string, bool>       ruleFunctions;
     ModuleIR* IR;
     ClassMethodTable() {}
 };
@@ -75,14 +77,12 @@ typedef std::map<std::string, int> StringMapType;
 
 extern ExecutionEngine *EE;
 extern std::map<const Function *, Function *> ruleRDYFunction;
-extern std::map<const Function *, const Function *> ruleENAFunction;
 extern std::list<MEMORY_REGION> memoryRegion;
 extern int trace_pair;
 extern Module *globalMod;
 
 void constructAddressMap(Module *Mod);
 std::string fieldName(const StructType *STy, uint64_t ind);
-std::string printType(const Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr);
 std::string printOperand(const Value *Operand, bool Indirect);
 std::string getStructName(const StructType *STy);
 std::string CBEMangle(const std::string &S);
@@ -102,11 +102,12 @@ void prepareReplace(const Value *olda, Value *newa);
 void recursiveDelete(Value *V);
 void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName);
 void dumpMemoryRegions(int arg);
-void generateClasses(std::string OutputDir);
 ClassMethodTable *getClass(const StructType *STy);
 bool isActionMethod(const Function *func);
 bool isInterface(const StructType *STy);
 
+void generateIR(std::string OutputDir);
+void generateVerilog(std::string OutputDir);
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);
 void metaGenerate(ModuleIR *IR, FILE *OStr);
 void generateModuleDef(ModuleIR *IR, FILE *OStr);

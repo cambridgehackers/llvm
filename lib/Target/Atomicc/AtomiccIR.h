@@ -87,6 +87,7 @@ typedef struct {
 
 typedef struct {
     std::string                guard;
+    bool                       rule;
     std::list<StoreListElement> storeList;
     std::list<CallListElement> callList;
     uint64_t                size;
@@ -112,10 +113,9 @@ typedef struct ModuleIR {
     int                               sequence;
     std::string                       name;
     std::list<std::string>            metaList;
-    std::map<std::string, int>        softwareName;
+    std::list<std::string>            softwareName;
     std::map<std::string, MethodInfo *> method;
     std::list<OutcallInterface>       outcall;
-    std::map<std::string, bool>       ruleFunctions;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::list<FieldElement>           fields;
     std::list<InterfaceConnectType>   interfaceConnect;

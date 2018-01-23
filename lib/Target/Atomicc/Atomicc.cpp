@@ -82,8 +82,11 @@ bool AtomiccWriter::runOnModule(Module &M)
     constructAddressMap(&M);
 
     // Walk the list of all classes referenced in the IR image,
-    // recursively generating cpp class and verilog module definitions
-    generateClasses(OutputDir);
+    // recursively generating IR
+    generateIR(OutputDir);
+
+    // Read/process IR to generate verilog module definitions
+    generateVerilog(OutputDir);
     return false;
 }
 

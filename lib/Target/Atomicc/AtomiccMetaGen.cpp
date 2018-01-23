@@ -103,9 +103,9 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
         }
     }
     std::string ruleNames;
-    for (auto item : IR->ruleFunctions)
-        if (item.second)
-            ruleNames += "; " + item.first;
+    for (auto item : IR->method)
+        if (item.second->rule && endswith(item.first, "__ENA"))
+            ruleNames += "; " + item.first.substr(0, item.first.length()-5);
     if (ruleNames != "")
         metaList.push_back("//METARULES" + ruleNames);
     for (auto item: IR->interfaceConnect) {

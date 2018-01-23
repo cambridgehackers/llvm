@@ -119,16 +119,13 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
         mapIndex[IR->sequence] = IR;
         while (readLine() && !checkItem(")")) {
             if (checkItem("SOFTWARE")) {
-                IR->softwareName[getToken()] = 1;
+                IR->softwareName.push_back(getToken());
             }
             else if (checkItem("OUTCALL")) {
                 std::string      fldName = getToken();
                 ParseCheck(checkItem("="), "outcall = missing");
                 ModuleIR *lIR = lookupIR(getToken());
                 IR->outcall.push_back(OutcallInterface{fldName, lIR});
-            }
-            else if (checkItem("RULE")) {
-                IR->ruleFunctions[getToken()] = true;
             }
             else if (checkItem("PRIORITY")) {
                 std::string rule = getToken();
@@ -162,6 +159,8 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             }
             else if (checkItem("METHOD")) {
                 MethodInfo *MI = new MethodInfo{""};
+                if (checkItem("/RULE"))
+                    MI->rule = true;
                 std::string methodName = getToken();
                 if (checkItem("SIZE"))
                     MI->size = getSize();

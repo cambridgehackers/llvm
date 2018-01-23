@@ -62,7 +62,6 @@ static INTMAP_TYPE opcodeMap[] = {
     {Instruction::And, "&"}, {Instruction::Or, "|"}, {Instruction::Xor, "^"},
     {Instruction::Shl, "<<"}, {Instruction::LShr, ">>"}, {Instruction::AShr, " >> "}, {}};
 std::map<const Function *, Function *> ruleRDYFunction;
-std::map<const Function *, const Function *> ruleENAFunction;
 static struct {
     std::map<const BasicBlock *, Value *> val;
 } blockCondition[2];
@@ -151,25 +150,24 @@ ClassMethodTable *getClass(const StructType *STy)
         ModuleIR *IR = new ModuleIR;
         IR->sequence = moduleSequence++;
         table->IR = IR;
-        IR->name = getStructName(STy);
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
-        int processSequence = 0; // seq=0 -> fields
+        int processSequence = 0; // fields
         while (subs < len) {
             while (subs < len && STy->structFieldMap[subs] != ',') {
                 subs++;
             }
             subs++;
             if (STy->structFieldMap[last_subs] == '/') {
-                processSequence++; // seq=1 -> methods
+                processSequence = 1; // methods
                 last_subs++;
             }
             if (STy->structFieldMap[last_subs] == ';') {
-                processSequence++; // seq=2 -> software interfaces
+                processSequence = 2; // software interfaces
                 last_subs++;
             }
             if (STy->structFieldMap[last_subs] == '@') {
-                processSequence++; // seq=3 -> interface connect
+                processSequence = 3; // interface connect
                 last_subs++;
             }
             std::string ret = STy->structFieldMap.substr(last_subs);
@@ -181,8 +179,8 @@ ClassMethodTable *getClass(const StructType *STy)
             if (processSequence == 0)
                 table->fieldName[fieldSub++] = ret;
             else if (processSequence == 2)
-                IR->softwareName[ret] = 1;
-            else if (processSequence == 3) {
+                table->softwareName.push_back(ret);
+            else if (processSequence == 3) { // interface connect
                 int ind = ret.find(":");
                 std::string source = ret.substr(ind+1);
                 std::string target = ret.substr(0, ind);
@@ -981,11 +979,6 @@ static uint64_t sizeType(const Type *Ty)
     case Type::ArrayTyID: {
         const ArrayType *ATy = cast<ArrayType>(Ty);
         unsigned len = ATy->getNumElements();
-        if (len == 0) {
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-exit(-1);
-len = 1;
-}
         return len * sizeType(ATy->getElementType());
         }
     case Type::PointerTyID:
@@ -997,67 +990,20 @@ len = 1;
     }
 }
 
-static std::string verilogArrRange(const Type *Ty)
-{
-    uint64_t NumBits = sizeType(Ty);
-
-    if (NumBits > 1)
-        return "[" + utostr(NumBits - 1) + ":0]";
-    return "";
-}
-
-std::string printType(const Type *Ty, bool isSigned, std::string NameSoFar, std::string prefix, std::string postfix, bool ptr)
-{
-    std::string sep, cbuffer = prefix, sp = (isSigned?"signed":"unsigned");
-    int thisId = Ty->getTypeID();
-    switch (thisId) {
-    case Type::IntegerTyID: {
-        unsigned NumBits = sizeType(Ty);
-        if (NumBits != 1 && NumBits != 8 && NumBits != 32 && NumBits != 64) {
-             printf("[%s:%d] NUMBITS %d\n", __FUNCTION__, __LINE__, NumBits);
-        }
-        assert(NumBits <= 128 && "Bit widths > 128 not implemented yet");
-        if (NumBits == 1)
-            cbuffer += "VERILOG_bool";
-        else if (NumBits <= 8) {
-                cbuffer += "reg";
-        }
-        else
-            cbuffer += "reg" + verilogArrRange(Ty);
-        cbuffer += " " + NameSoFar;
-        break;
-        }
-    case Type::ArrayTyID: {
-        const ArrayType *ATy = cast<ArrayType>(Ty);
-        unsigned len = ATy->getNumElements();
-        cbuffer += printType(ATy->getElementType(), false, "", "", "", false) + NameSoFar + "[" + utostr(len) + "]";
-        break;
-        }
-    default:
-        llvm_unreachable("Unhandled case in printType!");
-    }
-    cbuffer += postfix;
-    return cbuffer;
-}
-
 /*
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processClass(ClassMethodTable *table, bool isModule, FILE *OStr)
+static void processClass(ClassMethodTable *table, FILE *OStr)
 {
-    static std::string metaName[] = {"METANONE", "METAREAD ", "METAINVOKE "};
-    ModuleIR *IR = table->IR;
-    fprintf(OStr, "%sMODULE %s = %d (\n", isModule ? "" : "E", IR->name.c_str(), IR->sequence);
-    for (auto item: IR->softwareName)
-        if (item.second)
-            fprintf(OStr, "    SOFTWARE %s\n", item.first.c_str());
-    for (auto item: IR->ruleFunctions)
-        if (item.second)
-            fprintf(OStr, "    RULE %s\n", item.first.c_str());
-    for (auto item: IR->priority)
+    bool isModule = table->STy->getName().substr(0, 6) == "module";
+    fprintf(OStr, "%sMODULE %s = %d (\n", isModule ? "" : "E",
+        getStructName(table->STy).c_str(), table->IR->sequence);
+    for (auto item: table->softwareName)
+        fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
+    for (auto item: table->IR->priority)
         fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
-    for (auto item: IR->interfaceConnect)
+    for (auto item: table->IR->interfaceConnect)
         fprintf(OStr, "    INTERFACECONNECT %s %s %d\n", item.target.c_str(), item.source.c_str(), item.IR->sequence);
     // generate local state element declarations
     int Idx = 0;
@@ -1084,16 +1030,15 @@ static void processClass(ClassMethodTable *table, bool isModule, FILE *OStr)
                 temp += " ARRAY " + utostr(arrayLen);
             fprintf(OStr, "    FIELD%s %s\n", isPtr ? "/PTR ": "", temp.c_str());
         };
-        if (const PointerType *PTy = dyn_cast<PointerType>(element))
-        if (const StructType *iSTy = dyn_cast<StructType>(PTy->getElementType()))
-        if (isInterface(iSTy))
-            fprintf(OStr, "    OUTCALL %s = %d\n", fldName.c_str(), getClass(iSTy)->IR->sequence);
 
         if (const StructType *STy = dyn_cast<StructType>(element))
             pushField(getClass(STy)->IR->sequence, 0, false);
         else if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
-            if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
+            if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
+                if (isInterface(STy))
+                    fprintf(OStr, "    OUTCALL %s = %d\n", fldName.c_str(), getClass(STy)->IR->sequence);
                 pushField(getClass(STy)->IR->sequence, 0, true);
+            }
         }
         else {
             unsigned arrayLen = 0;
@@ -1127,7 +1072,7 @@ static void processClass(ClassMethodTable *table, bool isModule, FILE *OStr)
                     ERRORIF(dyn_cast<LoadInst>(II)->isVolatile());
                     if (II->getType()->getTypeID() != Type::PointerTyID
                      && !isAlloca(II->getOperand(0)) && !dyn_cast<Argument>(II->getOperand(0)))
-                        mlines.push_back(metaName[MetaRead] + printOperand(II->getOperand(0), true)
+                        mlines.push_back("METAREAD " + printOperand(II->getOperand(0), true)
                              + " " + tempCond);
                     break;
                 case Instruction::Store: {
@@ -1158,7 +1103,7 @@ static void processClass(ClassMethodTable *table, bool isModule, FILE *OStr)
                     if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
                         break;
                     std::string value = printCall(II);
-                    mlines.push_back(metaName[MetaInvoke] + value.substr(0,value.find("{")) + " " + tempCond);
+                    mlines.push_back("METAINVOKE " + value.substr(0,value.find("{")) + " " + tempCond);
                     std::string temp = isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ";
                     if (tempCond != "")
                         temp += "(" + tempCond + ")";
@@ -1169,7 +1114,7 @@ static void processClass(ClassMethodTable *table, bool isModule, FILE *OStr)
                 }
             }
         }
-        if (table->STy->getName().substr(0, 6) != "module")
+        if (!isModule)
             retGuard = "";
         retGuard = cleanupValue(retGuard);
         std::string headerLine = methodName;
@@ -1179,7 +1124,10 @@ static void processClass(ClassMethodTable *table, bool isModule, FILE *OStr)
             headerLine += " = (" + retGuard + ")";
         if (mlines.size())
             headerLine += " (";
-        fprintf(OStr, "    METHOD %s\n", headerLine.c_str());
+        std::string options;
+        if (table->ruleFunctions[methodName])
+            options += " /RULE";
+        fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
         for (auto line: mlines)
              fprintf(OStr, "        %s\n", line.c_str());
         if (mlines.size())
@@ -1240,7 +1188,7 @@ static void getDepend(const StructType *STy)
     }
 }
 
-void generateClasses(std::string OutputDir)
+void generateIR(std::string OutputDir)
 {
     for (auto current : classCreate)
         structAlpha[getStructName(current.first)] = current.first;
@@ -1248,12 +1196,13 @@ void generateClasses(std::string OutputDir)
         if (item.second)
             getDepend(item.second);
     FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
-    for (auto STy : structSeq) {
-        ClassMethodTable *table = getClass(STy);
-        processClass(table, STy->getName().substr(0, 6) == "module", OStrIR);
-    }
+    for (auto STy : structSeq)
+        processClass(getClass(STy), OStrIR);
     fclose(OStrIR);
+}
 
+void generateVerilog(std::string OutputDir)
+{
     FILE *OStrIRread = fopen((OutputDir + ".generated.IR").c_str(), "r");
     FILE *OStrV = fopen((OutputDir + ".generated.v").c_str(), "w");
     FILE *OStrVH = fopen((OutputDir + ".generated.vh").c_str(), "w");

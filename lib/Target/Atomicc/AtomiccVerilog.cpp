@@ -88,7 +88,7 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     for (auto FI : IR->method) {
         std::string methodName = FI.first;
         MethodInfo *MI = IR->method[methodName];
-        if (IR->ruleFunctions[methodName.substr(0, methodName.length()-5)])
+        if (MI->rule)
             continue;
         std::string wparam = inp + methodName;
         if (instance != "") {
@@ -142,7 +142,7 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     }
     fprintf(OStr, ");\n");
     for (auto item: IR->softwareName) {
-        fprintf(OStr, "// software: %s\n", item.first.c_str());
+        fprintf(OStr, "// software: %s\n", item.c_str());
     }
 }
 
@@ -229,7 +229,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             else if (IR->method[methodName]->guard != "")
                 setAssign(methodName, IR->method[methodName]->guard);  // collect the text of the return value into a single 'assign'
         }
-        else if (!IR->ruleFunctions[methodName.substr(0, methodName.length()-5)]) {
+        else if (!MI->rule) {
             // generate RDY_internal wire so that we can reference RDY expression inside module
             fprintf(OStr, "    wire %s_internal;\n", rdyName.c_str());
             lateAssignList[rdyName] = rdyName + "_internal";

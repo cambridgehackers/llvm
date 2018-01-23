@@ -226,7 +226,6 @@ static void pushWork(Function *func, std::string mName)
 void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName)
 {
     ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
-    ruleENAFunction[rdyFunc] = enaFunc;
     pushWork(enaFunc, enaName);
     pushWork(rdyFunc, rdyName); // must be after 'ENA', since hoisting copies guards
 }
@@ -334,7 +333,8 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
     // if necessary to avoid conflicts, generate unique rule names
     while (table->method[enaName + "__ENA"])
         enaName = tempName + "$" + utostr(counter++);
-    table->IR->ruleFunctions[enaName] = true;
+    table->ruleFunctions[enaName + "__ENA"] = true;
+    table->ruleFunctions[enaName + "__RDY"] = true;
     if (trace_pair)
         printf("[%s:%d] name %s size %ld ena %s rdy %s\n", __FUNCTION__, __LINE__, enaName.c_str(), aenaFunc->arg_size(), enaFunc->getName().str().c_str(), rdyFunc->getName().str().c_str());
     pushPair(enaFunc, enaName + "__ENA", rdyFunc, enaName + "__RDY");
