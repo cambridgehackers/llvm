@@ -1002,7 +1002,7 @@ static std::string typeName(const Type *Ty)
          return "ARRAY_" + utostr(ATy->getNumElements()) + "_" + typeName(ATy->getElementType());
          }
      case Type::PointerTyID:
-        return "POINTER_" + typeName(cast<PointerType>(Ty)->getElementType());
+        return typeName(cast<PointerType>(Ty)->getElementType());
      default:
          llvm_unreachable("Unhandled case in processTypes!");
      }
@@ -1031,41 +1031,27 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             continue;
         const Type *element = *I;
         int64_t vecCount = -1;
+        unsigned arrayLen = 0;
         if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = table->replaceCount[Idx];
         }
-        auto pushField = [&](std::string lIRseq, unsigned arrayLen, bool isPtr) -> void {
-            std::string temp;
-            if (lIRseq != "")
-                temp = lIRseq + ":";
-            temp += fldName;
-            if (vecCount != -1)
-                temp += " COUNT " + utostr(vecCount);
-            if (uint64_t size = sizeType(element))
-                temp += " TYPE " + typeName(element);
-            if (arrayLen != 0)
-                temp += " ARRAY " + utostr(arrayLen);
-            fprintf(OStr, "    FIELD%s %s\n", isPtr ? "/PTR ": "", temp.c_str());
-        };
-
-        if (const StructType *STy = dyn_cast<StructType>(element))
-            pushField(getClass(STy)->IR->name, 0, false);
-        else if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
-            if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
-                if (isInterface(STy))
-                    fprintf(OStr, "    OUTCALL %s = %s\n", fldName.c_str(), getClass(STy)->IR->name.c_str());
-                pushField(getClass(STy)->IR->name, 0, true);
-            }
+        if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
+            arrayLen = ATy->getNumElements();
+            element = ATy->getElementType();
         }
-        else {
-            unsigned arrayLen = 0;
-            if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
-                arrayLen = ATy->getNumElements();
-                element = ATy->getElementType();
-            }
-            pushField("", arrayLen, false);
-        }
+        if (const PointerType *PTy = dyn_cast<PointerType>(element))
+        if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
+        if (isInterface(STy))
+            fprintf(OStr, "    OUTCALL %s = %s\n", fldName.c_str(), getClass(STy)->IR->name.c_str());
+        std::string temp;
+        if (isa<PointerType>(element))
+            temp += "/Ptr ";
+        if (vecCount != -1)
+            temp += "/Count " + utostr(vecCount) + " ";
+        if (arrayLen != 0)
+            temp += "/Array " + utostr(arrayLen) + " ";
+        fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
     }
     for (auto FI : table->method) {
         std::string methodName = FI.first;

@@ -84,7 +84,7 @@ typedef struct {
 
 typedef struct {
     std::string name;
-    uint64_t    size;
+    std::string type;
 } ParamElement;
 
 typedef struct {
@@ -92,7 +92,7 @@ typedef struct {
     bool                       rule;
     std::list<StoreListElement> storeList;
     std::list<CallListElement> callList;
-    uint64_t                   size;
+    std::string                type;
     std::list<ParamElement>    params;
     MetaRef                    meta[MetaMax];
 } MethodInfo;
@@ -105,7 +105,7 @@ typedef struct {
 typedef struct {
     std::string fldName;
     int64_t     vecCount;
-    uint64_t    size;
+    std::string type;
     struct ModuleIR *IR;
     unsigned    arrayLen;
     bool        isPtr;

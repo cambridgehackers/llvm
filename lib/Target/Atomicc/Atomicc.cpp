@@ -88,12 +88,10 @@ bool AtomiccWriter::runOnModule(Module &M)
     generateIR(OutputDir);
 
     // Read/process IR to generate verilog module definitions
-globalPath = "../../../llvm/build/bin/";
-printf("[%s:%d] GLOBALPATH [%p] = %s OUTPUTDIRIRIRIRIR %s\n", __FUNCTION__, __LINE__, &globalPath, globalPath.c_str(), OutputDir.c_str());
-std::string commandLine = globalPath + "veriloggen " + OutputDir;
-printf("[%s:%d] CL %s LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n", __FUNCTION__, __LINE__, commandLine.c_str());
+    globalPath = "../../../llvm/build/bin/";
+    std::string commandLine = globalPath + "veriloggen " + OutputDir;
     int ret = system(commandLine.c_str());
-printf("[%s:%d] RETURN %d\n", __FUNCTION__, __LINE__, ret);
+printf("[%s:%d] RETURN from '%s' %d\n", __FUNCTION__, __LINE__, commandLine.c_str(), ret);
     return false;
 }
 

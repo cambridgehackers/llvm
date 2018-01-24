@@ -98,8 +98,11 @@ static ModuleIR *lookupIR(std::string ind)
     ParseCheck(ret != NULL, "lookupIR = " + ind + " not found");
     return ret;
 }
-static uint64_t convertType(const char *bp)
+static uint64_t convertType(std::string arg)
 {
+    if (arg == "")
+        return 0;
+    const char *bp = arg.c_str();
     auto checkT = [&] (const char *val) -> bool {
         int len = strlen(val);
         bool ret = !strncmp(bp, val, len);
@@ -111,16 +114,10 @@ static uint64_t convertType(const char *bp)
         return atoi(bp);
     if (checkT("ARRAY_"))
         return convertType(bp);
-    if (checkT("POINTER_"))
-        return convertType(bp);
     if (auto IR = lookupIR(bp))
         return IR->size;
     printf("[%s:%d] CONVERTTYPE FAILED '%s'\n", __FUNCTION__, __LINE__, bp);
     exit(-1);
-}
-static uint64_t getSize()
-{
-    return convertType(getToken().c_str());
 }
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
 {
@@ -156,32 +153,25 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 IR->interfaceConnect.push_back(InterfaceConnectType{target, source, lIR});
             }
             else if (checkItem("FIELD")) {
-                bool        isPtr = checkItem("/PTR");
-                struct ModuleIR *lIR = nullptr;
-                std::string fldName = getToken();
-                int ind = fldName.find(":");
-                if (ind > 0) {
-                    lIR = lookupIR(fldName.substr(0,ind));
-                    fldName = fldName.substr(ind+1);
-                }
                 int64_t     vecCount = -1;
-                unsigned arrayLen = 0;
-                uint64_t size = 0;
-                if (checkItem("COUNT"))
+                unsigned    arrayLen = 0;
+                bool        isPtr = checkItem("/Ptr");
+                if (checkItem("/Count"))
                     vecCount = atoi(getToken().c_str());
-                if (checkItem("TYPE"))
-                    size = getSize();
-                if (checkItem("ARRAY"))
+                if (checkItem("/Array"))
                     arrayLen = atoi(getToken().c_str());
-                IR->fields.push_back(FieldElement{fldName, vecCount, size, lIR, arrayLen, isPtr});
+                std::string fldName = getToken();
+                std::string type = getToken();
+                IR->fields.push_back(FieldElement{fldName, vecCount, type, mapIndex[type], arrayLen, isPtr});
             }
             else if (checkItem("METHOD")) {
                 MethodInfo *MI = new MethodInfo{""};
                 if (checkItem("/Rule"))
                     MI->rule = true;
                 std::string methodName = getToken();
-                if (checkItem("TYPE"))
-                    MI->size = getSize();
+                if (checkItem("TYPE")) {
+                    MI->type = getToken();
+                }
                 if (checkItem("="))
                     MI->guard = getExpression();
                 IR->method[methodName] = MI;
@@ -190,7 +180,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                         if (checkItem("PARAM")) {
                             std::string name = getToken();
                             ParseCheck(checkItem("TYPE"), "TYPE field missing");
-                            MI->params.push_back(ParamElement{name, getSize()});
+                            MI->params.push_back(ParamElement{name, getToken()});
                         }
                         else if (checkItem("STORE")) {
                             bool isAlloca = checkItem("/Alloca");
@@ -208,13 +198,11 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                         }
                         else if (checkItem("METAREAD")) {
                             std::string mname = getExpression();
-                            std::string mval = bufp;
-                            MI->meta[MetaRead][mname].insert(mval);
+                            MI->meta[MetaRead][mname].insert(bufp);
                         }
                         else if (checkItem("METAINVOKE")) {
                             std::string mname = getExpression();
-                            std::string mval = bufp;
-                            MI->meta[MetaInvoke][mname].insert(mval);
+                            MI->meta[MetaInvoke][mname].insert(bufp);
                         }
                         else
                             ParseCheck(false, "unknown method item");

@@ -60,8 +60,9 @@ static void setAssign(std::string target, std::string value)
      assignList[target] = inlineValue(value, true);
 }
 
-static std::string sizeProcess(uint64_t val)
+static std::string sizeProcess(std::string type)
 {
+    uint64_t val = convertType(type);
     if (val > 1)
         return "[" + autostr(val - 1) + ":0]";
     return "";
@@ -94,22 +95,22 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
         if (instance != "") {
             // define 'wire' elements before instantiating instance
             if (inlineValue(wparam, false) == "")
-                wireList.push_back(sizeProcess(MI->size) + wparam);
+                wireList.push_back(sizeProcess(MI->type) + wparam);
             wparam = inlineValue(wparam, true);
         }
-        else if (MI->size != 0) // !action
-            wparam = outp + sizeProcess(MI->size) + methodName;
+        else if (MI->type != "") // !action
+            wparam = outp + sizeProcess(MI->type) + methodName;
         modulePortList.push_back(wparam);
         for (auto item: MI->params) {
             if (instance != "") {
                 // define 'wire' elements before instantiating instance
                 wparam = inp + item.name;
                 if (inlineValue(wparam, false) == "")
-                    wireList.push_back(sizeProcess(item.size) + wparam);
+                    wireList.push_back(sizeProcess(item.type) + wparam);
                 wparam = inlineValue(wparam, true);
             }
             else
-                wparam = inp + sizeProcess(item.size) + item.name;
+                wparam = inp + sizeProcess(item.type) + item.name;
             modulePortList.push_back(wparam);
         }
     }
@@ -118,10 +119,10 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     for (auto oitem: IR->outcall)
         for (auto FI : oitem.IR->method) {
             MethodInfo *MI = oitem.IR->method[FI.first];
-            modulePortList.push_back((MI->size == 0/* action */ ? outp : inp + (instance == "" ? sizeProcess(MI->size) :""))
+            modulePortList.push_back((MI->type == ""/* action */ ? outp : inp + (instance == "" ? sizeProcess(MI->type) :""))
                 + oitem.fldName + MODULE_SEPARATOR + FI.first);
             for (auto item: MI->params)
-                modulePortList.push_back(outp + (instance == "" ? sizeProcess(item.size) :"")
+                modulePortList.push_back(outp + (instance == "" ? sizeProcess(item.type) :"")
                    + oitem.fldName + MODULE_SEPARATOR + item.name);
         }
 
@@ -223,7 +224,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
                 rval = rest;
             }
         }
-        if (MI->size != 0) { /* !action */
+        if (MI->type != "") { /* !action */
             if (methodName == rdyName)
                 assignList[methodName + "_internal"] = IR->method[methodName]->guard;  // collect the text of the return value into a single 'assign'
             else if (IR->method[methodName]->guard != "")
@@ -268,18 +269,19 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             std::string fldName = item.fldName;
             if (vecCount != -1)
                 fldName += autostr(dimIndex++);
+            uint64_t size = convertType(item.type);
             if (item.IR && !item.isPtr) {
                 if (item.IR->name.substr(0,12) == "l_struct_OC_") {
-                    fprintf(OStr, "    reg%s %s;\n", sizeProcess(item.size).c_str(), fldName.c_str());
+                    fprintf(OStr, "    reg%s %s;\n", sizeProcess(item.type).c_str(), fldName.c_str());
                     resetList.push_back(fldName);
                 }
                 else if (item.IR->name.substr(0, 12) != "l_ainterface")
                     generateModuleSignature(OStr, item.IR, fldName);
             }
-            else if (item.size != 0) {
+            else if (size != 0) {
                 std::string temp = "    reg";
-                if (item.size > 8)
-                    temp += "[" + autostr(item.size - 1) + ":0]";
+                if (size > 8)
+                    temp += "[" + autostr(size - 1) + ":0]";
                 temp += " " + fldName;
                 if (item.arrayLen > 0)
                     temp += "[" + autostr(item.arrayLen) + ":0]";
