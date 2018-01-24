@@ -255,6 +255,19 @@ std::string GetValueName(const Value *Operand)
             No = ++NextAnonValueNumber;
         Name = "tmp__" + utostr(No);
     }
+    else if (Name != "this")
+        if (auto arg = dyn_cast<Argument>(Operand)) {
+            const Function *func = arg->getParent();
+            for (auto item: getClass(findThisArgument(func))->method)
+                if (item.second == func) {
+                    Name = item.first.substr(0, item.first.length() - 5) + MODULE_SEPARATOR + Name;
+                    goto allDone;
+                }
+            printf("[%s:%d] COULDNT FIND PARAMFUNC\n", __FUNCTION__, __LINE__);
+            func->dump();
+            exit(-1);
+allDone:;
+        }
     std::string VarName = allocaMap[Operand];
     if (VarName == "")
     for (auto charp = Name.begin(), E = Name.end(); charp != E; ++charp) {
@@ -487,6 +500,15 @@ return "";
         std::string methodName = prefix + fname;
         vout += methodName + "{";
     }
+    std::string funcName;
+    for (auto item: getClass(findThisArgument(func))->method)
+        if (item.second == func) {
+            funcName = item.first.substr(0, item.first.length() - 5) + MODULE_SEPARATOR;
+            goto allDone;
+        }
+    printf("[%s:%d] COULDNT FIND PARAMFUNC\n", __FUNCTION__, __LINE__);
+    func->dump();
+allDone:;
     auto FAI = func->arg_begin();
     for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
         bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
@@ -497,7 +519,7 @@ return "";
         if (dyn_cast<Argument>(*AI))
             indirect = false;
         std::string parg = printOperand(*AI, indirect);
-        vout += sep + prefix + FAI->getName().str() + ";" + parg;
+        vout += sep + prefix + funcName + FAI->getName().str() + ";" + parg;
         sep = ",";
     }
     return vout + "}";
@@ -1046,7 +1068,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             fprintf(OStr, "    OUTCALL %s = %s\n", fldName.c_str(), getClass(STy)->IR->name.c_str());
         std::string temp;
         if (isa<PointerType>(element))
-            temp += "/Ptr ";
+            temp += "/Ptr";
         if (vecCount != -1)
             temp += "/Count " + utostr(vecCount) + " ";
         if (arrayLen != 0)
@@ -1061,7 +1083,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         std::list<std::string> mlines;
         auto AI = func->arg_begin(), AE = func->arg_end();
         for (AI++; AI != AE; ++AI)
-            mlines.push_back("PARAM " + AI->getName().str() + " TYPE " + typeName(AI->getType()));
+            mlines.push_back("PARAM " + AI->getName().str() + " " + typeName(AI->getType()));
         // promote guards from contained calls to be guards for this function
         processPromote(const_cast<Function *>(func));
         NextAnonValueNumber = 0;
@@ -1123,7 +1145,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         retGuard = cleanupValue(retGuard);
         std::string headerLine = methodName;
         if (uint64_t size = sizeType(func->getReturnType()))
-            headerLine += " TYPE " + typeName(func->getReturnType());
+            headerLine += " " + typeName(func->getReturnType());
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";
         if (mlines.size())

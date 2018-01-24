@@ -116,7 +116,7 @@ static uint64_t convertType(std::string arg)
         return convertType(bp);
     if (auto IR = lookupIR(bp))
         return IR->size;
-    printf("[%s:%d] CONVERTTYPE FAILED '%s'\n", __FUNCTION__, __LINE__, bp);
+    printf("[%s:%d] convertType FAILED '%s'\n", __FUNCTION__, __LINE__, bp);
     exit(-1);
 }
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
@@ -169,17 +169,16 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 if (checkItem("/Rule"))
                     MI->rule = true;
                 std::string methodName = getToken();
-                if (checkItem("TYPE")) {
+                bool foundParen = checkItem("(");
+                if (!foundParen)
                     MI->type = getToken();
-                }
                 if (checkItem("="))
                     MI->guard = getExpression();
                 IR->method[methodName] = MI;
-                if (checkItem("(")) {
+                if (foundParen || checkItem("(")) {
                     while (readLine() && !checkItem(")")) {
                         if (checkItem("PARAM")) {
                             std::string name = getToken();
-                            ParseCheck(checkItem("TYPE"), "TYPE field missing");
                             MI->params.push_back(ParamElement{name, getToken()});
                         }
                         else if (checkItem("STORE")) {

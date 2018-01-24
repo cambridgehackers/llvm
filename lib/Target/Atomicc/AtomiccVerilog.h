@@ -102,15 +102,16 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
             wparam = outp + sizeProcess(MI->type) + methodName;
         modulePortList.push_back(wparam);
         for (auto item: MI->params) {
+            std::string pname = methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + item.name;
             if (instance != "") {
                 // define 'wire' elements before instantiating instance
-                wparam = inp + item.name;
+                wparam = inp + pname;
                 if (inlineValue(wparam, false) == "")
                     wireList.push_back(sizeProcess(item.type) + wparam);
                 wparam = inlineValue(wparam, true);
             }
             else
-                wparam = inp + sizeProcess(item.type) + item.name;
+                wparam = inp + sizeProcess(item.type) + pname;
             modulePortList.push_back(wparam);
         }
     }
@@ -123,7 +124,8 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
                 + oitem.fldName + MODULE_SEPARATOR + FI.first);
             for (auto item: MI->params)
                 modulePortList.push_back(outp + (instance == "" ? sizeProcess(item.type) :"")
-                   + oitem.fldName + MODULE_SEPARATOR + item.name);
+                   + oitem.fldName + MODULE_SEPARATOR + FI.first.substr(0, FI.first.length()-5)
+                   + MODULE_SEPARATOR + item.name);
         }
 
     // now write actual module signature to output file
