@@ -92,7 +92,7 @@ typedef struct {
     bool                       rule;
     std::list<StoreListElement> storeList;
     std::list<CallListElement> callList;
-    uint64_t                size;
+    uint64_t                   size;
     std::list<ParamElement>    params;
     MetaRef                    meta[MetaMax];
 } MethodInfo;
@@ -113,6 +113,7 @@ typedef struct {
 
 typedef struct ModuleIR {
     std::string                       name;
+    uint64_t                          size;
     std::list<std::string>            metaList;
     std::list<std::string>            softwareName;
     std::map<std::string, MethodInfo *> method;

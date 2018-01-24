@@ -988,6 +988,25 @@ static uint64_t sizeType(const Type *Ty)
         llvm_unreachable("Unhandled case in sizeType!");
     }
 }
+static std::string typeName(const Type *Ty)
+{
+     switch (Ty->getTypeID()) {
+     case Type::VoidTyID:
+         return "";
+     case Type::IntegerTyID:
+         return "INTEGER_" + utostr(sizeType(Ty));
+     case Type::StructTyID:
+         return getStructName(cast<StructType>(Ty));
+     case Type::ArrayTyID: {
+         const ArrayType *ATy = cast<ArrayType>(Ty);
+         return "ARRAY_" + utostr(ATy->getNumElements()) + "_" + typeName(ATy->getElementType());
+         }
+     case Type::PointerTyID:
+        return "POINTER_" + typeName(cast<PointerType>(Ty)->getElementType());
+     default:
+         llvm_unreachable("Unhandled case in processTypes!");
+     }
+}
 
 /*
  * Walk all BasicBlocks for a Function, generating strings for Instructions
@@ -996,7 +1015,8 @@ static uint64_t sizeType(const Type *Ty)
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     bool isModule = table->STy->getName().substr(0, 6) == "module";
-    fprintf(OStr, "%sMODULE %s (\n", isModule ? "" : "E", getStructName(table->STy).c_str());
+    fprintf(OStr, "%sMODULE %s %lld (\n", isModule ? "" : "E", getStructName(table->STy).c_str(),
+        sizeType(table->STy));
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
     for (auto item: table->IR->priority)
@@ -1023,7 +1043,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             if (vecCount != -1)
                 temp += " COUNT " + utostr(vecCount);
             if (uint64_t size = sizeType(element))
-                temp += " SIZE " + utostr(size);
+                temp += " TYPE " + typeName(element);
             if (arrayLen != 0)
                 temp += " ARRAY " + utostr(arrayLen);
             fprintf(OStr, "    FIELD%s %s\n", isPtr ? "/PTR ": "", temp.c_str());
@@ -1055,7 +1075,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         std::list<std::string> mlines;
         auto AI = func->arg_begin(), AE = func->arg_end();
         for (AI++; AI != AE; ++AI)
-            mlines.push_back("PARAM " + AI->getName().str() + " SIZE " + utostr(sizeType(AI->getType())));
+            mlines.push_back("PARAM " + AI->getName().str() + " TYPE " + typeName(AI->getType()));
         // promote guards from contained calls to be guards for this function
         processPromote(const_cast<Function *>(func));
         NextAnonValueNumber = 0;
@@ -1117,7 +1137,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         retGuard = cleanupValue(retGuard);
         std::string headerLine = methodName;
         if (uint64_t size = sizeType(func->getReturnType()))
-            headerLine += " SIZE " + utostr(size);
+            headerLine += " TYPE " + typeName(func->getReturnType());
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";
         if (mlines.size())
@@ -1140,11 +1160,8 @@ static std::map<std::string, const StructType *> structAlpha;
 static void getDepend(const StructType *STy)
 {
     std::map<std::string, const StructType *> structTemp;
-    if (!STy->hasName() || STy->getName().substr(0, 7) == "emodule")
+    if (!STy->hasName())
         return;
-    std::string name = getStructName(STy);
-
-    if (!isInterface(STy))
     if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
      && strncmp(STy->getName().str().c_str(), "struct.std::", 12)) {
         ClassMethodTable *table = getClass(STy);
@@ -1154,6 +1171,8 @@ static void getDepend(const StructType *STy)
             if (table)
             if (const Type *newType = table->replaceType[Idx])
                 element = newType;
+            if (auto PTy = dyn_cast<PointerType>(element))
+                element = PTy->getElementType();
             if (auto iSTy = dyn_cast<StructType>(element))
                 structTemp[getStructName(iSTy)] = iSTy;
         }
@@ -1180,6 +1199,7 @@ static void getDepend(const StructType *STy)
              structAlpha[element.first] = NULL;
          }
     }
+    std::string name = getStructName(STy);
     if (structAlpha[name]) {
         structSeq.push_back(STy);
         structAlpha[name] = NULL;

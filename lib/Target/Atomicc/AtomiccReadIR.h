@@ -88,10 +88,6 @@ static std::string getExpression()
         bufp++;
     return ret;
 }
-static uint64_t getSize()
-{
-    return atoi(getToken().c_str());
-}
 static std::map<std::string, ModuleIR *> mapIndex;
 static ModuleIR *lookupIR(std::string ind)
 {
@@ -101,6 +97,30 @@ static ModuleIR *lookupIR(std::string ind)
     ModuleIR *ret = mapIndex[ind];
     ParseCheck(ret != NULL, "lookupIR = " + ind + " not found");
     return ret;
+}
+static uint64_t convertType(const char *bp)
+{
+    auto checkT = [&] (const char *val) -> bool {
+        int len = strlen(val);
+        bool ret = !strncmp(bp, val, len);
+        if (ret)
+            bp += len;
+        return ret;
+    };
+    if (checkT("INTEGER_"))
+        return atoi(bp);
+    if (checkT("ARRAY_"))
+        return convertType(bp);
+    if (checkT("POINTER_"))
+        return convertType(bp);
+    if (auto IR = lookupIR(bp))
+        return IR->size;
+    printf("[%s:%d] CONVERTTYPE FAILED '%s'\n", __FUNCTION__, __LINE__, bp);
+    exit(-1);
+}
+static uint64_t getSize()
+{
+    return convertType(getToken().c_str());
 }
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
 {
@@ -112,6 +132,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
         if (!ext)
             irSeq.push_back(IR);
         IR->name = getToken();
+        IR->size = atoi(getToken().c_str());
         ParseCheck(checkItem("("), "Module '(' missing");
         mapIndex[IR->name] = IR;
         while (readLine() && !checkItem(")")) {
@@ -147,11 +168,11 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 unsigned arrayLen = 0;
                 uint64_t size = 0;
                 if (checkItem("COUNT"))
-                    vecCount = getSize();
-                if (checkItem("SIZE"))
+                    vecCount = atoi(getToken().c_str());
+                if (checkItem("TYPE"))
                     size = getSize();
                 if (checkItem("ARRAY"))
-                    arrayLen = getSize();
+                    arrayLen = atoi(getToken().c_str());
                 IR->fields.push_back(FieldElement{fldName, vecCount, size, lIR, arrayLen, isPtr});
             }
             else if (checkItem("METHOD")) {
@@ -159,7 +180,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 if (checkItem("/Rule"))
                     MI->rule = true;
                 std::string methodName = getToken();
-                if (checkItem("SIZE"))
+                if (checkItem("TYPE"))
                     MI->size = getSize();
                 if (checkItem("="))
                     MI->guard = getExpression();
@@ -168,7 +189,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     while (readLine() && !checkItem(")")) {
                         if (checkItem("PARAM")) {
                             std::string name = getToken();
-                            ParseCheck(checkItem("SIZE"), "SIZE field missing");
+                            ParseCheck(checkItem("TYPE"), "TYPE field missing");
                             MI->params.push_back(ParamElement{name, getSize()});
                         }
                         else if (checkItem("STORE")) {
