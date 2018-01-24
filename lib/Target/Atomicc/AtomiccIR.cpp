@@ -156,7 +156,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             }
             else if (checkItem("METHOD")) {
                 MethodInfo *MI = new MethodInfo{""};
-                if (checkItem("/RULE"))
+                if (checkItem("/Rule"))
                     MI->rule = true;
                 std::string methodName = getToken();
                 if (checkItem("SIZE"))

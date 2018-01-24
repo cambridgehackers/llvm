@@ -1124,7 +1124,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             headerLine += " (";
         std::string options;
         if (table->ruleFunctions[methodName])
-            options += " /RULE";
+            options += "/Rule";
         fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
         for (auto line: mlines)
              fprintf(OStr, "        %s\n", line.c_str());
