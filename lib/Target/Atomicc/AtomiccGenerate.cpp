@@ -139,7 +139,6 @@ static void checkClass(const StructType *STy, const StructType *ActSTy)
     }
 }
 
-static int moduleSequence = 1;
 ClassMethodTable *getClass(const StructType *STy)
 {
     int fieldSub = 0;
@@ -148,8 +147,8 @@ ClassMethodTable *getClass(const StructType *STy)
         classCreate[STy] = table;
         classCreate[STy]->STy = STy;
         ModuleIR *IR = new ModuleIR;
-        IR->sequence = moduleSequence++;
         table->IR = IR;
+        IR->name = getStructName(STy);
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
         int processSequence = 0; // fields
@@ -997,14 +996,13 @@ static uint64_t sizeType(const Type *Ty)
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     bool isModule = table->STy->getName().substr(0, 6) == "module";
-    fprintf(OStr, "%sMODULE %s = %d (\n", isModule ? "" : "E",
-        getStructName(table->STy).c_str(), table->IR->sequence);
+    fprintf(OStr, "%sMODULE %s (\n", isModule ? "" : "E", getStructName(table->STy).c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
     for (auto item: table->IR->priority)
         fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
     for (auto item: table->IR->interfaceConnect)
-        fprintf(OStr, "    INTERFACECONNECT %s %s %d\n", item.target.c_str(), item.source.c_str(), item.IR->sequence);
+        fprintf(OStr, "    INTERFACECONNECT %s %s %s\n", item.target.c_str(), item.source.c_str(), item.IR->name.c_str());
     // generate local state element declarations
     int Idx = 0;
     for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
@@ -1017,10 +1015,10 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             element = newType;
             vecCount = table->replaceCount[Idx];
         }
-        auto pushField = [&](int lIRseq, unsigned arrayLen, bool isPtr) -> void {
+        auto pushField = [&](std::string lIRseq, unsigned arrayLen, bool isPtr) -> void {
             std::string temp;
-            if (lIRseq)
-                temp = utostr(lIRseq) + ":";
+            if (lIRseq != "")
+                temp = lIRseq + ":";
             temp += fldName;
             if (vecCount != -1)
                 temp += " COUNT " + utostr(vecCount);
@@ -1032,12 +1030,12 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         };
 
         if (const StructType *STy = dyn_cast<StructType>(element))
-            pushField(getClass(STy)->IR->sequence, 0, false);
+            pushField(getClass(STy)->IR->name, 0, false);
         else if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
             if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
                 if (isInterface(STy))
-                    fprintf(OStr, "    OUTCALL %s = %d\n", fldName.c_str(), getClass(STy)->IR->sequence);
-                pushField(getClass(STy)->IR->sequence, 0, true);
+                    fprintf(OStr, "    OUTCALL %s = %s\n", fldName.c_str(), getClass(STy)->IR->name.c_str());
+                pushField(getClass(STy)->IR->name, 0, true);
             }
         }
         else {
@@ -1046,7 +1044,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
                 arrayLen = ATy->getNumElements();
                 element = ATy->getElementType();
             }
-            pushField(0, arrayLen, false);
+            pushField("", arrayLen, false);
         }
     }
     for (auto FI : table->method) {

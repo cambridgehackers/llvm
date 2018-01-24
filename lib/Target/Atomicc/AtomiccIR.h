@@ -110,7 +110,6 @@ typedef struct {
 } FieldElement;
 
 typedef struct ModuleIR {
-    int                               sequence;
     std::string                       name;
     std::list<std::string>            metaList;
     std::list<std::string>            softwareName;

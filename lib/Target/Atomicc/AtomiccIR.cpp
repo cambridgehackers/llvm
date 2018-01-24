@@ -92,15 +92,14 @@ static uint64_t getSize()
 {
     return atoi(getToken().c_str());
 }
-static std::map<int, ModuleIR *> mapIndex;
+static std::map<std::string, ModuleIR *> mapIndex;
 static ModuleIR *lookupIR(std::string ind)
 {
     ind = trimStr(ind);
     if (ind == "")
         return nullptr;
-    int index = atoi(ind.c_str());
-    ModuleIR *ret = mapIndex[index];
-    ParseCheck(ret != NULL, "lookupIR = " + autostr(index) + " not found");
+    ModuleIR *ret = mapIndex[ind];
+    ParseCheck(ret != NULL, "lookupIR = " + ind + " not found");
     return ret;
 }
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
@@ -113,10 +112,8 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
         if (!ext)
             irSeq.push_back(IR);
         IR->name = getToken();
-        ParseCheck(checkItem("="), "Module = <sequence> missing");
-        IR->sequence = getSize();
         ParseCheck(checkItem("("), "Module '(' missing");
-        mapIndex[IR->sequence] = IR;
+        mapIndex[IR->name] = IR;
         while (readLine() && !checkItem(")")) {
             if (checkItem("SOFTWARE")) {
                 IR->softwareName.push_back(getToken());

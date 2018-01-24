@@ -86,6 +86,8 @@ bool AtomiccWriter::runOnModule(Module &M)
     generateIR(OutputDir);
 
     // Read/process IR to generate verilog module definitions
+std::string globalPath; // from clang/tools/driver/driver.cpp
+printf("[%s:%d] GLOBALPATH %s OUTPUTDIRIRIRIRIR %s\n", __FUNCTION__, __LINE__, globalPath.c_str(), OutputDir.c_str());
     generateVerilog(OutputDir);
     return false;
 }
