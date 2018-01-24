@@ -1198,26 +1198,3 @@ void generateIR(std::string OutputDir)
         processClass(getClass(STy), OStrIR);
     fclose(OStrIR);
 }
-
-void generateVerilog(std::string OutputDir)
-{
-    FILE *OStrIRread = fopen((OutputDir + ".generated.IR").c_str(), "r");
-    FILE *OStrV = fopen((OutputDir + ".generated.v").c_str(), "w");
-    FILE *OStrVH = fopen((OutputDir + ".generated.vh").c_str(), "w");
-    fprintf(OStrV, "`include \"%s.generated.vh\"\n\n", OutputDir.c_str());
-    std::string myName = OutputDir;
-    int ind = myName.rfind('/');
-    if (ind > 0)
-        myName = myName.substr(0, ind);
-    myName += "_GENERATED_";
-    fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
-    std::list<ModuleIR *> irSeq;
-    readModuleIR(irSeq, OStrIRread);
-    for (auto irItem : irSeq) {
-        // now generate the verilog header file '.vh'
-        metaGenerate(irItem, OStrVH);
-        // Only generate verilog for modules derived from Module
-        generateModuleDef(irItem, OStrV);
-    }
-    fprintf(OStrVH, "`endif\n");
-}

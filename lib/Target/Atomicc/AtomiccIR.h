@@ -18,6 +18,8 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
+#ifndef __ATOMICIR_H__
+#define __ATOMICIR_H__
 #include <stdio.h>
 #include <string>
 #include <list>
@@ -121,3 +123,4 @@ typedef struct ModuleIR {
 } ModuleIR;
 
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);
+#endif /* __ATOMICIR_H__ */

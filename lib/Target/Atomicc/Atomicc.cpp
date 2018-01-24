@@ -17,10 +17,12 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/DynamicLibrary.h"
+#include <stdlib.h> // system()
 
 using namespace llvm;
 #include "AtomiccDecl.h"
 
+std::string globalPath; // from clang/tools/driver/driver.cpp
 extern "C" void LLVMInitializeAtomiccTarget() {
   RegisterTargetMachine<AtomiccTargetMachine> X(TheAtomiccTarget);
 }
@@ -86,9 +88,12 @@ bool AtomiccWriter::runOnModule(Module &M)
     generateIR(OutputDir);
 
     // Read/process IR to generate verilog module definitions
-std::string globalPath; // from clang/tools/driver/driver.cpp
-printf("[%s:%d] GLOBALPATH %s OUTPUTDIRIRIRIRIR %s\n", __FUNCTION__, __LINE__, globalPath.c_str(), OutputDir.c_str());
-    generateVerilog(OutputDir);
+globalPath = "../../../llvm/build/bin/";
+printf("[%s:%d] GLOBALPATH [%p] = %s OUTPUTDIRIRIRIRIR %s\n", __FUNCTION__, __LINE__, &globalPath, globalPath.c_str(), OutputDir.c_str());
+std::string commandLine = globalPath + "veriloggen " + OutputDir;
+printf("[%s:%d] CL %s LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL\n", __FUNCTION__, __LINE__, commandLine.c_str());
+    int ret = system(commandLine.c_str());
+printf("[%s:%d] RETURN %d\n", __FUNCTION__, __LINE__, ret);
     return false;
 }
 
