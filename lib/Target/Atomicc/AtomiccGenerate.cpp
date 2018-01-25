@@ -1079,7 +1079,8 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         auto AI = func->arg_begin(), AE = func->arg_end();
         for (AI++; AI != AE; ++AI)
             mlines.push_back("PARAM " + AI->getName().str() + " " + typeName(AI->getType()));
-        // promote guards from contained calls to be guards for this function
+        // promote guards from contained calls to be guards for this function.
+        // Also set up condition expressions for all BasicBlocks 
         processPromote(const_cast<Function *>(func));
         NextAnonValueNumber = 0;
         /* Gather data for top level instructions in each basic block. */

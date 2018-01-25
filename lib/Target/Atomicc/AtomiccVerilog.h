@@ -148,6 +148,38 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
         fprintf(OStr, "// software: %s\n", item.c_str());
     }
 }
+MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
+{
+    while (searchStr != "") {
+        int ind = searchStr.find(MODULE_SEPARATOR);
+        if (ind < 0)
+            break;
+        std::string temp = searchStr.substr(0, ind);
+        for (auto item: searchIR->fields) {
+//printf("[%s:%d] prev %s/%d searchfor %s in %s : %s %p\n", __FUNCTION__, __LINE__, searchStr.c_str(), ind, temp.c_str(), searchIR->name.c_str(), item.fldName.c_str(), item.IR);
+            int64_t vecCount = item.vecCount;
+            int dimIndex = 0;
+            do {
+                std::string fldName = item.fldName;
+                if (vecCount != -1)
+                    fldName += autostr(dimIndex++);
+                if (fldName == temp) {
+                    searchIR = item.IR;
+                    goto nextItem;
+                }
+            } while(vecCount-- > 0);
+        }
+        break;
+nextItem:
+        searchStr = searchStr.substr(ind+1);
+    }
+    MethodInfo *MI = searchIR->method[searchStr];
+    if (!MI) {
+        printf("[%s:%d] method %s not found in module %s\n", __FUNCTION__, __LINE__, searchStr.c_str(), searchIR->name.c_str());
+        exit(-1);
+    }
+    return MI;
+}
 
 typedef struct {
     std::string fname;
@@ -209,29 +241,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             rval = cleanupValue(rval.substr(0, rval.length()-1));
             if (info.isAction)
                 muxEnableList.push_back(MuxEnableEntry{tempCond, calledName});
-            ModuleIR *searchIR = IR;
-            std::string searchStr = calledName;
-            while (searchStr != "") {
-                int ind = searchStr.find(MODULE_SEPARATOR);
-                if (ind < 0)
-                    break;
-                std::string temp = searchStr.substr(0, ind);
-                for (auto fitem: searchIR->fields) {
-//printf("[%s:%d] prev %s/%d searchfor %s in %s : %s %p\n", __FUNCTION__, __LINE__, searchStr.c_str(), ind, temp.c_str(), searchIR->name.c_str(), fitem.fldName.c_str(), fitem.IR);
-                    if (fitem.fldName == temp) {
-                        searchIR = fitem.IR;
-                        goto nextItem;
-                    }
-                }
-                break;
-nextItem:
-                searchStr = searchStr.substr(ind+1);
-            }
-            auto CI = searchIR->method[searchStr];
-            if (!CI) {
-                printf("[%s:%d] method %s not found in module %s\n", __FUNCTION__, __LINE__, searchStr.c_str(), searchIR->name.c_str());
-                exit(-1);
-            }
+            auto CI = lookupQualName(IR, calledName);
             auto AI = CI->params.begin();
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             while(rval.length()) {
