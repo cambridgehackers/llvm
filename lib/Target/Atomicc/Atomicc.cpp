@@ -92,6 +92,8 @@ bool AtomiccWriter::runOnModule(Module &M)
     std::string commandLine = globalPath + "veriloggen " + OutputDir;
     int ret = system(commandLine.c_str());
 printf("[%s:%d] RETURN from '%s' %d\n", __FUNCTION__, __LINE__, commandLine.c_str(), ret);
+    if (ret)
+        exit(-1); // force error return to be propigated
     return false;
 }
 

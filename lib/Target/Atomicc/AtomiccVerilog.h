@@ -188,7 +188,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
         if (endswith(methodName, "__VALID"))
             rdyName = methodName.substr(0, methodName.length()-7) + "__READY";
         std::list<std::string> localStore;
-        for (auto info: IR->method[methodName]->storeList) {
+        for (auto info: MI->storeList) {
             if (info.isAlloca)
                 setAssign(info.dest, cleanupValue(info.value));
             else {
@@ -197,7 +197,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
                 localStore.push_back("    " + info.dest + " <= " + info.value + ";");
             }
         }
-        for (auto info: IR->method[methodName]->callList) {
+        for (auto info: MI->callList) {
             std::string tempCond = info.cond;
             if (tempCond != "")
                 tempCond = " & " + tempCond;
@@ -209,6 +209,31 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             rval = cleanupValue(rval.substr(0, rval.length()-1));
             if (info.isAction)
                 muxEnableList.push_back(MuxEnableEntry{tempCond, calledName});
+            ModuleIR *searchIR = IR;
+            std::string searchStr = calledName;
+            while (searchStr != "") {
+                int ind = searchStr.find(MODULE_SEPARATOR);
+                if (ind < 0)
+                    break;
+                std::string temp = searchStr.substr(0, ind);
+                for (auto fitem: searchIR->fields) {
+//printf("[%s:%d] prev %s/%d searchfor %s in %s : %s %p\n", __FUNCTION__, __LINE__, searchStr.c_str(), ind, temp.c_str(), searchIR->name.c_str(), fitem.fldName.c_str(), fitem.IR);
+                    if (fitem.fldName == temp) {
+                        searchIR = fitem.IR;
+                        goto nextItem;
+                    }
+                }
+                break;
+nextItem:
+                searchStr = searchStr.substr(ind+1);
+            }
+            auto CI = searchIR->method[searchStr];
+            if (!CI) {
+                printf("[%s:%d] method %s not found in module %s\n", __FUNCTION__, __LINE__, searchStr.c_str(), searchIR->name.c_str());
+                exit(-1);
+            }
+            auto AI = CI->params.begin();
+            std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             while(rval.length()) {
                 std::string rest;
                 int ind = rval.find(",");
@@ -216,14 +241,9 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
                     rest = rval.substr(ind+1);
                     rval = rval.substr(0, ind);
                 }
-                ind = rval.find(";");
-                std::string paramValue;
-                if (ind > 0) {
-                    paramValue = rval.substr(ind+1);
-                    rval = rval.substr(0, ind);
-                }
-                muxValueList[rval].push_back(MuxValueEntry{tempCond, paramValue});
+                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, rval});
                 rval = rest;
+                AI++;
             }
         }
         if (MI->type != "") { /* !action */

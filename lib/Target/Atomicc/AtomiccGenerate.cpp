@@ -443,14 +443,20 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
     return cbuffer;
 }
 
+static ClassMethodTable *getFunctionTable(const Function *func)
+{
+    if (const StructType *targetSTy = findThisArgument(func))
+        return getClass(targetSTy);
+    return NULL;
+}
+
 std::string getMethodName(const Function *func)
 {
-    std::string fname = func->getName();
-    if (const StructType *targetSTy = findThisArgument(func))
-    if (ClassMethodTable *targetTable = getClass(targetSTy))
+    if (ClassMethodTable *targetTable = getFunctionTable(func))
         for (auto item: targetTable->method)
             if (item.second == func)
                 return item.first;
+    std::string fname = func->getName();
     if (fname == "printf")
         return "";
     return "";
@@ -500,17 +506,7 @@ return "";
         std::string methodName = prefix + fname;
         vout += methodName + "{";
     }
-    std::string funcName;
-    for (auto item: getClass(findThisArgument(func))->method)
-        if (item.second == func) {
-            funcName = item.first.substr(0, item.first.length() - 5) + MODULE_SEPARATOR;
-            goto allDone;
-        }
-    printf("[%s:%d] COULDNT FIND PARAMFUNC\n", __FUNCTION__, __LINE__);
-    func->dump();
-allDone:;
-    auto FAI = func->arg_begin();
-    for (FAI++; AI != AE; ++AI, FAI++) { // first param processed as pcalledFunction
+    for (; AI != AE; ++AI) { // first param processed as pcalledFunction
         bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
         if (auto *ins = dyn_cast<Instruction>(*AI)) {
             if (ins->getOpcode() == Instruction::GetElementPtr)
@@ -518,8 +514,7 @@ allDone:;
         }
         if (dyn_cast<Argument>(*AI))
             indirect = false;
-        std::string parg = printOperand(*AI, indirect);
-        vout += sep + prefix + funcName + FAI->getName().str() + ";" + parg;
+        vout += sep + printOperand(*AI, indirect);
         sep = ",";
     }
     return vout + "}";
