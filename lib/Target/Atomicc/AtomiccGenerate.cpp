@@ -62,9 +62,12 @@ static INTMAP_TYPE opcodeMap[] = {
     {Instruction::And, "&"}, {Instruction::Or, "|"}, {Instruction::Xor, "^"},
     {Instruction::Shl, "<<"}, {Instruction::LShr, ">>"}, {Instruction::AShr, " >> "}, {}};
 std::map<const Function *, Function *> ruleRDYFunction;
-static struct {
-    std::map<const BasicBlock *, Value *> val;
-} blockCondition[2];
+typedef struct {
+    bool invert;
+    Value *cond;
+    BasicBlock *from;
+} BlockCondItem;
+static std::map<const BasicBlock *, std::list<BlockCondItem *>> blockCondition;
 
 /*
  * Utility functions
@@ -534,38 +537,70 @@ std::string parenOperand(const Value *Operand)
     return temp;
 }
 
-static void setCondition(BasicBlock *bb, int invert, Value *val)
+static void setCondition(BasicBlock *bb, bool invert, Value *val, BasicBlock *from)
 {
-    blockCondition[invert].val[bb] = val;
+    // each element in list is a valid path to get to the target BasicBlock.
+    // therefore the 'execute guard' for the BB is the 'OR' of all elements in the list.
+    blockCondition[bb].push_back(new BlockCondItem{invert, val, from});
 }
-
-static Value *getACondition(BasicBlock *bb, int invert)
+static Value *makeBinop(BasicBlock *bb, BinaryOperator::BinaryOps Opc, Value *LHS, Value *RHS)
 {
-    if (Value *val = blockCondition[invert].val[bb])
-        return val;
-    if (Instruction *val = dyn_cast_or_null<Instruction>(blockCondition[1-invert].val[bb])) {
-        BasicBlock *prevBB = val->getParent();
-        Instruction *TI = bb->getTerminator();
-        if (!TI) {
-printf("[%s:%d] terminator not found!!\n", __FUNCTION__, __LINE__);
-            bb->dump();
-            exit(-1);
-        }
-        if (prevBB != bb) {
-            prepareReplace(NULL, NULL);
-            val = cloneTree(val, TI);
-        }
-        IRBuilder<> builder(bb);
-        builder.SetInsertPoint(TI);
-        setCondition(bb, invert, BinaryOperator::Create(Instruction::Xor,
-           val, builder.getInt1(1), "invertCond", TI));
-        return blockCondition[invert].val[bb];
+    Instruction *TI = bb->getTerminator();
+    if (!TI) {
+        printf("[%s:%d] terminator not found!!\n", __FUNCTION__, __LINE__);
+        bb->dump();
+        exit(-1);
     }
-    return NULL;
+    IRBuilder<> builder(bb);
+    builder.SetInsertPoint(TI);
+    if (Instruction *ins = dyn_cast<Instruction>(LHS))
+    if (ins->getParent() != bb) {
+        prepareReplace(NULL, NULL);
+        LHS = cloneTree(ins, TI);
+    }
+    if (!RHS)
+        RHS = builder.getInt1(1);
+    else if (Instruction *ins = dyn_cast<Instruction>(RHS))
+        if (ins->getParent() != bb) {
+            prepareReplace(NULL, NULL);
+            RHS = cloneTree(ins, TI);
+        }
+    return BinaryOperator::Create(Opc, LHS, RHS, "insertedCond", TI);
+}
+static Value *makeInvert(BasicBlock *bb, Value *aval)
+{
+    return makeBinop(bb, Instruction::Xor, aval, NULL);
+}
+static Value *getACondition(BasicBlock *bb, bool invert)
+{
+    Value *exprTop = nullptr;
+    if (blockCondition[bb].size() == 1) {
+        BlockCondItem *BC = blockCondition[bb].front();
+        if (blockCondition[BC->from].size() == 0) {
+            if (BC->invert == invert)
+                return BC->cond;
+            return makeInvert(bb, BC->cond);
+        }
+    }
+    for (auto item: blockCondition[bb]) {
+        Value *thisTerm = item->cond;
+        if (item->invert)
+            // Since we are 'AND'ing conditions together, remove inversions
+            thisTerm = makeInvert(bb, thisTerm);
+        if (Value *blockCond = getACondition(item->from, false))
+            // if BB where 'If' statement existed had a condition, 'AND' it in
+            thisTerm = makeBinop(bb, Instruction::And, thisTerm, blockCond);
+        if (exprTop)  // 'OR' together all paths of getting to this BB
+            thisTerm = makeBinop(bb, Instruction::Or, thisTerm, exprTop);
+        exprTop = thisTerm;
+    }
+    if (invert && exprTop)
+        exprTop = makeInvert(bb, exprTop);
+    return exprTop;
 }
 static std::string getCondStr(BasicBlock *bb)
 {
-    if (Value *cond = getACondition(bb, 0))
+    if (Value *cond = getACondition(bb, false))
         return printOperand(cond, false);
     return "";
 }
@@ -662,9 +697,9 @@ std::string printOperand(const Value *Operand, bool Indirect)
             for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
                 std::string cStr = getCondStr(inBlock);
-                if (cStr != "" && (opIndex != Eop - 1 || getACondition(inBlock, 1) != prevCond))
+                if (cStr != "" && (opIndex != Eop - 1 || getACondition(inBlock, true) != prevCond))
                     vout += cStr + " ? ";
-                prevCond = getACondition(inBlock, 0);
+                prevCond = getACondition(inBlock, false);
                 vout += printOperand(PN->getIncomingValue(opIndex), false);
                 if (opIndex != Eop - 1)
                     vout += ":";
@@ -836,7 +871,7 @@ static void addGuard(Instruction *argI, Function *func, Function *currentFunctio
     /* make a call to the guard being promoted */
     Instruction *newI = expandTreeOptions(TI, argI, func);
     /* if the promoted guard is in an 'if' block, 'or' with inverted condition of block */
-    if (Instruction *bcond = dyn_cast_or_null<Instruction>(getACondition(argI->getParent(), 1))) { // get inverted condition, if any
+    if (Instruction *bcond = dyn_cast_or_null<Instruction>(getACondition(argI->getParent(), true))) { // get inverted condition, if any
         prepareReplace(argI->getParent()->getParent()->arg_begin(), TI->getParent()->getParent()->arg_begin());
         newI = BinaryOperator::Create(Instruction::Or, newI, cloneTree(bcond,TI), "newor", TI);
     }
@@ -854,31 +889,89 @@ static void addGuard(Instruction *argI, Function *func, Function *currentFunctio
         recursiveDelete(newI);
 }
 
-// Preprocess the body rules, moving items to RDY() and ENA()
-static void processPromote(Function *currentFunction)
+static void processIndexRef(Function *currentFunction)
 {
 restart:
-    for (auto BI = currentFunction->begin(), BE = currentFunction->end(); BI != BE; BI++) {
-        for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;) {
+    for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
+        for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE;) {
             auto INEXT = std::next(BasicBlock::iterator(IIb));
             Instruction *II = &*IIb;
             switch (II->getOpcode()) {
-            case Instruction::Call: {
-                Function *func = dyn_cast<Function>(dyn_cast<CallInst>(II)->getCalledValue());
-                Function *calledFunctionGuard = ruleRDYFunction[func];
-                if (trace_hoist)
-                    printf("HOIST: CALLER %s calling '%s' guard %p\n", currentFunction->getName().str().c_str(), func->getName().str().c_str(), calledFunctionGuard);
-                if (calledFunctionGuard)
-                    addGuard(II, calledFunctionGuard, currentFunction);
-                break;
+            case Instruction::GetElementPtr:
+                // Expand out index expression references
+                if (II->getNumOperands() == 2)
+                if (Instruction *switchIndex = dyn_cast<Instruction>(II->getOperand(1))) {
+                    int Values_size = 2;
+                    if (Instruction *ins = dyn_cast<Instruction>(II->getOperand(0))) {
+                        if (PointerType *PTy = dyn_cast<PointerType>(ins->getOperand(0)->getType()))
+                        if (StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
+                            int Idx = 0, eleIndex = -1;
+                            if (const ConstantInt *CI = dyn_cast<ConstantInt>(ins->getOperand(2)))
+                                eleIndex = CI->getZExtValue();
+                            for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++)
+                                if (Idx == eleIndex)
+                                if (ClassMethodTable *table = getClass(STy))
+                                    if (table->replaceType[Idx]) {
+                                        Values_size = table->replaceCount[Idx];
+printf("[%s:%d] get dyn size (static not handled) %d\n", __FUNCTION__, __LINE__, Values_size);
+if (Values_size < 0 || Values_size > 100) Values_size = 2;
+                                        //II->getParent()->dump();
+                                    }
+                        }
+                        ins->getOperand(0)->dump();
+                    }
+                    II->getOperand(0)->dump();
+                    BasicBlock *afterswitchBB = BBI->splitBasicBlock(II, "afterswitch");
+                    IRBuilder<> afterBuilder(afterswitchBB);
+                    afterBuilder.SetInsertPoint(II);
+                    // Build Switch instruction in starting block
+                    IRBuilder<> startBuilder(&*BBI);
+                    startBuilder.SetInsertPoint(BBI->getTerminator());
+                    BasicBlock *lastCaseBB = BasicBlock::Create(BBI->getContext(), "lastcase", currentFunction, afterswitchBB);
+                    SwitchInst *switchInst = startBuilder.CreateSwitch(switchIndex, lastCaseBB, Values_size - 1);
+                    BBI->getTerminator()->eraseFromParent();
+                    // Build PHI in end block
+                    PHINode *phi = afterBuilder.CreatePHI(II->getType(), Values_size, "phi");
+                    // Add all of the 'cases' to the switch instruction.
+                    for (int caseIndex = 0; caseIndex < Values_size; ++caseIndex) {
+                        ConstantInt *caseInt = startBuilder.getInt64(caseIndex);
+                        BasicBlock *caseBB = lastCaseBB;
+                        if (caseIndex != Values_size - 1) { // already created a block for 'default'
+                            caseBB = BasicBlock::Create(BBI->getContext(), "switchcase", currentFunction, afterswitchBB);
+                            switchInst->addCase(caseInt, caseBB);
+                        }
+                        IRBuilder<> cbuilder(caseBB);
+                        cbuilder.CreateBr(afterswitchBB);
+                        prepareReplace(NULL, NULL);
+                        Instruction *val = cloneTree(II, caseBB->getTerminator());
+                        val->setOperand(1, caseInt);
+                        phi->addIncoming(val, caseBB);
+                    }
+                    II->replaceAllUsesWith(phi);
+                    recursiveDelete(II);
+                    goto restart;  // the instruction INEXT is no longer in the block BBI
                 }
+                break;
+            }
+            IIb = INEXT;
+        }
+    }
+}
+
+static void processBlockConditions(Function *currentFunction)
+{
+    for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
+        for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE;) {
+            auto INEXT = std::next(BasicBlock::iterator(IIb));
+            Instruction *II = &*IIb;
+            switch (II->getOpcode()) {
             case Instruction::Br: {
                 // BUG BUG BUG -> combine the condition for the current block with the getConditions for this instruction
                 const BranchInst *BI = dyn_cast<BranchInst>(II);
                 if (BI && BI->isConditional()) {
                     //printf("[%s:%d] condition %s [%p, %p]\n", __FUNCTION__, __LINE__, printOperand(BI->getCondition(), false).c_str(), BI->getSuccessor(0), BI->getSuccessor(1));
-                    setCondition(BI->getSuccessor(0), 0, BI->getCondition()); // 'true' condition
-                    setCondition(BI->getSuccessor(1), 1, BI->getCondition()); // 'inverted' condition
+                    setCondition(BI->getSuccessor(0), false, BI->getCondition(), &*BBI); // 'true' condition
+                    setCondition(BI->getSuccessor(1), true, BI->getCondition(), &*BBI); // 'inverted' condition
                 }
                 else if (isa<IndirectBrInst>(II)) {
                     printf("[%s:%d] indirect\n", __FUNCTION__, __LINE__);
@@ -910,68 +1003,36 @@ restart:
                         }
                         cbuilder.SetInsertPoint(TI);
                         Value *cmp = cbuilder.CreateICmpEQ(myIndex, ConstantInt::get(swType, val));
-                        setCondition(caseBB, 0, cmp);
+                        setCondition(caseBB, false, cmp, &*BBI);
                     }
                 }
                 //printf("[%s:%d] after switch\n", __FUNCTION__, __LINE__);
                 //II->getParent()->getParent()->dump();
                 break;
                 }
-            case Instruction::GetElementPtr:
-                // Expand out index expression references
-                if (II->getNumOperands() == 2)
-                if (Instruction *switchIndex = dyn_cast<Instruction>(II->getOperand(1))) {
-                    int Values_size = 2;
-                    if (Instruction *ins = dyn_cast<Instruction>(II->getOperand(0))) {
-                        if (PointerType *PTy = dyn_cast<PointerType>(ins->getOperand(0)->getType()))
-                        if (StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
-                            int Idx = 0, eleIndex = -1;
-                            if (const ConstantInt *CI = dyn_cast<ConstantInt>(ins->getOperand(2)))
-                                eleIndex = CI->getZExtValue();
-                            for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++)
-                                if (Idx == eleIndex)
-                                if (ClassMethodTable *table = getClass(STy))
-                                    if (table->replaceType[Idx]) {
-                                        Values_size = table->replaceCount[Idx];
-printf("[%s:%d] get dyn size (static not handled) %d\n", __FUNCTION__, __LINE__, Values_size);
-if (Values_size < 0 || Values_size > 100) Values_size = 2;
-                                        //II->getParent()->dump();
-                                    }
-                        }
-                        ins->getOperand(0)->dump();
-                    }
-                    II->getOperand(0)->dump();
-                    BasicBlock *afterswitchBB = BI->splitBasicBlock(II, "afterswitch");
-                    IRBuilder<> afterBuilder(afterswitchBB);
-                    afterBuilder.SetInsertPoint(II);
-                    // Build Switch instruction in starting block
-                    IRBuilder<> startBuilder(&*BI);
-                    startBuilder.SetInsertPoint(BI->getTerminator());
-                    BasicBlock *lastCaseBB = BasicBlock::Create(BI->getContext(), "lastcase", currentFunction, afterswitchBB);
-                    SwitchInst *switchInst = startBuilder.CreateSwitch(switchIndex, lastCaseBB, Values_size - 1);
-                    BI->getTerminator()->eraseFromParent();
-                    // Build PHI in end block
-                    PHINode *phi = afterBuilder.CreatePHI(II->getType(), Values_size, "phi");
-                    // Add all of the 'cases' to the switch instruction.
-                    for (int caseIndex = 0; caseIndex < Values_size; ++caseIndex) {
-                        ConstantInt *caseInt = startBuilder.getInt64(caseIndex);
-                        BasicBlock *caseBB = lastCaseBB;
-                        if (caseIndex != Values_size - 1) { // already created a block for 'default'
-                            caseBB = BasicBlock::Create(BI->getContext(), "switchcase", currentFunction, afterswitchBB);
-                            switchInst->addCase(caseInt, caseBB);
-                        }
-                        IRBuilder<> cbuilder(caseBB);
-                        cbuilder.CreateBr(afterswitchBB);
-                        prepareReplace(NULL, NULL);
-                        Instruction *val = cloneTree(II, caseBB->getTerminator());
-                        val->setOperand(1, caseInt);
-                        phi->addIncoming(val, caseBB);
-                    }
-                    II->replaceAllUsesWith(phi);
-                    recursiveDelete(II);
-                    goto restart;  // the instruction INEXT is no longer in the block BI
-                }
+            }
+            IIb = INEXT;
+        }
+    }
+}
+
+// Preprocess the body rules, moving items to RDY() and ENA()
+static void processPromote(Function *currentFunction)
+{
+    for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
+        for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE;) {
+            auto INEXT = std::next(BasicBlock::iterator(IIb));
+            Instruction *II = &*IIb;
+            switch (II->getOpcode()) {
+            case Instruction::Call: {
+                Function *func = dyn_cast<Function>(dyn_cast<CallInst>(II)->getCalledValue());
+                Function *calledFunctionGuard = ruleRDYFunction[func];
+                if (trace_hoist)
+                    printf("HOIST: CALLER %s calling '%s' guard %p\n", currentFunction->getName().str().c_str(), func->getName().str().c_str(), calledFunctionGuard);
+                if (calledFunctionGuard)
+                    addGuard(II, calledFunctionGuard, currentFunction);
                 break;
+                }
             }
             IIb = INEXT;
         }
@@ -1079,8 +1140,11 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         auto AI = func->arg_begin(), AE = func->arg_end();
         for (AI++; AI != AE; ++AI)
             mlines.push_back("PARAM " + AI->getName().str() + " " + typeName(AI->getType()));
+        // Expand array indexing into Switch/PHI
+        processIndexRef(const_cast<Function *>(func));
+        // Set up condition expressions for all BasicBlocks 
+        processBlockConditions(const_cast<Function *>(func));
         // promote guards from contained calls to be guards for this function.
-        // Also set up condition expressions for all BasicBlocks 
         processPromote(const_cast<Function *>(func));
         NextAnonValueNumber = 0;
         /* Gather data for top level instructions in each basic block. */
