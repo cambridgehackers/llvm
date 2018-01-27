@@ -28,7 +28,7 @@ static bool findExact(std::string haystack, std::string needle)
 /*
  * lookup/replace values for class variables that are assigned only 1 time.
  */
-std::map<std::string, std::string> assignList, lateAssignList;
+std::map<std::string, std::string> assignList;
 static std::string inlineValue(std::string wname, bool clear)
 {
     std::string temp, exactMatch;
@@ -67,6 +67,57 @@ static std::string sizeProcess(std::string type)
         return "[" + autostr(val - 1) + ":0]";
     return "";
 }
+
+#if 1
+std::map<std::string, bool> inList, outList;
+static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
+{
+    std::string instPrefix = instance + MODULE_SEPARATOR;
+    // First handle all 'incoming' interface methods
+    for (auto FI : IR->method) {
+        std::string methodName = FI.first;
+        MethodInfo *MI = IR->method[methodName];
+        if (MI->rule)
+            continue;
+        std::string wparam = instPrefix + methodName;
+        if (instance != "") {
+            if (MI->type == "") // action
+                outList[wparam] = true;
+            else
+                inList[wparam] = true;
+        }
+        else if (MI->type != "") // !action
+            outList[methodName] = true;
+        else
+            inList[methodName] = true;
+        for (auto item: MI->params) {
+            std::string pname = methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + item.name;
+            if (instance != "") {
+                wparam = instPrefix + pname;
+                outList[wparam] = true;
+            }
+            else
+                inList[pname] = true;
+        }
+    }
+    // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
+    for (auto oitem: IR->outcall)
+        for (auto FI : oitem.IR->method) {
+            MethodInfo *MI = oitem.IR->method[FI.first];
+            std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
+            if (MI->type == "")/* action */
+                outList[wparam] = true;
+            else
+                inList[wparam] = true;
+            for (auto item: MI->params) {
+                std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first.substr(0, FI.first.length()-5)
+                   + MODULE_SEPARATOR + item.name;
+                outList[wparam] = true;
+            }
+        }
+
+}
+#endif
 
 /*
  * Generate verilog module header for class definition or reference
@@ -120,12 +171,14 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     for (auto oitem: IR->outcall)
         for (auto FI : oitem.IR->method) {
             MethodInfo *MI = oitem.IR->method[FI.first];
+            std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
             modulePortList.push_back((MI->type == ""/* action */ ? outp : inp + (instance == "" ? sizeProcess(MI->type) :""))
-                + oitem.fldName + MODULE_SEPARATOR + FI.first);
-            for (auto item: MI->params)
-                modulePortList.push_back(outp + (instance == "" ? sizeProcess(item.type) :"")
-                   + oitem.fldName + MODULE_SEPARATOR + FI.first.substr(0, FI.first.length()-5)
-                   + MODULE_SEPARATOR + item.name);
+                + wparam);
+            for (auto item: MI->params) {
+                std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first.substr(0, FI.first.length()-5)
+                   + MODULE_SEPARATOR + item.name;
+                modulePortList.push_back(outp + (instance == "" ? sizeProcess(item.type) :"") + wparam);
+            }
         }
 
     // now write actual module signature to output file
@@ -202,7 +255,26 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
 
     assignList.clear();
-    lateAssignList.clear();
+#if 1 // generate in/outList
+    inList.clear();
+    outList.clear();
+    generateModuleSignatureList(IR, "");
+    for (auto item: IR->fields) {
+        int64_t vecCount = item.vecCount;
+        int dimIndex = 0;
+        do {
+            std::string fldName = item.fldName;
+            if (vecCount != -1)
+                fldName += autostr(dimIndex++);
+            if (item.IR && !item.isPtr) {
+                if (item.IR->name.substr(0,12) == "l_struct_OC_") {
+                }
+                else if (item.IR->name.substr(0, 12) != "l_ainterface")
+                    generateModuleSignatureList(item.IR, fldName);
+            }
+        } while(vecCount-- > 0);
+    }
+#endif
     generateModuleSignature(OStr, IR, "");
     for (auto IC : IR->interfaceConnect) {
         for (auto FI : IC.IR->method) {
@@ -233,7 +305,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             std::string tempCond = info.cond;
             if (tempCond != "")
                 tempCond = " & " + tempCond;
-            tempCond = methodName + "_internal" + tempCond;
+            tempCond = methodName + tempCond;
             std::string rval = info.value; // get call info
             int ind = rval.find("{");
             std::string calledName = rval.substr(0, ind);
@@ -258,14 +330,9 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
         }
         if (MI->type != "") { /* !action */
             if (methodName == rdyName)
-                assignList[methodName + "_internal"] = IR->method[methodName]->guard;  // collect the text of the return value into a single 'assign'
+                assignList[methodName] = IR->method[methodName]->guard;  // collect the text of the return value into a single 'assign'
             else if (IR->method[methodName]->guard != "")
                 setAssign(methodName, IR->method[methodName]->guard);  // collect the text of the return value into a single 'assign'
-        }
-        else if (!MI->rule) {
-            // generate RDY_internal wire so that we can reference RDY expression inside module
-            fprintf(OStr, "    wire %s_internal;\n", rdyName.c_str());
-            lateAssignList[rdyName] = rdyName + "_internal";
         }
         if (localStore.size()) {
             alwaysLines.push_back("if (" + methodName + ") begin");
@@ -323,13 +390,16 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             }
         } while(vecCount-- > 0);
     }
+for (auto item: inList)
+    if (0 && item.second)
+    fprintf(OStr, "                                   %s\n", item.first.c_str());
     // generate 'assign' items
     for (auto item: assignList)
         if (item.second != "")
             fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.c_str());
-    for (auto item: lateAssignList)
-        if (item.second != "")
-            fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.c_str());
+for (auto item: outList)
+    if (0 && item.second)
+    fprintf(OStr, "%s\n", item.first.c_str());
     // generate clocked updates to state elements
     if (resetList.size() > 0 || alwaysLines.size() > 0) {
         fprintf(OStr, "\n    always @( posedge CLK) begin\n      if (!nRST) begin\n");
