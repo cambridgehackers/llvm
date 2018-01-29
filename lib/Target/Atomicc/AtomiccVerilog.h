@@ -33,7 +33,7 @@ static bool findExact(std::string haystack, std::string needle)
 static std::string inlineValue(std::string wname, bool clear)
 {
     std::string temp, exactMatch;
-printf("[%s:%d] assignList[%s] = %s, clear %d\n", __FUNCTION__, __LINE__,wname.c_str(), assignList[wname].c_str(), clear);
+//printf("[%s:%d] assignList[%s] = %s, clear %d\n", __FUNCTION__, __LINE__,wname.c_str(), assignList[wname].c_str(), clear);
     if (!dontInlineValues && (temp = assignList[wname]) == "") {
         int referenceCount = 0;
         for (auto item: assignList) {
@@ -42,9 +42,7 @@ printf("[%s:%d] assignList[%s] = %s, clear %d\n", __FUNCTION__, __LINE__,wname.c
             if (findExact(item.second, wname))
                 referenceCount++;
         }
-        if (referenceCount == 1 && exactMatch != ""
-// && !outList[exactMatch]
-) {
+        if (referenceCount == 1 && exactMatch != "") {
             if (clear)
                 assignList[exactMatch] = "";
             return exactMatch;
@@ -61,7 +59,7 @@ printf("[%s:%d] assignList[%s] = %s, clear %d\n", __FUNCTION__, __LINE__,wname.c
 
 static void setAssign(std::string target, std::string value, bool force)
 {
-printf("[%s:%d] [%s] = %s force %d\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str(), force);
+//printf("[%s:%d] [%s] = %s force %d\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str(), force);
      if (!outList[target])
          printf("[%s:%d] ASSIGNNONONONONONNO %s = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
      assignList[target] = force ? value : inlineValue(value, true);
@@ -249,6 +247,7 @@ typedef struct {
 /*
  * Generate *.v and *.vh for a Verilog module
  */
+static std::map<std::string, std::string> replaceList;
 void generateModuleDef(ModuleIR *IR, FILE *OStr)
 {
     std::list<std::string> alwaysLines, resetList;
@@ -288,16 +287,23 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : IR->method) {
+        replaceList.clear();
         std::string methodName = FI.first;
         MethodInfo *MI = IR->method[methodName];
         std::list<std::string> localStore;
         for (auto info: MI->storeList) {
+            std::string rval = cleanupValue(info.value);
             if (info.isAlloca)
                 setAssign(info.dest, cleanupValue(info.value), false);
+                //replaceList[info.dest] = rval;
             else {
+                if (replaceList[rval] != "") {
+printf("[%s:%d] replace %s with %s\n", __FUNCTION__, __LINE__, rval.c_str(), replaceList[rval].c_str());
+                    rval = replaceList[rval];
+                }
                 if (info.cond != "")
                     localStore.push_back("    if (" + info.cond + ")");
-                localStore.push_back("    " + info.dest + " <= " + info.value + ";");
+                localStore.push_back("    " + info.dest + " <= " + rval + ";");
             }
         }
         for (auto info: MI->callList) {
@@ -321,6 +327,10 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
                 if (ind > 0) {
                     rest = rval.substr(ind+1);
                     rval = rval.substr(0, ind);
+                }
+                if (replaceList[rval] != "") {
+printf("[%s:%d] replace %s with %s\n", __FUNCTION__, __LINE__, rval.c_str(), replaceList[rval].c_str());
+                    rval = replaceList[rval];
                 }
                 muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, rval});
                 rval = rest;
