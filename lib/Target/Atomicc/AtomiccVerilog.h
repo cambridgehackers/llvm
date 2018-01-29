@@ -125,9 +125,16 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
  */
 static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instance)
 {
-    std::list<std::string> modulePortList, wireList;
+    std::list<std::string> modulePortList;
+    std::map<std::string, std::string> wireList; // name -> type
     std::string inp = "input ", outp = "output ", instPrefix, inpClk = "input ";
 
+    auto checkWire = [&](std::string wparam, std::string atype) -> std::string {
+        // define 'wire' elements before instantiating instance
+        if (inlineValue(wparam, false) == "")
+            wireList[wparam] = atype;
+        return inlineValue(wparam, true);
+      };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
     if (instance != "") {
         instPrefix = instance + MODULE_SEPARATOR;
@@ -144,24 +151,16 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
         if (MI->rule)
             continue;
         std::string wparam = inp + methodName;
-        if (instance != "") {
-            // define 'wire' elements before instantiating instance
-            if (inlineValue(wparam, false) == "")
-                wireList.push_back(sizeProcess(MI->type) + wparam);
-            wparam = inlineValue(wparam, true);
-        }
+        if (instance != "")
+            wparam = checkWire(wparam, MI->type);
         else if (MI->type != "") // !action
             wparam = outp + sizeProcess(MI->type) + methodName;
         modulePortList.push_back(wparam);
         for (auto item: MI->params) {
             std::string pname = methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + item.name;
-            if (instance != "") {
-                // define 'wire' elements before instantiating instance
-                wparam = inp + pname;
-                if (inlineValue(wparam, false) == "")
-                    wireList.push_back(sizeProcess(item.type) + wparam);
-                wparam = inlineValue(wparam, true);
-            }
+            wparam = inp + pname;
+            if (instance != "")
+                wparam = checkWire(wparam, item.type);
             else
                 wparam = inp + sizeProcess(item.type) + pname;
             modulePortList.push_back(wparam);
@@ -183,8 +182,9 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
         }
 
     // now write actual module signature to output file
-    for (auto wname: wireList)
-        fprintf(OStr, "    wire %s;\n", wname.c_str());
+    for (auto item: wireList)
+        if (item.second != "")
+        fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
     if (instance != "")
         fprintf(OStr, "    %s %s (\n", IR->name.c_str(), instance.c_str());
     else
