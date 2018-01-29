@@ -32,8 +32,8 @@ static int trace_operand;//=1;
 static int trace_hoist;//= 1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
+static std::string globalMethodName;
 
-static std::map<const Value *, std::string> allocaMap;
 static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
@@ -252,6 +252,10 @@ std::string GetValueName(const Value *Operand)
     if (const GlobalValue *GV = dyn_cast<GlobalValue>(Operand))
         return CBEMangle(GV->getName());
     std::string Name = Operand->getName();
+    if (const Instruction *source = dyn_cast_or_null<Instruction>(Operand))
+    if (source->getOpcode() == Instruction::Alloca)
+        // Make the names unique across all methods in a class
+        Name = globalMethodName + MODULE_SEPARATOR + Name;
     if (Name.empty()) { // Assign unique names to local temporaries.
         unsigned &No = AnonValueNumbers[Operand];
         if (No == 0)
@@ -271,8 +275,7 @@ std::string GetValueName(const Value *Operand)
             exit(-1);
 allDone:;
         }
-    std::string VarName = allocaMap[Operand];
-    if (VarName == "")
+    std::string VarName;
     for (auto charp = Name.begin(), E = Name.end(); charp != E; ++charp) {
         char ch = *charp;
         if (isalnum(ch) || ch == '_' || ch == '$')
@@ -1132,10 +1135,10 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
     }
     for (auto FI : table->method) {
-        std::string methodName = FI.first;
+        globalMethodName = FI.first;
         const Function *func = FI.second;
         if (trace_function || trace_call)
-            printf("PROCESSING %s %s\n", func->getName().str().c_str(), methodName.c_str());
+            printf("PROCESSING %s %s\n", func->getName().str().c_str(), globalMethodName.c_str());
         std::list<std::string> mlines;
         auto AI = func->arg_begin(), AE = func->arg_end();
         for (AI++; AI != AE; ++AI)
@@ -1203,7 +1206,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         if (!isModule)
             retGuard = "";
         retGuard = cleanupValue(retGuard);
-        std::string headerLine = methodName;
+        std::string headerLine = globalMethodName;
         if (uint64_t size = sizeType(func->getReturnType()))
             headerLine += " " + typeName(func->getReturnType());
         if (retGuard != "")
@@ -1211,7 +1214,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         if (mlines.size())
             headerLine += " (";
         std::string options;
-        if (table->ruleFunctions[methodName])
+        if (table->ruleFunctions[globalMethodName])
             options += "/Rule";
         fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
         for (auto line: mlines)
