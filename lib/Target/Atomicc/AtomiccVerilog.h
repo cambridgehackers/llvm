@@ -47,12 +47,9 @@ static std::string inlineValue(std::string wname, std::string atype)
             if (findExact(item.second, wname))
                 referenceCount++;
         }
-        if (referenceCount == 1 && exactMatch != "") {
-printf("[%s:%d] inlinewname %s exactMatch %s out %d\n", __FUNCTION__, __LINE__, wname.c_str(), exactMatch.c_str(), outList[exactMatch]);
-if (!outList[exactMatch] || atype != "") {
+        if (referenceCount == 1 && exactMatch != "" && (!outList[exactMatch] || atype != "")) {
             assignList[exactMatch] = "";
             return exactMatch;
-}
         }
     }
     // define 'wire' elements before instantiating instance
@@ -87,20 +84,11 @@ static void setDir(std::string name, bool out)
 
 static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
 {
-    std::string instPrefix;
-    if (instance != "")
-        instPrefix = instance + MODULE_SEPARATOR;
     // First handle all 'incoming' interface methods
     for (auto FI : IR->method) {
-        std::string methodName = FI.first;
-        MethodInfo *MI = IR->method[methodName];
-        std::string wparam = instPrefix + methodName;
-        //if (MI->rule)
-            //continue;
-        if (instance != "")
-            setDir(wparam, MI->type == ""); // action -> out
-        else
-            setDir(wparam, MI->type != ""); // !action -> out
+        MethodInfo *MI = IR->method[FI.first];
+        std::string wparam = instance + FI.first;
+        setDir(wparam, (instance != "") ^ (MI->type != "")); // if !instance, !action -> out
         wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
         for (auto item: MI->params)
             setDir(wparam + item.name, instance != "");
@@ -124,7 +112,7 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
 static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instance)
 {
     std::list<std::string> modulePortList;
-    std::string inp = "input ", outp = "output ", instPrefix, inpClk = "input ";
+    std::string inp = "input ", outp = "output ", inpClk = "input ";
 
     auto checkWire = [&](std::string wparam, std::string atype, std::string dir) -> void {
         std::string ret = inp + wparam;
@@ -137,9 +125,8 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
     wireList.clear();
     if (instance != "") {
-        instPrefix = instance + MODULE_SEPARATOR;
-        inp = instPrefix;
-        outp = instPrefix;
+        inp = instance;
+        outp = instance;
         inpClk = "";
     }
     modulePortList.push_back(inpClk + "CLK");
@@ -176,7 +163,7 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
         if (item.second != "")
         fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
     if (instance != "")
-        fprintf(OStr, "    %s %s (\n", IR->name.c_str(), instance.c_str());
+        fprintf(OStr, "    %s %s (\n", IR->name.c_str(), instance.substr(0,instance.length()-1).c_str());
     else
         fprintf(OStr, "module %s (\n", IR->name.c_str());
     for (auto PI = modulePortList.begin(); PI != modulePortList.end();) {
@@ -259,7 +246,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             if (item.IR && !item.isPtr)
             if (item.IR->name.substr(0,12) != "l_struct_OC_")
             if (item.IR->name.substr(0, 12) != "l_ainterface")
-                generateModuleSignatureList(item.IR, fldName);
+                generateModuleSignatureList(item.IR, fldName + MODULE_SEPARATOR);
         } while(vecCount-- > 0);
     }
 
@@ -275,6 +262,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     for (auto FI : IR->method) {
         std::string methodName = FI.first;
         MethodInfo *MI = IR->method[methodName];
+        setAssign(methodName, MI->guard);  // collect the text of the return value into a single 'assign'
         std::list<std::string> localStore;
         for (auto info: MI->storeList) {
             std::string rval = cleanupValue(info.value);
@@ -313,8 +301,6 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
                 AI++;
             }
         }
-        if (MI->guard != "")
-            setAssign(methodName, MI->guard);  // collect the text of the return value into a single 'assign'
         if (localStore.size()) {
             alwaysLines.push_back("if (" + methodName + ") begin");
             alwaysLines.splice(alwaysLines.end(), localStore);
@@ -356,7 +342,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
                     resetList.push_back(fldName);
                 }
                 else if (item.IR->name.substr(0, 12) != "l_ainterface")
-                    generateModuleSignature(OStr, item.IR, fldName);
+                    generateModuleSignature(OStr, item.IR, fldName + MODULE_SEPARATOR);
             }
             else if (size != 0) {
                 std::string temp = "    reg";
