@@ -61,8 +61,6 @@ static std::string inlineValue(std::string wname, std::string atype)
 static void setAssign(std::string target, std::string value)
 {
 //printf("[%s:%d] [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
-     if (!outList[target])
-         printf("[%s:%d] ASSIGNNONONONONONNO %s = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
      assignList[target] = inlineValue(value, "");
 }
 
@@ -98,7 +96,7 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
         for (auto FI : oitem.IR->method) {
             MethodInfo *MI = oitem.IR->method[FI.first];
             std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
-            setDir(wparam, MI->type == ""); // action -> out
+            setDir(wparam, (instance != "") ^ (MI->type == "")); // action -> out
             wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
             for (auto item: MI->params)
                 setDir(wparam + item.name, instance == "");
@@ -121,7 +119,12 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
         else if (atype != "") // !action
             ret = dir + sizeProcess(atype) + wparam;
         modulePortList.push_back(ret);
-      };
+    };
+    auto sizeT = [&](std::string atype) -> std::string {
+        if (instance == "")
+            return sizeProcess(atype);
+        return "";
+    };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
     wireList.clear();
     if (instance != "") {
@@ -141,12 +144,6 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
                 checkWire(methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + item.name, item.type, inp);
         }
     }
-
-    auto sizeT = [&](std::string atype) -> std::string {
-        if (instance == "")
-            return sizeProcess(atype);
-        return "";
-    };
     // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
     for (auto oitem: IR->outcall)
         for (auto FI : oitem.IR->method) {
@@ -253,21 +250,27 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     // Generate module header
     generateModuleSignature(OStr, IR, "");
     for (auto IC : IR->interfaceConnect)
-        for (auto FI : IC.IR->method)
-            setAssign(IC.target + MODULE_SEPARATOR + FI.first,
-                      IC.source + MODULE_SEPARATOR + FI.first);
+        for (auto FI : IC.IR->method) {
+            std::string tstr = IC.target + MODULE_SEPARATOR + FI.first,
+                        sstr = IC.source + MODULE_SEPARATOR + FI.first;
+printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outList[tstr], sstr.c_str(), outList[sstr]);
+            if (outList[sstr])
+                setAssign(sstr, tstr);
+            else
+                setAssign(tstr, sstr);
+        }
     // generate local state element declarations
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : IR->method) {
+        std::list<std::string> localStore;
         std::string methodName = FI.first;
         MethodInfo *MI = IR->method[methodName];
         setAssign(methodName, MI->guard);  // collect the text of the return value into a single 'assign'
-        std::list<std::string> localStore;
         for (auto info: MI->storeList) {
             std::string rval = cleanupValue(info.value);
             if (info.isAlloca)
-                setAssign(info.dest, cleanupValue(info.value));
+                setAssign(info.dest, rval);
             else {
                 if (info.cond != "")
                     localStore.push_back("    if (" + info.cond + ")");
@@ -363,7 +366,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             if (assignList[item.first] != "")
                 fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), assignList[item.first].c_str());
             //else
-                //fprintf(OStr, "    assign %s = MISSING_ASSIGNMENT_FOR_OUTPUT_VALUE;\n", item.first.c_str());
+                //fprintf(OStr, "    // assign %s = MISSING_ASSIGNMENT_FOR_OUTPUT_VALUE;\n", item.first.c_str());
             assignList[item.first] = "";
         }
     bool seen = false;
