@@ -86,7 +86,7 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
     for (auto FI : IR->method) {
         MethodInfo *MI = IR->method[FI.first];
         std::string wparam = instance + FI.first;
-        setDir(wparam, (instance != "") ^ (MI->type != "")); // if !instance, !action -> out
+        setDir(wparam, (instance == "") != (MI->type == "")); // if !instance, !action -> out
         wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
         for (auto item: MI->params)
             setDir(wparam + item.name, instance != "");
@@ -96,7 +96,7 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
         for (auto FI : oitem.IR->method) {
             MethodInfo *MI = oitem.IR->method[FI.first];
             std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
-            setDir(wparam, (instance != "") ^ (MI->type == "")); // action -> out
+            setDir(wparam, (instance != "") != (MI->type == "")); // action -> out
             wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
             for (auto item: MI->params)
                 setDir(wparam + item.name, instance == "");
