@@ -13,7 +13,7 @@
 #include "AtomiccIR.h"
 
 static int dontInlineValues;//=1;
-std::map<std::string, bool> inList, outList;
+std::map<std::string, bool> inList, outList, seenList;
 std::map<std::string, std::string> assignList;
 std::map<std::string, std::string> wireList; // name -> type
 
@@ -61,7 +61,8 @@ static std::string inlineValue(std::string wname, std::string atype)
 static void setAssign(std::string target, std::string value)
 {
 //printf("[%s:%d] [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
-     assignList[target] = inlineValue(value, "");
+    seenList[target] = true;
+    assignList[target] = inlineValue(value, "");
 }
 
 static std::string sizeProcess(std::string type)
@@ -86,7 +87,8 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
     for (auto FI : IR->method) {
         MethodInfo *MI = IR->method[FI.first];
         std::string wparam = instance + FI.first;
-        setDir(wparam, (instance == "") != (MI->type == "")); // if !instance, !action -> out
+        if (!MI->rule || instance == "")
+            setDir(wparam, (instance == "") != (MI->type == "")); // if !instance, !action -> out
         wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
         for (auto item: MI->params)
             setDir(wparam + item.name, instance != "");
@@ -96,7 +98,8 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
         for (auto FI : oitem.IR->method) {
             MethodInfo *MI = oitem.IR->method[FI.first];
             std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
-            setDir(wparam, (instance != "") != (MI->type == "")); // action -> out
+            if (!MI->rule)
+                setDir(wparam, (instance != "") != (MI->type == "")); // action -> out
             wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
             for (auto item: MI->params)
                 setDir(wparam + item.name, instance == "");
@@ -195,7 +198,7 @@ MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
                     searchIR = item.IR;
                     goto nextItem;
                 }
-            } while(vecCount-- > 0);
+            } while(--vecCount > 0);
         }
         break;
 nextItem:
@@ -244,7 +247,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             if (item.IR->name.substr(0,12) != "l_struct_OC_")
             if (item.IR->name.substr(0, 12) != "l_ainterface")
                 generateModuleSignatureList(item.IR, fldName + MODULE_SEPARATOR);
-        } while(vecCount-- > 0);
+        } while(--vecCount > 0);
     }
 
     // Generate module header
@@ -258,6 +261,10 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
                 setAssign(sstr, tstr);
             else
                 setAssign(tstr, sstr);
+            tstr = tstr.substr(0, tstr.length()-5) + MODULE_SEPARATOR;
+            sstr = sstr.substr(0, sstr.length()-5) + MODULE_SEPARATOR;
+            for (auto info: FI.second->params)
+                setAssign(sstr + info.name, tstr + info.name);
         }
     // generate local state element declarations
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
@@ -314,6 +321,7 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
         if (assignList[item.signal] != "")
             assignList[item.signal] += " || ";
         assignList[item.signal] += item.fname;
+        seenList[item.signal] = true;
     }
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
@@ -358,15 +366,15 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
                 fprintf(OStr, "%s", temp.c_str());
                 resetList.push_back(fldName);
             }
-        } while(vecCount-- > 0);
+        } while(--vecCount > 0);
     }
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
             if (assignList[item.first] != "")
                 fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), assignList[item.first].c_str());
-            //else
-                //fprintf(OStr, "    // assign %s = MISSING_ASSIGNMENT_FOR_OUTPUT_VALUE;\n", item.first.c_str());
+            else if (!seenList[item.first])
+                fprintf(OStr, "    // assign %s = MISSING_ASSIGNMENT_FOR_OUTPUT_VALUE;\n", item.first.c_str());
             assignList[item.first] = "";
         }
     bool seen = false;

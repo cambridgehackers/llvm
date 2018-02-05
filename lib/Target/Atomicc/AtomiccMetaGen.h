@@ -31,7 +31,7 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
             else if (item.IR->name.substr(0,12) != "l_struct_OC_"
                  && item.IR->name.substr(0,12) != "l_ainterface")
                 metaList.push_back("//METAINTERNAL; " + fldName + "; " + item.IR->name + ";");
-        } while(vecCount-- > 0);
+        } while(--vecCount > 0);
     }
     for (auto FI : IR->method) {
         std::string methodName = FI.first;
