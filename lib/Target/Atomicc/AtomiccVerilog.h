@@ -73,12 +73,18 @@ static std::string sizeProcess(std::string type)
     return "";
 }
 
-static void setDir(std::string name, bool out)
+static void setDir(std::string name, bool out, MethodInfo *MI)
 {
-    if (out)
-        outList[name] = true;
-    else
-        inList[name] = true;
+    auto setItem = [&](std::string extra, bool oo) {
+        if (oo)
+            outList[name + extra] = true;
+        else
+            inList[name + extra] = true;
+    };
+    setItem("", out == (MI->type == ""));
+    name = name.substr(0, name.length()-5) + MODULE_SEPARATOR;
+    for (auto item: MI->params)
+        setItem(item.name, out);
 }
 
 static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
@@ -86,23 +92,15 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
     // First handle all 'incoming' interface methods
     for (auto FI : IR->method) {
         MethodInfo *MI = IR->method[FI.first];
-        std::string wparam = instance + FI.first;
         if (!MI->rule || instance == "")
-            setDir(wparam, (instance == "") != (MI->type == "")); // if !instance, !action -> out
-        wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
-        for (auto item: MI->params)
-            setDir(wparam + item.name, instance != "");
+            setDir(instance + FI.first, instance != "", MI); // if !instance, !action -> out
     }
     // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
     for (auto oitem: IR->outcall)
         for (auto FI : oitem.IR->method) {
             MethodInfo *MI = oitem.IR->method[FI.first];
-            std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
             if (!MI->rule)
-                setDir(wparam, (instance != "") != (MI->type == "")); // action -> out
-            wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
-            for (auto item: MI->params)
-                setDir(wparam + item.name, instance == "");
+                setDir(oitem.fldName + MODULE_SEPARATOR + FI.first, instance == "", MI); // action -> out
         }
 
 }
