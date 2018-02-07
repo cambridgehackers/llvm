@@ -86,6 +86,22 @@ static void setDir(std::string name, bool out, MethodInfo *MI)
     for (auto item: MI->params)
         setItem(item.name, out);
 }
+typedef bool (^CBFun)(FieldElement &item, std::string fldName);
+static bool iterField(ModuleIR *IR, CBFun cb)
+{
+    for (auto item: IR->fields) {
+        int64_t vecCount = item.vecCount;
+        int dimIndex = 0;
+        do {
+            std::string fldName = item.fldName;
+            if (vecCount != -1)
+                fldName += autostr(dimIndex++);
+            if ((cb)(item, fldName))
+                return true;
+        } while(--vecCount > 0);
+    }
+    return false;
+}
 
 static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
 {
@@ -177,37 +193,24 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
         fprintf(OStr, "// software: %s\n", item.c_str());
     }
 }
-MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
+MethodInfo *lookupQualName(ModuleIR *asearchIR, std::string searchStr)
 {
+    __block ModuleIR *searchIR = asearchIR;
     while (searchStr != "") {
         int ind = searchStr.find(MODULE_SEPARATOR);
-        if (ind < 0)
-            break;
-        std::string temp = searchStr.substr(0, ind);
-        for (auto item: searchIR->fields) {
-//printf("[%s:%d] prev %s/%d searchfor %s in %s : %s %p\n", __FUNCTION__, __LINE__, searchStr.c_str(), ind, temp.c_str(), searchIR->name.c_str(), item.fldName.c_str(), item.IR);
-            int64_t vecCount = item.vecCount;
-            int dimIndex = 0;
-            do {
-                std::string fldName = item.fldName;
-                if (vecCount != -1)
-                    fldName += autostr(dimIndex++);
-                if (fldName == temp) {
+        if (ind < 0 || !iterField(searchIR, ^ bool (FieldElement &item, std::string fldName) {
+                if (fldName == searchStr.substr(0, ind)) {
                     searchIR = item.IR;
-                    goto nextItem;
+                    return true;
                 }
-            } while(--vecCount > 0);
-        }
-        break;
-nextItem:
+                return false; }))
+            break;
         searchStr = searchStr.substr(ind+1);
     }
-    MethodInfo *MI = searchIR->method[searchStr];
-    if (!MI) {
-        printf("[%s:%d] method %s not found in module %s\n", __FUNCTION__, __LINE__, searchStr.c_str(), searchIR->name.c_str());
-        exit(-1);
-    }
-    return MI;
+    if (MethodInfo *MI = searchIR->method[searchStr])
+        return MI;
+    printf("[%s:%d] method %s not found in module %s\n", __FUNCTION__, __LINE__, searchStr.c_str(), searchIR->name.c_str());
+    exit(-1);
 }
 
 typedef struct {
@@ -224,7 +227,7 @@ typedef struct {
  */
 void generateModuleDef(ModuleIR *IR, FILE *OStr)
 {
-    std::list<std::string> alwaysLines, resetList;
+    __block std::list<std::string> alwaysLines, resetList;
     // 'Or' together ENA lines from all invocations of a method from this class
     std::list<MuxEnableEntry> muxEnableList;
     // 'Mux' together parameter settings from all invocations of a method from this class
@@ -234,19 +237,13 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     inList.clear();
     outList.clear();
     generateModuleSignatureList(IR, "");
-    for (auto item: IR->fields) {
-        int64_t vecCount = item.vecCount;
-        int dimIndex = 0;
-        do {
-            std::string fldName = item.fldName;
-            if (vecCount != -1)
-                fldName += autostr(dimIndex++);
+    iterField(IR, ^ bool (FieldElement &item, std::string fldName) {
             if (item.IR && !item.isPtr)
             if (item.IR->name.substr(0,12) != "l_struct_OC_")
             if (item.IR->name.substr(0, 12) != "l_ainterface")
                 generateModuleSignatureList(item.IR, fldName + MODULE_SEPARATOR);
-        } while(--vecCount > 0);
-    }
+          return false;
+          });
 
     // Generate module header
     generateModuleSignature(OStr, IR, "");
@@ -337,13 +334,7 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
         setAssign(item.first, temp);
     }
     // generate local state element declarations
-    for (auto item: IR->fields) {
-        int64_t vecCount = item.vecCount;
-        int dimIndex = 0;
-        do {
-            std::string fldName = item.fldName;
-            if (vecCount != -1)
-                fldName += autostr(dimIndex++);
+    iterField(IR, ^ bool (FieldElement &item, std::string fldName) {
             uint64_t size = convertType(item.type);
             if (item.IR && !item.isPtr) {
                 if (item.IR->name.substr(0,12) == "l_struct_OC_") {
@@ -364,8 +355,7 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
                 fprintf(OStr, "%s", temp.c_str());
                 resetList.push_back(fldName);
             }
-        } while(--vecCount > 0);
-    }
+            return false; });
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
