@@ -17,6 +17,13 @@ std::map<std::string, bool> inList, outList, seenList;
 std::map<std::string, std::string> assignList;
 std::map<std::string, std::string> wireList; // name -> type
 
+typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
+#define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
+typedef struct {
+    std::string cond;
+    std::string value;
+} MuxValueEntry;
+
 static bool findExact(std::string haystack, std::string needle)
 {
     std::string::size_type sz = haystack.find(needle);
@@ -86,8 +93,8 @@ static void setDir(std::string name, bool out, MethodInfo *MI)
     for (auto item: MI->params)
         setItem(item.name, out);
 }
-typedef bool (^CBFun)(FieldElement &item, std::string fldName);
-static bool iterField(ModuleIR *IR, CBFun cb)
+
+static ModuleIR *iterField(ModuleIR *IR, CBFun cbWorker)
 {
     for (auto item: IR->fields) {
         int64_t vecCount = item.vecCount;
@@ -96,11 +103,26 @@ static bool iterField(ModuleIR *IR, CBFun cb)
             std::string fldName = item.fldName;
             if (vecCount != -1)
                 fldName += autostr(dimIndex++);
-            if ((cb)(item, fldName))
-                return true;
+            if (auto ret = (cbWorker)(item, fldName))
+                return ret;
         } while(--vecCount > 0);
     }
-    return false;
+    return nullptr;
+}
+
+static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
+{
+    while (1) {
+        int ind = searchStr.find(MODULE_SEPARATOR);
+        if (auto nextIR = iterField(searchIR, CBAct {
+              if (ind != -1 && fldName == searchStr.substr(0, ind))
+                  return item.IR;
+              return nullptr; }))
+            searchIR = nextIR;
+        else
+            return searchIR->method[searchStr];
+        searchStr = searchStr.substr(ind+1);
+    };
 }
 
 static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
@@ -189,47 +211,17 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
             fprintf(OStr, ",\n");
     }
     fprintf(OStr, ");\n");
-    for (auto item: IR->softwareName) {
+    for (auto item: IR->softwareName)
         fprintf(OStr, "// software: %s\n", item.c_str());
-    }
-}
-MethodInfo *lookupQualName(ModuleIR *asearchIR, std::string searchStr)
-{
-    __block ModuleIR *searchIR = asearchIR;
-    while (searchStr != "") {
-        int ind = searchStr.find(MODULE_SEPARATOR);
-        if (ind < 0 || !iterField(searchIR, ^ bool (FieldElement &item, std::string fldName) {
-                if (fldName == searchStr.substr(0, ind)) {
-                    searchIR = item.IR;
-                    return true;
-                }
-                return false; }))
-            break;
-        searchStr = searchStr.substr(ind+1);
-    }
-    if (MethodInfo *MI = searchIR->method[searchStr])
-        return MI;
-    printf("[%s:%d] method %s not found in module %s\n", __FUNCTION__, __LINE__, searchStr.c_str(), searchIR->name.c_str());
-    exit(-1);
 }
 
-typedef struct {
-    std::string fname;
-    std::string value;
-} MuxValueEntry;
-
-typedef struct {
-    std::string fname;
-    std::string signal;
-} MuxEnableEntry;
 /*
  * Generate *.v and *.vh for a Verilog module
  */
 void generateModuleDef(ModuleIR *IR, FILE *OStr)
 {
     __block std::list<std::string> alwaysLines, resetList;
-    // 'Or' together ENA lines from all invocations of a method from this class
-    std::list<MuxEnableEntry> muxEnableList;
+    std::map<std::string, std::string> enableList;
     // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
 
@@ -237,12 +229,12 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     inList.clear();
     outList.clear();
     generateModuleSignatureList(IR, "");
-    iterField(IR, ^ bool (FieldElement &item, std::string fldName) {
+    iterField(IR, CBAct {
             if (item.IR && !item.isPtr)
             if (item.IR->name.substr(0,12) != "l_struct_OC_")
             if (item.IR->name.substr(0, 12) != "l_ainterface")
                 generateModuleSignatureList(item.IR, fldName + MODULE_SEPARATOR);
-          return false;
+          return nullptr;
           });
 
     // Generate module header
@@ -265,33 +257,41 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : IR->method) {
-        std::list<std::string> localStore;
         std::string methodName = FI.first;
         MethodInfo *MI = IR->method[methodName];
         setAssign(methodName, MI->guard);  // collect the text of the return value into a single 'assign'
+        bool alwaysSeen = false;
         for (auto info: MI->storeList) {
             std::string rval = cleanupValue(info.value);
             if (info.isAlloca)
                 setAssign(info.dest, rval);
             else {
+                if (!alwaysSeen)
+                    alwaysLines.push_back("if (" + methodName + ") begin");
+                alwaysSeen = true;
                 if (info.cond != "")
-                    localStore.push_back("    if (" + info.cond + ")");
-                localStore.push_back("    " + info.dest + " <= " + rval + ";");
+                    alwaysLines.push_back("    if (" + info.cond + ")");
+                alwaysLines.push_back("    " + info.dest + " <= " + rval + ";");
             }
         }
+        if (alwaysSeen)
+            alwaysLines.push_back("end; // End of " + methodName);
         for (auto info: MI->callList) {
-            std::string tempCond = info.cond;
-            if (tempCond != "")
-                tempCond = " & " + tempCond;
-            tempCond = methodName + tempCond;
+            std::string tempCond = methodName;
+            if (info.cond != "")
+                tempCond += " & " + info.cond;
             std::string rval = info.value; // get call info
             int ind = rval.find("{");
             std::string calledName = rval.substr(0, ind);
-            rval = rval.substr(ind+1);
-            rval = cleanupValue(rval.substr(0, rval.length()-1));
+            rval = cleanupValue(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
+            // 'Or' together ENA lines from all invocations of a method from this class
             if (info.isAction)
-                muxEnableList.push_back(MuxEnableEntry{tempCond, calledName});
-            auto CI = lookupQualName(IR, calledName);
+                enableList[calledName] += " || " + tempCond;
+            MethodInfo *CI = lookupQualName(IR, calledName);
+            if (!CI) {
+                printf("[%s:%d] method %s not found\n", __FUNCTION__, __LINE__, calledName.c_str());
+                exit(-1);
+            }
             auto AI = CI->params.begin();
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             while(rval.length()) {
@@ -306,35 +306,23 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
                 AI++;
             }
         }
-        if (localStore.size()) {
-            alwaysLines.push_back("if (" + methodName + ") begin");
-            alwaysLines.splice(alwaysLines.end(), localStore);
-            alwaysLines.push_back("end; // End of " + methodName);
-        }
     }
-    for (auto item: muxEnableList) {
-        if (assignList[item.signal] != "")
-            assignList[item.signal] += " || ";
-        assignList[item.signal] += item.fname;
-        seenList[item.signal] = true;
-    }
+    for (auto item: enableList)
+        setAssign(item.first, item.second.substr(4) /* remove leading '||'*/);
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
     for (auto item: muxValueList) {
-        int remain = item.second.size();
-        std::string temp;
+        std::string temp, prevCond, prevValue;
         for (auto element: item.second) {
-            std::string tempCond = element.fname;
-            if (--remain)
-                temp += tempCond + " ? ";
-            temp += element.value;
-            if (remain)
-                temp += " : ";
+            if (prevCond != "")
+                temp += prevCond + " ? " + prevValue + " : ";
+            prevCond = element.cond;
+            prevValue = element.value;
         }
-        setAssign(item.first, temp);
+        setAssign(item.first, temp + prevValue);
     }
     // generate local state element declarations
-    iterField(IR, ^ bool (FieldElement &item, std::string fldName) {
+    iterField(IR, CBAct {
             uint64_t size = convertType(item.type);
             if (item.IR && !item.isPtr) {
                 if (item.IR->name.substr(0,12) == "l_struct_OC_") {
@@ -355,7 +343,7 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
                 fprintf(OStr, "%s", temp.c_str());
                 resetList.push_back(fldName);
             }
-            return false; });
+            return nullptr; });
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
