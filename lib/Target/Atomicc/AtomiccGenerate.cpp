@@ -1191,13 +1191,10 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
                 case Instruction::Call: { // can have value
                     if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
                         break;
-                    std::string value = printCall(II);
-                    mlines.push_back("METAINVOKE " + value.substr(0,value.find("{")) + " " + tempCond);
                     std::string temp = isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ";
                     if (tempCond != "")
                         temp += "(" + tempCond + ")";
-                    if (II->getType() == Type::getVoidTy(II->getContext()))
-                        mlines.push_back("CALL" + temp + ":" + value);
+                    mlines.push_back("CALL" + temp + ":" + printCall(II));
                     break;
                     }
                 }

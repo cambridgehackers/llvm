@@ -193,15 +193,14 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             bool isAction = checkItem("/Action");
                             std::string cond = getExpression();
                             ParseCheck(checkItem(":"), "':' missing");
-                            MI->callList.push_back(CallListElement{bufp, cond, isAction});
+                            std::string expr = bufp;
+                            if (isAction)
+                                MI->callList.push_back(CallListElement{expr, cond, isAction});
+                            MI->meta[MetaInvoke][expr.substr(0,expr.find("{"))].insert(cond);
                         }
                         else if (checkItem("METAREAD")) {
                             std::string mname = getExpression();
                             MI->meta[MetaRead][mname].insert(bufp);
-                        }
-                        else if (checkItem("METAINVOKE")) {
-                            std::string mname = getExpression();
-                            MI->meta[MetaInvoke][mname].insert(bufp);
                         }
                         else
                             ParseCheck(false, "unknown method item");
