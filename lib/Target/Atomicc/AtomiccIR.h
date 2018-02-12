@@ -94,6 +94,7 @@ typedef struct {
     std::list<CallListElement> callList;
     std::string                type;
     std::list<ParamElement>    params;
+    std::map<std::string, std::string> alloca;
     MetaRef                    meta[MetaMax];
 } MethodInfo;
 

@@ -1135,6 +1135,15 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
     }
     for (auto FI : table->method) {
+        std::map<std::string, const Type *> allocaList;
+        std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
+            if (II) {
+            if (II->getOpcode() == Instruction::Alloca)
+                allocaList[GetValueName(II)] = II->getType();
+            else for (int i = 0; i < II->getNumOperands(); i++)
+                findAlloca(dyn_cast<Instruction>(II->getOperand(i)));
+            }
+        };
         globalMethodName = FI.first;
         const Function *func = FI.second;
         if (trace_function || trace_call)
@@ -1167,6 +1176,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
                 case Instruction::Store: {
                     const StoreInst *SI = cast<StoreInst>(II);
                     std::string value = printOperand(SI->getOperand(0), false);
+                    findAlloca(dyn_cast<Instruction>(SI->getPointerOperand()));
                     std::string dest = printOperand(SI->getPointerOperand(), true);
                     if (dest[0] == '&')
                         dest = dest.substr(1);
@@ -1209,6 +1219,9 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             headerLine += " " + typeName(func->getReturnType());
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";
+        for (auto item: allocaList)
+            mlines.push_back("ALLOCA " + globalMethodName + MODULE_SEPARATOR
+                + item.first + " " + typeName(item.second));
         if (mlines.size())
             headerLine += " (";
         std::string options;

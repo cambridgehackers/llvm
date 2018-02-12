@@ -181,6 +181,10 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             std::string name = getToken();
                             MI->params.push_back(ParamElement{name, getToken()});
                         }
+                        else if (checkItem("ALLOCA")) {
+                            std::string name = getToken();
+                            MI->alloca[name] = getToken();
+                        }
                         else if (checkItem("STORE")) {
                             std::string cond = getExpression();
                             ParseCheck(checkItem(":"), "':' missing");
