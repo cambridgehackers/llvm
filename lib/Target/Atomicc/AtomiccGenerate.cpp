@@ -1166,13 +1166,6 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
                 const Instruction *II = &*IIb;
                 switch(II->getOpcode()) {
-                case Instruction::Load:
-                    ERRORIF(dyn_cast<LoadInst>(II)->isVolatile());
-                    if (II->getType()->getTypeID() != Type::PointerTyID
-                     && !isAlloca(II->getOperand(0)) && !dyn_cast<Argument>(II->getOperand(0)))
-                        mlines.push_back("METAREAD " + printOperand(II->getOperand(0), true)
-                             + " " + tempCond);
-                    break;
                 case Instruction::Store: {
                     const StoreInst *SI = cast<StoreInst>(II);
                     std::string value = printOperand(SI->getOperand(0), false);

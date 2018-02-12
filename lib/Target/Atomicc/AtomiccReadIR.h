@@ -68,6 +68,50 @@ static std::string trimStr(std::string arg)
     std::string ret = std::string(start, end+1);
     return ret;
 }
+std::list<std::string> readNameList;
+static void tokenizeStr(std::string arg)
+{
+    int total = arg.length();
+    int index = 0;
+    char ch = arg[index++];
+    readNameList.clear();
+    while(index < total) {
+        std::string token;
+        if (ch == ' ' || ch == '\t') {
+            ch = arg[index++];
+        }
+        else if (isalpha(ch)) {
+            do {
+                token += ch;
+                ch = arg[index++];
+            } while (isalpha(ch) || isdigit(ch) || ch == '_' || ch == '$');
+//printf("[%s:%d] token %s\n", __FUNCTION__, __LINE__, token.c_str());
+            readNameList.push_back(token);
+        }
+        else if (isdigit(ch)) {
+            do {
+                token += ch;
+                ch = arg[index++];
+            } while (isdigit(ch) || ch == '.');
+        }
+        else if (ch == '{') {
+            token += ch;
+            ch = arg[index++];
+            readNameList.pop_back();
+        }
+        else if (ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '%'
+            || ch == '}' || ch == '(' || ch == ')' || ch == '<' || ch == '>'
+            || ch == '&' || ch == '|' || ch == '^' || ch == '!'
+            || ch == '=' || ch == ',' || ch == '?' || ch == ':') {
+            token += ch;
+            ch = arg[index++];
+        }
+        else {
+printf("[%s:%d] arg '%s' unknown ch %c\n", __FUNCTION__, __LINE__, arg.c_str(), ch);
+            exit(-1);
+        }
+    }
+}
 static std::string getExpression()
 {
     char *startp = bufp;
@@ -169,11 +213,17 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 if (checkItem("/Rule"))
                     MI->rule = true;
                 std::string methodName = getToken();
+                auto insertRead = [&](std::string expr, std::string cond) -> std::string {
+                    tokenizeStr(expr);
+                    for (auto item: readNameList)
+                        MI->meta[MetaRead][item].insert(cond);
+                    return expr;
+                };
                 bool foundParen = checkItem("(");
                 if (!foundParen)
                     MI->type = getToken();
                 if (checkItem("="))
-                    MI->guard = getExpression();
+                    MI->guard = insertRead(getExpression(), "");
                 IR->method[methodName] = MI;
                 if (foundParen || checkItem("(")) {
                     while (readLine() && !checkItem(")")) {
@@ -186,34 +236,30 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             MI->alloca[name] = getToken();
                         }
                         else if (checkItem("STORE")) {
-                            std::string cond = getExpression();
+                            std::string cond = insertRead(getExpression(), "");
                             ParseCheck(checkItem(":"), "':' missing");
                             std::string dest = getExpression();
                             ParseCheck(checkItem("="), "store = missing");
-                            std::string expr = bufp;
+                            std::string expr = insertRead(bufp, cond);
                             MI->storeList.push_back(StoreListElement{dest, expr, cond, false});
                         }
                         else if (checkItem("LET")) {
                             std::string type = getToken();
-                            std::string cond = getExpression();
+                            std::string cond = insertRead(getExpression(), "");
                             ParseCheck(checkItem(":"), "':' missing");
                             std::string dest = getExpression();
                             ParseCheck(checkItem("="), "store = missing");
-                            std::string expr = bufp;
+                            std::string expr = insertRead(bufp, cond);
                             MI->storeList.push_back(StoreListElement{dest, expr, cond, true});
                         }
                         else if (checkItem("CALL")) {
                             bool isAction = checkItem("/Action");
-                            std::string cond = getExpression();
+                            std::string cond = insertRead(getExpression(), "");
                             ParseCheck(checkItem(":"), "':' missing");
-                            std::string expr = bufp;
+                            std::string expr = insertRead(bufp, cond);
                             if (isAction)
                                 MI->callList.push_back(CallListElement{expr, cond, isAction});
                             MI->meta[MetaInvoke][expr.substr(0,expr.find("{"))].insert(cond);
-                        }
-                        else if (checkItem("METAREAD")) {
-                            std::string mname = getExpression();
-                            MI->meta[MetaRead][mname].insert(bufp);
                         }
                         else
                             ParseCheck(false, "unknown method item");
