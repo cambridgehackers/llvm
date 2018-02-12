@@ -182,12 +182,21 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             MI->params.push_back(ParamElement{name, getToken()});
                         }
                         else if (checkItem("STORE")) {
-                            bool isAlloca = checkItem("/Alloca");
                             std::string cond = getExpression();
                             ParseCheck(checkItem(":"), "':' missing");
                             std::string dest = getExpression();
                             ParseCheck(checkItem("="), "store = missing");
-                            MI->storeList.push_back(StoreListElement{dest, bufp, cond, isAlloca});
+                            std::string expr = bufp;
+                            MI->storeList.push_back(StoreListElement{dest, expr, cond, false});
+                        }
+                        else if (checkItem("LET")) {
+                            std::string type = getToken();
+                            std::string cond = getExpression();
+                            ParseCheck(checkItem(":"), "':' missing");
+                            std::string dest = getExpression();
+                            ParseCheck(checkItem("="), "store = missing");
+                            std::string expr = bufp;
+                            MI->storeList.push_back(StoreListElement{dest, expr, cond, true});
                         }
                         else if (checkItem("CALL")) {
                             bool isAction = checkItem("/Action");

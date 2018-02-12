@@ -1170,13 +1170,14 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
                     std::string dest = printOperand(SI->getPointerOperand(), true);
                     if (dest[0] == '&')
                         dest = dest.substr(1);
-                    std::string alloc = " ";
+                    std::string alloc = "STORE ";
                     if (isAlloca(SI->getPointerOperand()))
-                        alloc = "/Alloca ";
+                        alloc = "LET " + typeName(cast<PointerType>(
+                          SI->getPointerOperand()->getType())->getElementType()) + " ";
                     std::string temp;
                     if (tempCond != "")
                         temp = "(" + tempCond + ")";
-                    mlines.push_back("STORE" + alloc + temp + ":" + dest + " = " + value);
+                    mlines.push_back(alloc + temp + ":" + dest + " = " + value);
                     break;
                     }
                 case Instruction::Ret:
