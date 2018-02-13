@@ -1041,41 +1041,13 @@ static void processPromote(Function *currentFunction)
         }
     }
 }
-
-static uint64_t sizeType(const Type *Ty)
-{
-    switch (Ty->getTypeID()) {
-    case Type::IntegerTyID:
-        return cast<IntegerType>(Ty)->getBitWidth();
-    case Type::StructTyID: {
-        const StructType *STy = cast<StructType>(Ty);
-        uint64_t len = 0;
-        int Idx = 0;
-        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++)
-            if (fieldName(STy, Idx) != "")
-                len += sizeType(*I);
-        return len;
-        }
-    case Type::ArrayTyID: {
-        const ArrayType *ATy = cast<ArrayType>(Ty);
-        unsigned len = ATy->getNumElements();
-        return len * sizeType(ATy->getElementType());
-        }
-    case Type::PointerTyID:
-        return sizeType(cast<PointerType>(Ty)->getElementType());
-    case Type::VoidTyID:
-        return 0;
-    default:
-        llvm_unreachable("Unhandled case in sizeType!");
-    }
-}
 static std::string typeName(const Type *Ty)
 {
      switch (Ty->getTypeID()) {
      case Type::VoidTyID:
          return "";
      case Type::IntegerTyID:
-         return "INTEGER_" + utostr(sizeType(Ty));
+         return "INTEGER_" + utostr(cast<IntegerType>(Ty)->getBitWidth());
      case Type::StructTyID:
          return getStructName(cast<StructType>(Ty));
      case Type::ArrayTyID: {
@@ -1096,8 +1068,7 @@ static std::string typeName(const Type *Ty)
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     bool isModule = table->STy->getName().substr(0, 6) == "module";
-    fprintf(OStr, "%sMODULE %s %lld (\n", isModule ? "" : "E", getStructName(table->STy).c_str(),
-        sizeType(table->STy));
+    fprintf(OStr, "%sMODULE %s (\n", isModule ? "" : "E", getStructName(table->STy).c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
     for (auto item: table->IR->priority)
@@ -1208,7 +1179,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             retGuard = "";
         retGuard = cleanupValue(retGuard);
         std::string headerLine = globalMethodName;
-        if (uint64_t size = sizeType(func->getReturnType()))
+        if (!isActionMethod(func))
             headerLine += " " + typeName(func->getReturnType());
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";

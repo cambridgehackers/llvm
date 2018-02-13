@@ -114,7 +114,6 @@ typedef struct {
 
 typedef struct ModuleIR {
     std::string                       name;
-    uint64_t                          size;
     std::list<std::string>            metaList;
     std::list<std::string>            softwareName;
     std::map<std::string, MethodInfo *> method;
