@@ -260,8 +260,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             std::string cond = insertRead(getExpression(), "");
                             ParseCheck(checkItem(":"), "':' missing");
                             std::string expr = insertRead(bufp, cond);
-                            if (isAction)
-                                MI->callList.push_back(CallListElement{expr, cond, isAction});
+                            MI->callList.push_back(CallListElement{expr, cond, isAction});
                             MI->meta[MetaInvoke][expr.substr(0,expr.find("{"))].insert(cond);
                         }
                         else
@@ -271,6 +270,22 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             }
             else
                 ParseCheck(false, "unknown module item");
+            for (auto item: IR->method) {
+                std::string methodName = item.first;
+                MethodInfo *MI = item.second;
+                if (endswith(methodName, "__RDY"))
+                    continue;
+                std::string rdyName = getRdyName(methodName);
+                if (IR->method[rdyName])
+                    continue;
+                MethodInfo *MIRdy = new MethodInfo{""};
+                MIRdy->rule = MI->rule;
+                MIRdy->type = "INTEGER_1";
+                MIRdy->guard = "1";
+                IR->method[rdyName] = MIRdy;
+            }
         }
     }
+    for (auto irItem : irSeq)
+         promoteGuards(irItem);
 }

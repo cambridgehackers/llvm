@@ -277,6 +277,8 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
         if (alwaysSeen)
             alwaysLines.push_back("end; // End of " + methodName);
         for (auto info: MI->callList) {
+            if (!info.isAction)
+                continue;
             std::string tempCond = methodName;
             if (info.cond != "")
                 tempCond += " & " + info.cond;
@@ -376,4 +378,60 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
         fprintf(OStr, "    end // always @ (posedge CLK)\n");
     }
     fprintf(OStr, "endmodule \n\n");
+}
+
+std::string getRdyName(std::string basename)
+{
+    std::string rdyName = basename;
+    if (endswith(rdyName, "__ENA"))
+        rdyName = rdyName.substr(0, rdyName.length()-5);
+    rdyName += "__RDY";
+    return rdyName;
+}
+
+static std::string encapExpr(std::string arg)
+{
+    std::string temp = arg;
+    int ind = temp.find(" ");
+    if (ind != -1)
+        temp = "(" + temp + ")";
+    return temp;
+}
+static std::string invertExpr(std::string arg)
+{
+    if (endswith(arg, " ^ 1"))
+        return arg.substr(0, arg.length()-4);
+    int indparen = arg.find("(");
+    int indeq = arg.find("==");
+    if (indparen == -1 && indeq > 0)
+        return encapExpr(arg.substr(0, indeq) + "!=" + arg.substr(indeq + 2));
+    return encapExpr(encapExpr(arg) + " ^ 1");
+}
+
+// lift guards from called method interfaces
+void promoteGuards(ModuleIR *IR)
+{
+    for (auto FI : IR->method) {
+        std::string methodName = FI.first, rdyName = getRdyName(methodName);
+        if (endswith(methodName, "__RDY"))
+            continue;
+        MethodInfo *MI = IR->method[methodName];
+        MethodInfo *MIRdy = IR->method[rdyName];
+        assert(MIRdy);
+        for (auto info: MI->callList) {
+            std::string rval = info.value; // get call info
+            int ind = rval.find("{");
+            std::string calledName = getRdyName(rval.substr(0, ind));
+            std::string tempCond;
+            if (info.cond != "")
+                tempCond = calledName + " | " + invertExpr(info.cond);
+            else
+                tempCond = calledName;
+            rval = cleanupValue(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
+            if (MIRdy->guard == "1")
+                MIRdy->guard = tempCond;
+            else
+                MIRdy->guard = encapExpr(MIRdy->guard) + " & " + encapExpr(tempCond);
+        }
+    }
 }

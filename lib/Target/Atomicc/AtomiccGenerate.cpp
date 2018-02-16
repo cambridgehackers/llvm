@@ -826,72 +826,6 @@ static Instruction *expandTreeOptions(Instruction *insertPoint, const Instructio
     return retItem;
 }
 
-/*
- * Add another condition to a guard function.
- */
-static Instruction *recClean(Instruction *arg)
-{
-    int opcode = arg->getOpcode();
-    for (unsigned i = 0, e = arg->getNumOperands(); i != e; ++i) {
-        if (Instruction *op = dyn_cast<Instruction>(arg->getOperand(i))) {
-            Instruction *newOp = recClean(op);
-            if (!newOp) {
-                if (opcode == Instruction::Or || opcode == Instruction::And) {
-                    if (Instruction *otherOp = dyn_cast<Instruction>(arg->getOperand(1-i))) {
-                        Instruction *onewOp = recClean(otherOp);
-//printf("[%s:%d] AND/OR replace i=%d newOp %p onewOp %p\n", __FUNCTION__, __LINE__, i, newOp, onewOp);
-//op->dump();
-//otherOp->dump();
-                        if (onewOp)
-                            return onewOp;
-                    }
-                }
-                return NULL;
-            }
-            if (newOp != op) {
-                op->replaceAllUsesWith(newOp);
-                recursiveDelete(op);
-            }
-        }
-        else if (Argument *inv = dyn_cast<Argument>(arg->getOperand(i))) {
-//printf("[%s:%d] inv %p begin %p\n", __FUNCTION__, __LINE__, inv, &*arg->getParent()->getParent()->arg_begin());
-//arg->dump();
-            if (inv != arg->getParent()->getParent()->arg_begin()) {
-//printf("[%s:%d] ARGNULL\n", __FUNCTION__, __LINE__);
-                return NULL;
-            }
-        }
-    }
-    return arg;
-}
-
-static void addGuard(Instruction *argI, Function *func, Function *currentFunction)
-{
-    /* get my function's guard function */
-    Function *parentRDYName = ruleRDYFunction[currentFunction];
-    assert (parentRDYName && func);
-    TerminatorInst *TI = parentRDYName->begin()->getTerminator();
-    /* make a call to the guard being promoted */
-    Instruction *newI = expandTreeOptions(TI, argI, func);
-    /* if the promoted guard is in an 'if' block, 'or' with inverted condition of block */
-    if (Instruction *bcond = dyn_cast_or_null<Instruction>(getACondition(argI->getParent(), true))) { // get inverted condition, if any
-        prepareReplace(argI->getParent()->getParent()->arg_begin(), TI->getParent()->getParent()->arg_begin());
-        newI = BinaryOperator::Create(Instruction::Or, newI, cloneTree(bcond,TI), "newor", TI);
-    }
-    /* get existing return value from my function's guard */
-    Value *cond = TI->getOperand(0);
-    const ConstantInt *CI = dyn_cast<ConstantInt>(cond);
-    if (!CI || !CI->getType()->isIntegerTy(1) || !CI->getZExtValue())
-        newI = BinaryOperator::Create(Instruction::And, cond, newI, "newand", TI);
-        // 'And' return value into condition
-//printf("[%s:%d] condition '%s'\n", __FUNCTION__, __LINE__, printOperand(newI, false).c_str());
-//parentRDYName->dump();
-    Instruction *repNewI = recClean(newI);
-    TI->setOperand(0, repNewI); /* replace 'return' expression */
-    if (repNewI != newI)
-        recursiveDelete(newI);
-}
-
 static void processIndexRef(Function *currentFunction)
 {
 restart:
@@ -1019,28 +953,6 @@ static void processBlockConditions(Function *currentFunction)
     }
 }
 
-// Preprocess the body rules, moving items to RDY() and ENA()
-static void processPromote(Function *currentFunction)
-{
-    for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
-        for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE;) {
-            auto INEXT = std::next(BasicBlock::iterator(IIb));
-            Instruction *II = &*IIb;
-            switch (II->getOpcode()) {
-            case Instruction::Call: {
-                Function *func = dyn_cast<Function>(dyn_cast<CallInst>(II)->getCalledValue());
-                Function *calledFunctionGuard = ruleRDYFunction[func];
-                if (trace_hoist)
-                    printf("HOIST: CALLER %s calling '%s' guard %p\n", currentFunction->getName().str().c_str(), func->getName().str().c_str(), calledFunctionGuard);
-                if (calledFunctionGuard)
-                    addGuard(II, calledFunctionGuard, currentFunction);
-                break;
-                }
-            }
-            IIb = INEXT;
-        }
-    }
-}
 static std::string typeName(const Type *Ty)
 {
      switch (Ty->getTypeID()) {
@@ -1127,8 +1039,6 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         processIndexRef(const_cast<Function *>(func));
         // Set up condition expressions for all BasicBlocks 
         processBlockConditions(const_cast<Function *>(func));
-        // promote guards from contained calls to be guards for this function.
-        processPromote(const_cast<Function *>(func));
         NextAnonValueNumber = 0;
         /* Gather data for top level instructions in each basic block. */
         std::string retGuard, valsep;
@@ -1191,6 +1101,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         std::string options;
         if (table->ruleFunctions[globalMethodName])
             options += "/Rule";
+        if (!endswith(globalMethodName, "__RDY") || mlines.size() > 0 || retGuard != "1")
         fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
         for (auto line: mlines)
              fprintf(OStr, "        %s\n", line.c_str());

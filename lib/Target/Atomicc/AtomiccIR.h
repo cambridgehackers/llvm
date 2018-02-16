@@ -124,4 +124,6 @@ typedef struct ModuleIR {
 } ModuleIR;
 
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);
+void promoteGuards(ModuleIR *arg);
+std::string getRdyName(std::string basename);
 #endif /* __ATOMICIR_H__ */
