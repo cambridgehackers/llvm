@@ -260,28 +260,12 @@ void preprocessModule(Module *Mod)
         StructType *STy = StructTypes[i];
         if (STy->isLiteral() || STy->getName().empty()) continue;
         ClassMethodTable *table = getClass(STy); // make sure that classCreate is initialized
-//printf("[%s:%d] STy %p table %p name %s map %s\n", __FUNCTION__, __LINE__, STy, table, getStructName(STy).c_str(), STy->structFieldMap.c_str());
         for (auto item: table->funcMap) {
+            std::string enaSuffix = "__ENA";
+            if (!isActionMethod(item.second.func))
+                enaSuffix = "";
 //printf("[%s:%d] sname %s first %s second %p name %s callingconv %x\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second.func, item.second.func->getName().str().c_str(), item.second.func->getCallingConv() == CallingConv::X86_VectorCall);
-            if (item.second.func->getCallingConv() == CallingConv::X86_VectorCall)
-            if (endswith(item.first, "__RDY") || endswith(item.first, "__READY")) {
-                std::string enaName = item.first.substr(0, item.first.length() - 5);
-                std::string enaSuffix = "__ENA";
-                if (endswith(item.first, "__READY")) {
-                    enaName = item.first.substr(0, item.first.length() - 7);
-                    enaSuffix = "__VALID";
-                }
-                Function *enaFunc = table->funcMap[enaName].func;
-                if (!enaFunc) {
-                    printf("[%s:%d] %s function NULL\n", __FUNCTION__, __LINE__, enaName.c_str());
-                    continue;
-                }
-                if (!isActionMethod(enaFunc))
-                    enaSuffix = "";
-//printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second.func, enaName.c_str(), enaFunc);
-                pushWork(enaFunc, enaName + enaSuffix);
-                pushWork(item.second.func, item.first);
-            }
+            pushWork(item.second.func, item.first + enaSuffix);
         }
     }
 }
