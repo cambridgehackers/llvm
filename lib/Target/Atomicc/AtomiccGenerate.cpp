@@ -61,7 +61,6 @@ static INTMAP_TYPE opcodeMap[] = {
     {Instruction::URem, "%"}, {Instruction::SRem, "%"}, {Instruction::FRem, "%"},
     {Instruction::And, "&"}, {Instruction::Or, "|"}, {Instruction::Xor, "^"},
     {Instruction::Shl, "<<"}, {Instruction::LShr, ">>"}, {Instruction::AShr, " >> "}, {}};
-std::map<const Function *, Function *> ruleRDYFunction;
 typedef struct {
     bool invert;
     Value *cond;
@@ -1096,8 +1095,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";
         for (auto item: allocaList)
-            mlines.push_back("ALLOCA " + globalMethodName + MODULE_SEPARATOR
-                + item.first + " " + typeName(item.second));
+            mlines.push_back("ALLOCA " + item.first + " " + typeName(item.second));
         if (mlines.size())
             headerLine += " (";
         std::string options;

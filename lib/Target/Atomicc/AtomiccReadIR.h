@@ -188,7 +188,6 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 std::string      type = getToken();
                 ModuleIR *lIR = lookupIR(type);
                 IR->outcall.push_back(OutcallInterface{fldName, lIR});
-                IR->fields.push_back(FieldElement{fldName, -1, type, mapIndex[type], 0, true});
             }
             else if (checkItem("PRIORITY")) {
                 std::string rule = getToken();

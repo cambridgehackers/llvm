@@ -114,13 +114,21 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
 {
     while (1) {
         int ind = searchStr.find(MODULE_SEPARATOR);
+        std::string tname = searchStr.substr(0, ind);
         if (auto nextIR = iterField(searchIR, CBAct {
-              if (ind != -1 && fldName == searchStr.substr(0, ind))
+              if (ind != -1 && fldName == tname)
                   return item.IR;
               return nullptr; }))
             searchIR = nextIR;
-        else
+        else {
+            for (auto item: searchIR->outcall)
+                if (item.fldName == tname) {
+                    searchIR = item.IR;
+                    goto next;
+                }
             return searchIR->method[searchStr];
+        }
+next:
         searchStr = searchStr.substr(ind+1);
     };
 }

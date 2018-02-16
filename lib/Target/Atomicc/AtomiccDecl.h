@@ -76,7 +76,6 @@ typedef  struct {
 typedef std::map<std::string, int> StringMapType;
 
 extern ExecutionEngine *EE;
-extern std::map<const Function *, Function *> ruleRDYFunction;
 extern std::list<MEMORY_REGION> memoryRegion;
 extern int trace_pair;
 extern Module *globalMod;
@@ -100,7 +99,7 @@ std::string GetValueName(const Value *Operand);
 int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_type_iterator E);
 void prepareReplace(const Value *olda, Value *newa);
 void recursiveDelete(Value *V);
-void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName);
+void pushWork(Function *func, std::string mName);
 void dumpMemoryRegions(int arg);
 ClassMethodTable *getClass(const StructType *STy);
 bool isActionMethod(const Function *func);

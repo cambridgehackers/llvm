@@ -26,11 +26,10 @@ static int trace_clone;
  */
 Instruction *cloneTree(const Instruction *I, Instruction *insertPoint)
 {
-    std::string NameSuffix = "foosuff";
     Instruction *NewInst = I->clone();
 
     if (I->hasName())
-        NewInst->setName(I->getName()+NameSuffix);
+        NewInst->setName(I->getName());
     for (unsigned OI = 0, E = I->getNumOperands(); OI != E; ++OI) {
         const Value *oval = I->getOperand(OI);
         if (cloneVmap.find(oval) == cloneVmap.end()) {

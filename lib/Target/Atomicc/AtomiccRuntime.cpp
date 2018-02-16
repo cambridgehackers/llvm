@@ -200,24 +200,12 @@ restart: // restart here after inlining function.... basic block structure might
 /*
  * Add a function to the processing list for generation of cpp and verilog.
  */
-static void pushWork(Function *func, std::string mName)
+void pushWork(Function *func, std::string mName)
 {
     //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
     getClass(findThisArgument(func))->method[mName] = func;
     // inline intra-class method call bodies
     processMethodInlining(func, func);
-}
-
-/*
- * Methods, guarded values, rules all get pushed as pairs so that 'RDY' function
- * is processed after processing for base method (so that guards promoted during
- * the method processing are later handled)
- */
-void pushPair(Function *enaFunc, std::string enaName, Function *rdyFunc, std::string rdyName)
-{
-    ruleRDYFunction[enaFunc] = rdyFunc; // must be before pushWork() calls
-    pushWork(enaFunc, enaName);
-    pushWork(rdyFunc, rdyName); // must be after 'ENA', since hoisting copies guards
 }
 
 /*
@@ -327,7 +315,8 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
     table->ruleFunctions[enaName + "__RDY"] = true;
     if (trace_pair)
         printf("[%s:%d] name %s size %ld ena %s rdy %s\n", __FUNCTION__, __LINE__, enaName.c_str(), aenaFunc->arg_size(), enaFunc->getName().str().c_str(), rdyFunc->getName().str().c_str());
-    pushPair(enaFunc, enaName + "__ENA", rdyFunc, enaName + "__RDY");
+    pushWork(enaFunc, enaName + "__ENA");
+    pushWork(rdyFunc, enaName + "__RDY");
 }
 
 /*

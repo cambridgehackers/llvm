@@ -279,7 +279,8 @@ void preprocessModule(Module *Mod)
                 if (!isActionMethod(enaFunc))
                     enaSuffix = "";
 //printf("[%s:%d] sname %s func %s=%p %s=%p\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second.func, enaName.c_str(), enaFunc);
-                pushPair(enaFunc, enaName + enaSuffix, item.second.func, item.first);
+                pushWork(enaFunc, enaName + enaSuffix);
+                pushWork(item.second.func, item.first);
             }
         }
     }
