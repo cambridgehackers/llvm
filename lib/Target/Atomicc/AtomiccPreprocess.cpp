@@ -258,14 +258,7 @@ void preprocessModule(Module *Mod)
     StructTypes.run(*Mod, true);
     for (unsigned i = 0, e = StructTypes.size(); i != e; ++i) {
         StructType *STy = StructTypes[i];
-        if (STy->isLiteral() || STy->getName().empty()) continue;
-        ClassMethodTable *table = getClass(STy); // make sure that classCreate is initialized
-        for (auto item: table->funcMap) {
-            std::string enaSuffix = "__ENA";
-            if (!isActionMethod(item.second.func))
-                enaSuffix = "";
-//printf("[%s:%d] sname %s first %s second %p name %s callingconv %x\n", __FUNCTION__, __LINE__, STy->getName().str().c_str(), item.first.c_str(), item.second.func, item.second.func->getName().str().c_str(), item.second.func->getCallingConv() == CallingConv::X86_VectorCall);
-            pushWork(item.second.func, item.first + enaSuffix);
-        }
+        if (!STy->isLiteral() && !STy->getName().empty())
+            getClass(STy); // make sure that classCreate is initialized
     }
 }

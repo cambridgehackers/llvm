@@ -46,11 +46,6 @@ typedef struct {
     const char *name;
 } INTMAP_TYPE;
 
-typedef struct {
-    std::string fname;
-    Function   *func;
-} FuncInfo;
-
 class ClassMethodTable {
 public:
     const StructType                  *STy;
@@ -58,7 +53,6 @@ public:
     std::map<std::string, const Function *> method;
     std::map<int, const Type *>       replaceType;
     std::map<int, uint64_t>           replaceCount;
-    std::map<std::string, FuncInfo>   funcMap;
     std::list<std::string>            softwareName;
     std::map<std::string, bool>       ruleFunctions;
     ModuleIR* IR;

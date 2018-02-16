@@ -210,12 +210,8 @@ printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str()
         nextInterface:;
             }
             else if (idx >= 0) {
-                std::string fname = ret.substr(0, idx);
-                Function *func = globalMod->getFunction(fname);
-                std::string mName = ret.substr(idx+1);
-                if (func)
-                    table->funcMap[mName] = {fname, func};
-//printf("[%s:%d] fname %s mName %s func %p\n", __FUNCTION__, __LINE__, fname.c_str(), mName.c_str(), func);
+                if (Function *func = globalMod->getFunction(ret.substr(0, idx)))
+                    pushWork(func, ret.substr(idx+1));
                 }
             last_subs = subs;
         }
