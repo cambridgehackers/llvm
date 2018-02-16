@@ -161,7 +161,7 @@ static uint64_t convertType(std::string arg)
     if (auto IR = lookupIR(bp)) {
         uint64_t total = 0;
         for (auto item: IR->fields)
-             total += convertType(item.type);
+            total += convertType(item.type);
         return total;
     }
     printf("[%s:%d] convertType FAILED '%s'\n", __FUNCTION__, __LINE__, bp);
@@ -185,9 +185,10 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             }
             else if (checkItem("OUTCALL")) {
                 std::string      fldName = getToken();
-                ParseCheck(checkItem("="), "outcall = missing");
-                ModuleIR *lIR = lookupIR(getToken());
+                std::string      type = getToken();
+                ModuleIR *lIR = lookupIR(type);
                 IR->outcall.push_back(OutcallInterface{fldName, lIR});
+                IR->fields.push_back(FieldElement{fldName, -1, type, mapIndex[type], 0, true});
             }
             else if (checkItem("PRIORITY")) {
                 std::string rule = getToken();

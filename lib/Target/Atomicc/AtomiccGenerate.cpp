@@ -1006,8 +1006,10 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         }
         if (const PointerType *PTy = dyn_cast<PointerType>(element))
         if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
-        if (isInterface(STy))
-            fprintf(OStr, "    OUTCALL %s = %s\n", fldName.c_str(), getClass(STy)->IR->name.c_str());
+        if (isInterface(STy)) {
+            fprintf(OStr, "    OUTCALL %s %s\n", fldName.c_str(), getClass(STy)->IR->name.c_str());
+            continue;
+        }
         std::string temp;
         if (isa<PointerType>(element))
             temp += "/Ptr";
@@ -1101,8 +1103,8 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         std::string options;
         if (table->ruleFunctions[globalMethodName])
             options += "/Rule";
-        if (!endswith(globalMethodName, "__RDY") || mlines.size() > 0 || retGuard != "1")
-        fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
+        if (!endswith(globalMethodName, "__RDY") || mlines.size() > 0 || (retGuard != "1" && retGuard != ""))
+            fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
         for (auto line: mlines)
              fprintf(OStr, "        %s\n", line.c_str());
         if (mlines.size())
