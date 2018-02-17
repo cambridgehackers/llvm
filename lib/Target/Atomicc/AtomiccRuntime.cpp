@@ -300,23 +300,24 @@ extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType
  */
 extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc, Function *aenaFunc)
 {
+    ClassMethodTable *table = getClass(findThisArgument(aenaFunc));
     std::string tempName = name;
     for (unsigned i = 0; i < aenaFunc->arg_size() - 1; i++)
         tempName += "_" + utostr(bcap[i]);
-    Function *rdyFunc = fixupFunction(bcap, ardyFunc);
-    Function *enaFunc = fixupFunction(bcap, aenaFunc);
-    ClassMethodTable *table = getClass(findThisArgument(rdyFunc));
     std::string enaName = tempName;
     int counter = 100;
     // if necessary to avoid conflicts, generate unique rule names
     while (table->method[enaName + "__ENA"])
         enaName = tempName + "$" + utostr(counter++);
-    table->ruleFunctions[enaName + "__ENA"] = true;
-    table->ruleFunctions[enaName + "__RDY"] = true;
+    Function *enaFunc = fixupFunction(bcap, aenaFunc);
     if (trace_pair)
-        printf("[%s:%d] name %s size %ld ena %s rdy %s\n", __FUNCTION__, __LINE__, enaName.c_str(), aenaFunc->arg_size(), enaFunc->getName().str().c_str(), rdyFunc->getName().str().c_str());
+        printf("[%s:%d] name %s size %ld ena %s\n", __FUNCTION__, __LINE__, enaName.c_str(), aenaFunc->arg_size(), enaFunc->getName().str().c_str());
+    table->ruleFunctions[enaName + "__ENA"] = true;
     pushWork(enaFunc, enaName + "__ENA");
-    pushWork(rdyFunc, enaName + "__RDY");
+    if (ardyFunc) {
+        table->ruleFunctions[enaName + "__RDY"] = true;
+        pushWork(fixupFunction(bcap, ardyFunc), enaName + "__RDY");
+    }
 }
 
 /*
