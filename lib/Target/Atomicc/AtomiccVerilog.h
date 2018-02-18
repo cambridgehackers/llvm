@@ -182,10 +182,11 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     modulePortList.push_back(inpClk + "CLK");
     modulePortList.push_back(inpClk + "nRST");
     // First handle all 'incoming' interface methods
-    for (auto FI : IR->method) {
-        std::string methodName = FI.first;
-        MethodInfo *MI = IR->method[methodName];
-        if (!MI->rule) {
+    for (auto item : IR->fields) {
+        if (item.IR && item.IR->name.substr(0,12) == "l_ainterface")
+        for (auto FI: item.IR->method) {
+            std::string methodName = item.fldName + MODULE_SEPARATOR + FI.first;
+            MethodInfo *MI = FI.second;
             checkWire(methodName, MI->type, outp);
             for (auto item: MI->params)
                 checkWire(methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + item.name, item.type, inp);

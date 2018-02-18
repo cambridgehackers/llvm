@@ -972,28 +972,23 @@ static std::string typeName(const Type *Ty)
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processClass(ClassMethodTable *table, FILE *OStr)
+static void processField(ClassMethodTable *table, FILE *OStr)
 {
-    bool isModule = table->STy->getName().substr(0, 6) == "module";
-    fprintf(OStr, "%sMODULE %s (\n", isModule ? "" : "E", getStructName(table->STy).c_str());
-    for (auto item: table->softwareName)
-        fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
-    for (auto item: table->IR->priority)
-        fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
-    for (auto item: table->IR->interfaceConnect)
-        fprintf(OStr, "    INTERFACECONNECT %s %s %s\n", item.target.c_str(), item.source.c_str(), item.IR->name.c_str());
     // generate local state element declarations
     int Idx = 0;
     for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
         std::string fldName = fieldName(table->STy, Idx);
-        if (fldName == "")
-            continue;
         const Type *element = *I;
         int64_t vecCount = -1;
         unsigned arrayLen = 0;
         if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = table->replaceCount[Idx];
+        }
+        if (fldName == "") {
+            if (auto iSTy = dyn_cast<StructType>(element))
+                processField(getClass(iSTy), OStr);
+            continue;
         }
         if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
             arrayLen = ATy->getNumElements();
@@ -1014,6 +1009,18 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             temp += "/Array " + utostr(arrayLen) + " ";
         fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
     }
+}
+static void processClass(ClassMethodTable *table, FILE *OStr)
+{
+    bool isModule = table->STy->getName().substr(0, 6) == "module";
+    fprintf(OStr, "%sMODULE %s (\n", isModule ? "" : "E", getStructName(table->STy).c_str());
+    for (auto item: table->softwareName)
+        fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
+    for (auto item: table->IR->priority)
+        fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
+    for (auto item: table->IR->interfaceConnect)
+        fprintf(OStr, "    INTERFACECONNECT %s %s %s\n", item.target.c_str(), item.source.c_str(), item.IR->name.c_str());
+    processField(table, OStr);
     for (auto FI : table->method) {
         std::map<std::string, const Type *> allocaList;
         std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
