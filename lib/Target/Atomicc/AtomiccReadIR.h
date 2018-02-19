@@ -222,19 +222,25 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                         MI->meta[MetaRead][item].insert(cond);
                     return expr;
                 };
-                bool foundParen = checkItem("(");
+                if (checkItem("(")) {
+                    bool first = true;
+                    while (!checkItem(")")) {
+                        if (!first)
+                            ParseCheck(checkItem(","), "',' missing");
+                        std::string type = getToken();
+                        MI->params.push_back(ParamElement{getToken(), type});
+                        first = false;
+                    }
+                }
+                bool foundParen = checkItem("{");
                 if (!foundParen)
                     MI->type = getToken();
                 if (checkItem("="))
                     MI->guard = insertRead(getExpression(), "");
                 IR->method[methodName] = MI;
-                if (foundParen || checkItem("(")) {
-                    while (readLine() && !checkItem(")")) {
-                        if (checkItem("PARAM")) {
-                            std::string name = getToken();
-                            MI->params.push_back(ParamElement{name, getToken()});
-                        }
-                        else if (checkItem("ALLOCA")) {
+                if (foundParen || checkItem("{")) {
+                    while (readLine() && !checkItem("}")) {
+                        if (checkItem("ALLOCA")) {
                             std::string name = getToken();
                             MI->alloca[name] = getToken();
                         }

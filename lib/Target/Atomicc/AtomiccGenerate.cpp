@@ -1036,9 +1036,6 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         if (trace_function || trace_call)
             printf("PROCESSING %s %s\n", func->getName().str().c_str(), globalMethodName.c_str());
         std::list<std::string> mlines;
-        auto AI = func->arg_begin(), AE = func->arg_end();
-        for (AI++; AI != AE; ++AI)
-            mlines.push_back("PARAM " + AI->getName().str() + " " + typeName(AI->getType()));
         // Expand array indexing into Switch/PHI
         processIndexRef(const_cast<Function *>(func));
         // Set up condition expressions for all BasicBlocks 
@@ -1093,6 +1090,14 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             retGuard = "";
         retGuard = cleanupValue(retGuard);
         std::string headerLine = globalMethodName;
+        auto AI = func->arg_begin(), AE = func->arg_end();
+        std::string sep = " ( ";
+        for (AI++; AI != AE; ++AI) {
+            headerLine += sep + typeName(AI->getType()) + " " + AI->getName().str();
+            sep = " , ";
+        }
+        if (sep != " ( ")
+            headerLine += " ) ";
         if (!isActionMethod(func))
             headerLine += " " + typeName(func->getReturnType());
         if (retGuard != "")
@@ -1100,7 +1105,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         for (auto item: allocaList)
             mlines.push_back("ALLOCA " + item.first + " " + typeName(item.second));
         if (mlines.size())
-            headerLine += " (";
+            headerLine += " {";
         std::string options;
         if (table->ruleFunctions[globalMethodName])
             options += "/Rule";
@@ -1109,7 +1114,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         for (auto line: mlines)
              fprintf(OStr, "        %s\n", line.c_str());
         if (mlines.size())
-            fprintf(OStr, "    )\n");
+            fprintf(OStr, "    }\n");
     }
     fprintf(OStr, ")\n");
 }
