@@ -29,7 +29,6 @@ static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
 static int trace_operand;//=1;
-static int trace_hoist;//= 1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
 static std::string globalMethodName;
@@ -766,6 +765,7 @@ std::string printOperand(const Value *Operand, bool Indirect)
     return cbuffer;
 }
 
+#if 0
 static std::list<Instruction *> preCopy;
 // This code recursively expands an expression tree that has PHI instructions
 // into a list of trees that for each possible incoming value to the PHI.
@@ -820,6 +820,7 @@ static Instruction *expandTreeOptions(Instruction *insertPoint, const Instructio
     }
     return retItem;
 }
+#endif
 
 static void processIndexRef(Function *currentFunction)
 {
@@ -1010,10 +1011,85 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
     }
 }
+
+std::string getRdyName(std::string basename)
+{
+    std::string rdyName = basename;
+    if (endswith(rdyName, "__ENA"))
+        rdyName = rdyName.substr(0, rdyName.length()-5);
+    return rdyName + "__RDY";
+}
+static std::string processMethod(std::string methodName, const Function *func, std::list<std::string> &mlines)
+{
+    std::map<std::string, const Type *> allocaList;
+    std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
+        if (II) {
+        if (II->getOpcode() == Instruction::Alloca)
+            allocaList[GetValueName(II)] = II->getType();
+        else for (int i = 0; i < II->getNumOperands(); i++)
+            findAlloca(dyn_cast<Instruction>(II->getOperand(i)));
+        }
+    };
+    globalMethodName = methodName;
+    // Expand array indexing into Switch/PHI
+    processIndexRef(const_cast<Function *>(func));
+    // Set up condition expressions for all BasicBlocks 
+    processBlockConditions(const_cast<Function *>(func));
+    NextAnonValueNumber = 0;
+    /* Gather data for top level instructions in each basic block. */
+    std::string retGuard, valsep;
+    for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
+        std::string tempCond = getCondStr(const_cast<BasicBlock *>(&*BI));
+        for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
+            const Instruction *II = &*IIb;
+            switch(II->getOpcode()) {
+            case Instruction::Store: {
+                const StoreInst *SI = cast<StoreInst>(II);
+                std::string value = printOperand(SI->getOperand(0), false);
+                findAlloca(dyn_cast<Instruction>(SI->getPointerOperand()));
+                std::string dest = printOperand(SI->getPointerOperand(), true);
+                if (dest[0] == '&')
+                    dest = dest.substr(1);
+                std::string alloc = "STORE ";
+                if (isAlloca(SI->getPointerOperand()))
+                    alloc = "LET " + typeName(cast<PointerType>(
+                      SI->getPointerOperand()->getType())->getElementType()) + " ";
+                std::string temp;
+                if (tempCond != "")
+                    temp = "(" + tempCond + ")";
+                mlines.push_back(alloc + temp + ":" + dest + " = " + value);
+                break;
+                }
+            case Instruction::Ret:
+                if (!II->getNumOperands())
+                    break;
+                retGuard += valsep;
+                if (tempCond != "")
+                    retGuard += tempCond + " ? ";
+                valsep = " : ";
+                retGuard += printOperand(II->getOperand(0), false);
+                break;
+            case Instruction::Call: { // can have value
+                if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
+                    break;
+                std::string temp = isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ";
+                if (tempCond != "")
+                    temp += "(" + tempCond + ")";
+                mlines.push_back("CALL" + temp + ":" + printCall(II));
+                break;
+                }
+            }
+        }
+    }
+    for (auto item: allocaList)
+        mlines.push_back("ALLOCA " + item.first + " " + typeName(item.second));
+    return cleanupValue(retGuard);
+}
+
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     bool isModule = table->STy->getName().substr(0, 6) == "module";
-    fprintf(OStr, "%sMODULE %s (\n", isModule ? "" : "E", getStructName(table->STy).c_str());
+    fprintf(OStr, "%sMODULE %s {\n", isModule ? "" : "E", getStructName(table->STy).c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
     for (auto item: table->IR->priority)
@@ -1022,74 +1098,25 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         fprintf(OStr, "    INTERFACECONNECT %s %s %s\n", item.target.c_str(), item.source.c_str(), item.IR->name.c_str());
     processField(table, OStr);
     for (auto FI : table->method) {
-        std::map<std::string, const Type *> allocaList;
-        std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
-            if (II) {
-            if (II->getOpcode() == Instruction::Alloca)
-                allocaList[GetValueName(II)] = II->getType();
-            else for (int i = 0; i < II->getNumOperands(); i++)
-                findAlloca(dyn_cast<Instruction>(II->getOperand(i)));
-            }
-        };
-        globalMethodName = FI.first;
+        std::list<std::string> mlines, mrlines;
+        std::string methodName = FI.first;
         const Function *func = FI.second;
+        std::string rdyName = getRdyName(methodName);
+        std::string rdyGuard;
+        if (endswith(methodName, "__RDY"))
+            continue;
         if (trace_function || trace_call)
-            printf("PROCESSING %s %s\n", func->getName().str().c_str(), globalMethodName.c_str());
-        std::list<std::string> mlines;
-        // Expand array indexing into Switch/PHI
-        processIndexRef(const_cast<Function *>(func));
-        // Set up condition expressions for all BasicBlocks 
-        processBlockConditions(const_cast<Function *>(func));
-        NextAnonValueNumber = 0;
-        /* Gather data for top level instructions in each basic block. */
-        std::string retGuard, valsep;
-        for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
-            std::string tempCond = getCondStr(const_cast<BasicBlock *>(&*BI));
-            for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
-                const Instruction *II = &*IIb;
-                switch(II->getOpcode()) {
-                case Instruction::Store: {
-                    const StoreInst *SI = cast<StoreInst>(II);
-                    std::string value = printOperand(SI->getOperand(0), false);
-                    findAlloca(dyn_cast<Instruction>(SI->getPointerOperand()));
-                    std::string dest = printOperand(SI->getPointerOperand(), true);
-                    if (dest[0] == '&')
-                        dest = dest.substr(1);
-                    std::string alloc = "STORE ";
-                    if (isAlloca(SI->getPointerOperand()))
-                        alloc = "LET " + typeName(cast<PointerType>(
-                          SI->getPointerOperand()->getType())->getElementType()) + " ";
-                    std::string temp;
-                    if (tempCond != "")
-                        temp = "(" + tempCond + ")";
-                    mlines.push_back(alloc + temp + ":" + dest + " = " + value);
-                    break;
-                    }
-                case Instruction::Ret:
-                    if (!II->getNumOperands())
-                        break;
-                    retGuard += valsep;
-                    if (tempCond != "")
-                        retGuard += tempCond + " ? ";
-                    valsep = " : ";
-                    retGuard += printOperand(II->getOperand(0), false);
-                    break;
-                case Instruction::Call: { // can have value
-                    if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
-                        break;
-                    std::string temp = isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ";
-                    if (tempCond != "")
-                        temp += "(" + tempCond + ")";
-                    mlines.push_back("CALL" + temp + ":" + printCall(II));
-                    break;
-                    }
-                }
-            }
+            printf("PROCESSING %s %s\n", func->getName().str().c_str(), methodName.c_str());
+        if (isModule)
+        if (auto rfunc = table->method[rdyName]) {
+            rdyGuard = processMethod(rdyName, rfunc, mrlines);
+            if (rdyGuard == "1")
+                rdyGuard = "";
         }
+        std::string retGuard = processMethod(methodName, func, mlines);
         if (!isModule)
             retGuard = "";
-        retGuard = cleanupValue(retGuard);
-        std::string headerLine = globalMethodName;
+        std::string headerLine = methodName;
         auto AI = func->arg_begin(), AE = func->arg_end();
         std::string sep = " ( ";
         for (AI++; AI != AE; ++AI) {
@@ -1097,26 +1124,25 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             sep = " , ";
         }
         if (sep != " ( ")
-            headerLine += " ) ";
+            headerLine += " )";
         if (!isActionMethod(func))
             headerLine += " " + typeName(func->getReturnType());
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";
-        for (auto item: allocaList)
-            mlines.push_back("ALLOCA " + item.first + " " + typeName(item.second));
+        if (rdyGuard != "")
+            headerLine += " if (" + rdyGuard + ")";
         if (mlines.size())
             headerLine += " {";
         std::string options;
         if (table->ruleFunctions[globalMethodName])
             options += "/Rule";
-        if (!endswith(globalMethodName, "__RDY") || mlines.size() > 0 || (retGuard != "1" && retGuard != ""))
-            fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
+        fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
         for (auto line: mlines)
              fprintf(OStr, "        %s\n", line.c_str());
         if (mlines.size())
             fprintf(OStr, "    }\n");
     }
-    fprintf(OStr, ")\n");
+    fprintf(OStr, "}\n");
 }
 
 static std::list<const StructType *> structSeq;

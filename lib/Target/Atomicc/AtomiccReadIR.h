@@ -177,9 +177,9 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
         if (!ext)
             irSeq.push_back(IR);
         IR->name = getToken();
-        ParseCheck(checkItem("("), "Module '(' missing");
+        ParseCheck(checkItem("{"), "Module '{' missing");
         mapIndex[IR->name] = IR;
-        while (readLine() && !checkItem(")")) {
+        while (readLine() && !checkItem("}")) {
             if (checkItem("SOFTWARE")) {
                 IR->softwareName.push_back(getToken());
             }
@@ -233,11 +233,23 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     }
                 }
                 bool foundParen = checkItem("{");
-                if (!foundParen)
-                    MI->type = getToken();
+                bool foundIf = false;
+                if (!foundParen) {
+                    foundIf = checkItem("if");
+                    if (!foundIf)
+                        MI->type = getToken();
+                }
                 if (checkItem("="))
                     MI->guard = insertRead(getExpression(), "");
                 IR->method[methodName] = MI;
+                if (foundIf || (!foundParen && checkItem("if"))) {
+                    std::string rdyName = getRdyName(methodName);
+                    MethodInfo *MIRdy = new MethodInfo{""};
+                    MIRdy->rule = MI->rule;
+                    MIRdy->type = "INTEGER_1";
+                    MIRdy->guard = getExpression();
+                    IR->method[rdyName] = MIRdy;
+                }
                 if (foundParen || checkItem("{")) {
                     while (readLine() && !checkItem("}")) {
                         if (checkItem("ALLOCA")) {
