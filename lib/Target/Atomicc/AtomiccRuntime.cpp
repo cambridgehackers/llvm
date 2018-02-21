@@ -56,6 +56,15 @@ restart:
                 }
                 }
                 break;
+            case Instruction::BitCast: {
+                if (auto PTy = dyn_cast<PointerType>(II->getType()))
+                if (auto STy = dyn_cast<StructType>(PTy->getElementType())) {
+                    getClass(STy);
+                    ClassMethodTable *table = getClass(findThisArgument(func));
+                    table->typeRef.push_back(STy);
+                }
+                break;
+                }
             case Instruction::Load:
                 if (Instruction *val = remapValue[II->getOperand(0)]) {
                     // replace loads from temp areas with stored values
