@@ -80,7 +80,7 @@ static void tokenizeStr(std::string arg)
         if (ch == ' ' || ch == '\t') {
             ch = arg[index++];
         }
-        else if (isalpha(ch)) {
+        else if (isalpha(ch) || ch == '_' || ch == '$') {
             do {
                 token += ch;
                 ch = arg[index++];
@@ -112,20 +112,26 @@ printf("[%s:%d] arg '%s' unknown ch %c\n", __FUNCTION__, __LINE__, arg.c_str(), 
         }
     }
 }
+std::string scanExpression(const char *val)
+{
+    const char *startp = val;
+    int level = 0;
+    while (*val == ' ')
+        val++;
+    while (*val && ((*val != ' ' && *val != ':' && *val != ',') || level != 0)) {
+        if (*val == '(')
+            level++;
+        else if (*val == ')')
+            level--;
+        val++;
+    }
+    return std::string(startp, val);
+}
 static std::string getExpression()
 {
-    char *startp = bufp;
-    int level = 0;
-    while (*bufp == ' ')
-        bufp++;
-    while (*bufp && ((*bufp != ' ' && *bufp != ':') || level != 0)) {
-        if (*bufp == '(')
-            level++;
-        else if (*bufp == ')')
-            level--;
-        bufp++;
-    }
-    std::string ret = trimStr(std::string(startp, bufp));
+    std::string scanexp = scanExpression(bufp);
+    bufp += scanexp.length();
+    std::string ret = trimStr(scanexp);
     if (ret[0] == '(' && ret[ret.length()-1] == ')')
         ret = ret.substr(1, ret.length()-2);
     while (*bufp == ' ')

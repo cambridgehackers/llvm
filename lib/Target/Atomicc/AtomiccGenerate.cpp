@@ -706,9 +706,11 @@ std::string printOperand(const Value *Operand, bool Indirect)
             if (auto PTy = dyn_cast<PointerType>(I->getType()))
             if (auto STy = dyn_cast<StructType>(PTy->getElementType()))
                 ctype = typeName(STy);
-I->dump();
-            //vout += "BITCAST(" + printOperand(I->getOperand(0), false) + ", " + ctype + ")";
+#if 0
+            vout += "BITCAST(" + printOperand(I->getOperand(0), false) + ", " + ctype + ")";
+#else
             vout += printOperand(I->getOperand(0), false);
+#endif
             break;
             }
 

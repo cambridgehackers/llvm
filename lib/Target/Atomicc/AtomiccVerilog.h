@@ -305,16 +305,26 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
             }
             auto AI = CI->params.begin();
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
-            while(rval.length()) {
+            int argCount = CI->params.size();
+            while(rval.length() && argCount-- > 0) {
                 std::string rest;
-                int ind = rval.find(",");
-                if (ind > 0) {
-                    rest = rval.substr(ind+1);
-                    rval = rval.substr(0, ind);
+                std::string scanexp = scanExpression(rval.c_str());
+                rest = rval.substr(scanexp.length());
+                while (rest[0] == ' ')
+                    rest = rest.substr(1);
+                if (rest.length()) {
+                    if (rest[0] == ',')
+                        rest = rest.substr(1);
+                    else
+                        printf("[%s:%d] cannot locate ','\n", __FUNCTION__, __LINE__);
                 }
-                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, rval});
+                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, scanexp});
                 rval = rest;
                 AI++;
+            }
+            if (rval.length()) {
+printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval.c_str(), info.value.c_str());
+                exit(-1);
             }
         }
     }
