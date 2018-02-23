@@ -120,6 +120,7 @@ typedef struct ModuleIR {
     std::list<OutcallInterface>       outcall;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::list<FieldElement>           fields;
+    std::list<FieldElement>           interfaces;
     std::list<InterfaceConnectType>   interfaceConnect;
 } ModuleIR;
 

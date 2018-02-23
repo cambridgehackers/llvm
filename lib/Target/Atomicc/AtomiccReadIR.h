@@ -189,7 +189,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             if (checkItem("SOFTWARE")) {
                 IR->softwareName.push_back(getToken());
             }
-            else if (checkItem("OUTCALL")) {
+            else if (checkItem("EINTERFACE")) {
                 std::string      fldName = getToken();
                 std::string      type = getToken();
                 ModuleIR *lIR = lookupIR(type);
@@ -216,6 +216,18 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 std::string fldName = getToken();
                 std::string type = getToken();
                 IR->fields.push_back(FieldElement{fldName, vecCount, type, mapIndex[type], arrayLen, isPtr});
+            }
+            else if (checkItem("INTERFACE")) {
+                int64_t     vecCount = -1;
+                unsigned    arrayLen = 0;
+                bool        isPtr = checkItem("/Ptr");
+                if (checkItem("/Count"))
+                    vecCount = atoi(getToken().c_str());
+                if (checkItem("/Array"))
+                    arrayLen = atoi(getToken().c_str());
+                std::string fldName = getToken();
+                std::string type = getToken();
+                IR->interfaces.push_back(FieldElement{fldName, vecCount, type, mapIndex[type], arrayLen, isPtr});
             }
             else if (checkItem("METHOD")) {
                 MethodInfo *MI = new MethodInfo{""};

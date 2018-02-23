@@ -1012,7 +1012,7 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         if (const PointerType *PTy = dyn_cast<PointerType>(element))
         if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
         if (isInterface(STy)) {
-            fprintf(OStr, "    OUTCALL %s %s\n", fldName.c_str(), getClass(STy)->IR->name.c_str());
+            fprintf(OStr, "    EINTERFACE %s %s\n", fldName.c_str(), getClass(STy)->IR->name.c_str());
             continue;
         }
         std::string temp;
@@ -1022,7 +1022,10 @@ static void processField(ClassMethodTable *table, FILE *OStr)
             temp += "/Count " + utostr(vecCount) + " ";
         if (arrayLen != 0)
             temp += "/Array " + utostr(arrayLen) + " ";
-        fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
+        if (isInterface(dyn_cast<StructType>(element)))
+            fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
+        else
+            fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
     }
 }
 

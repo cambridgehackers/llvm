@@ -110,17 +110,47 @@ static ModuleIR *iterField(ModuleIR *IR, CBFun cbWorker)
     return nullptr;
 }
 
+static ModuleIR *iterInterface(ModuleIR *IR, CBFun cbWorker)
+{
+    for (auto item: IR->interfaces) {
+        int64_t vecCount = item.vecCount;
+        int dimIndex = 0;
+        do {
+            std::string fldName = item.fldName;
+            if (vecCount != -1)
+                fldName += autostr(dimIndex++);
+            if (auto ret = (cbWorker)(item, fldName))
+                return ret;
+        } while(--vecCount > 0);
+    }
+    return nullptr;
+}
+
 static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
 {
+    bool lookInterface = false;
     while (1) {
         int ind = searchStr.find(MODULE_SEPARATOR);
         std::string tname = searchStr.substr(0, ind);
+        if (lookInterface) {
+        if (auto nextIR = iterInterface(searchIR, CBAct {
+              if (ind != -1 && fldName == tname)
+                  return item.IR;
+              return nullptr; })) {
+            searchIR = nextIR;
+            goto next;
+            }
+        }
+        else {
         if (auto nextIR = iterField(searchIR, CBAct {
               if (ind != -1 && fldName == tname)
                   return item.IR;
-              return nullptr; }))
+              return nullptr; })) {
             searchIR = nextIR;
-        else {
+            goto next;
+            }
+        }
+        {
             for (auto item: searchIR->outcall)
                 if (item.fldName == tname) {
                     searchIR = item.IR;
@@ -129,6 +159,7 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
             return searchIR->method[searchStr];
         }
 next:
+        lookInterface = !lookInterface;
         searchStr = searchStr.substr(ind+1);
     };
 }
@@ -182,8 +213,7 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     modulePortList.push_back(inpClk + "CLK");
     modulePortList.push_back(inpClk + "nRST");
     // First handle all 'incoming' interface methods
-    for (auto item : IR->fields) {
-        if (item.IR && item.IR->name.substr(0,12) == "l_ainterface")
+    for (auto item : IR->interfaces) {
         for (auto FI: item.IR->method) {
             std::string methodName = item.fldName + MODULE_SEPARATOR + FI.first;
             MethodInfo *MI = FI.second;
@@ -241,7 +271,6 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     iterField(IR, CBAct {
             if (item.IR && !item.isPtr)
             if (item.IR->name.substr(0,12) != "l_struct_OC_")
-            if (item.IR->name.substr(0, 12) != "l_ainterface")
                 generateModuleSignatureList(item.IR, fldName + MODULE_SEPARATOR);
           return nullptr;
           });
@@ -350,7 +379,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
                     fprintf(OStr, "    reg%s %s;\n", sizeProcess(item.type).c_str(), fldName.c_str());
                     resetList.push_back(fldName);
                 }
-                else if (item.IR->name.substr(0, 12) != "l_ainterface")
+                else
                     generateModuleSignature(OStr, item.IR, fldName + MODULE_SEPARATOR);
             }
             else if (size != 0) {
