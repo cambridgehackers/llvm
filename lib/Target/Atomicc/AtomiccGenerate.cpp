@@ -1036,7 +1036,8 @@ std::string getRdyName(std::string basename)
         rdyName = rdyName.substr(0, rdyName.length()-5);
     return rdyName + "__RDY";
 }
-static std::string processMethod(std::string methodName, const Function *func, std::list<std::string> &mlines)
+static std::string processMethod(std::string methodName, const Function *func,
+           std::list<std::string> &mlines, std::list<std::string> &malines)
 {
     std::map<std::string, const Type *> allocaList;
     std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
@@ -1099,7 +1100,7 @@ static std::string processMethod(std::string methodName, const Function *func, s
         }
     }
     for (auto item: allocaList)
-        mlines.push_back("ALLOCA " + item.first + " " + typeName(item.second));
+        malines.push_back("ALLOCA " + item.first + " " + typeName(item.second));
     return cleanupValue(retGuard);
 }
 
@@ -1115,7 +1116,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
         fprintf(OStr, "    INTERFACECONNECT %s %s %s\n", item.target.c_str(), item.source.c_str(), item.type.c_str());
     processField(table, OStr);
     for (auto FI : table->method) {
-        std::list<std::string> mlines, mrlines;
+        std::list<std::string> mlines, malines;
         std::string methodName = FI.first;
         const Function *func = FI.second;
         std::string rdyName = getRdyName(methodName);
@@ -1126,11 +1127,12 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             printf("PROCESSING %s %s\n", func->getName().str().c_str(), methodName.c_str());
         if (isModule)
         if (auto rfunc = table->method[rdyName]) {
-            rdyGuard = processMethod(rdyName, rfunc, mrlines);
+            std::list<std::string> mrlines;
+            rdyGuard = processMethod(rdyName, rfunc, mrlines, mrlines);
             if (rdyGuard == "1")
                 rdyGuard = "";
         }
-        std::string retGuard = processMethod(methodName, func, mlines);
+        std::string retGuard = processMethod(methodName, func, mlines, malines);
         if (!isModule)
             retGuard = "";
         std::string headerLine = methodName;
@@ -1148,12 +1150,14 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
             headerLine += " = (" + retGuard + ")";
         if (rdyGuard != "")
             headerLine += " if (" + rdyGuard + ")";
-        if (mlines.size())
+        if (mlines.size() + malines.size())
             headerLine += " {";
         std::string options;
         if (table->ruleFunctions[globalMethodName])
             options += "/Rule";
         fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
+        for (auto line: malines)
+             fprintf(OStr, "        %s\n", line.c_str());
         for (auto line: mlines)
              fprintf(OStr, "        %s\n", line.c_str());
         if (mlines.size())
