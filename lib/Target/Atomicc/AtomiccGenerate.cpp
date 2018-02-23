@@ -1172,10 +1172,16 @@ void generateIR(std::string OutputDir)
     for (auto current : classCreate) {
         assert(current.first);
         std::string sname = current.first->getName();
-        std::string strname = getStructName(current.first);
+        std::string sortName =
+              ( (!strncmp(sname.c_str(), "struct.", 7))      ? '1'
+              : (!strncmp(sname.c_str(), "union.", 6))       ? '2'
+              : (!strncmp(sname.c_str(), "class.", 6))       ? '4'
+              : (!strncmp(sname.c_str(), "ainterface.", 11)) ? '5'
+              : (!strncmp(sname.c_str(), "emodule.", 8))     ? '7'
+              : '9') + getStructName(current.first);
         if (strncmp(sname.c_str(), "class.std::", 11) // don't generate anything for std classes
          && strncmp(sname.c_str(), "struct.std::", 12))
-            structAlpha[((!strncmp(sname.c_str(), "struct.", 7)) ? '1' : '2') + strname] = current.first;
+            structAlpha[sortName] = current.first;
     }
     FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
     for (auto item : structAlpha)
