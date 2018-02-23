@@ -145,7 +145,7 @@ static ModuleIR *lookupIR(std::string ind)
     if (ind == "")
         return nullptr;
     ModuleIR *ret = mapIndex[ind];
-    ParseCheck(ret != NULL, "lookupIR = " + ind + " not found");
+    //ParseCheck(ret != NULL, "lookupIR = " + ind + " not found");
     return ret;
 }
 static uint64_t convertType(std::string arg)
@@ -192,8 +192,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             else if (checkItem("EINTERFACE")) {
                 std::string      fldName = getToken();
                 std::string      type = getToken();
-                ModuleIR *lIR = lookupIR(type);
-                IR->outcall.push_back(OutcallInterface{fldName, lIR});
+                IR->outcall.push_back(OutcallInterface{fldName, type});
             }
             else if (checkItem("PRIORITY")) {
                 std::string rule = getToken();
@@ -202,8 +201,8 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             else if (checkItem("INTERFACECONNECT")) {
                 std::string target = getToken();
                 std::string source = getToken();
-                ModuleIR *lIR = lookupIR(getToken());
-                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, lIR});
+                std::string type = getToken();
+                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, type});
             }
             else if (checkItem("FIELD")) {
                 int64_t     vecCount = -1;
@@ -215,7 +214,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     arrayLen = atoi(getToken().c_str());
                 std::string fldName = getToken();
                 std::string type = getToken();
-                IR->fields.push_back(FieldElement{fldName, vecCount, type, mapIndex[type], arrayLen, isPtr});
+                IR->fields.push_back(FieldElement{fldName, vecCount, type, arrayLen, isPtr});
             }
             else if (checkItem("INTERFACE")) {
                 int64_t     vecCount = -1;
@@ -227,7 +226,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     arrayLen = atoi(getToken().c_str());
                 std::string fldName = getToken();
                 std::string type = getToken();
-                IR->interfaces.push_back(FieldElement{fldName, vecCount, type, mapIndex[type], arrayLen, isPtr});
+                IR->interfaces.push_back(FieldElement{fldName, vecCount, type, arrayLen, isPtr});
             }
             else if (checkItem("METHOD")) {
                 MethodInfo *MI = new MethodInfo{""};

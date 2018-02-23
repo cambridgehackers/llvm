@@ -200,7 +200,7 @@ ClassMethodTable *getClass(const StructType *STy)
                             if (const StructType *STyI = dyn_cast<StructType>(PTy->getElementType()))
                             if (targetInterface == fieldName(STyE, Idx)) {
 printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
-                                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyI)->IR});
+                                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getStructName(STyI)});
                                 goto nextInterface;
                             }
                         }
@@ -1112,7 +1112,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
     for (auto item: table->IR->priority)
         fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
     for (auto item: table->IR->interfaceConnect)
-        fprintf(OStr, "    INTERFACECONNECT %s %s %s\n", item.target.c_str(), item.source.c_str(), item.IR->name.c_str());
+        fprintf(OStr, "    INTERFACECONNECT %s %s %s\n", item.target.c_str(), item.source.c_str(), item.type.c_str());
     processField(table, OStr);
     for (auto FI : table->method) {
         std::list<std::string> mlines, mrlines;
@@ -1162,69 +1162,19 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
     fprintf(OStr, "}\n");
 }
 
-static std::list<const StructType *> structSeq;
-static std::map<std::string, const StructType *> structAlpha;
-
-static void getDepend(const StructType *STy)
-{
-    std::map<std::string, const StructType *> structTemp;
-    if (!STy->hasName())
-        return;
-    if (strncmp(STy->getName().str().c_str(), "class.std::", 11) // don't generate anything for std classes
-     && strncmp(STy->getName().str().c_str(), "struct.std::", 12)) {
-        ClassMethodTable *table = getClass(STy);
-        int Idx = 0;
-        for (auto iSTy: table->typeRef)
-            structTemp[getStructName(iSTy)] = iSTy;
-        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-            const Type *element = *I;
-            if (table)
-            if (const Type *newType = table->replaceType[Idx])
-                element = newType;
-            if (auto PTy = dyn_cast<PointerType>(element))
-                element = PTy->getElementType();
-            if (auto iSTy = dyn_cast<StructType>(element))
-                structTemp[getStructName(iSTy)] = iSTy;
-        }
-        for (auto FI : table->method) {
-            const Function *func = FI.second;
-            auto AI = func->arg_begin(), AE = func->arg_end();
-            if (const StructType *iSTy = dyn_cast<StructType>(func->getReturnType()))
-                structTemp[getStructName(iSTy)] = iSTy;
-            AI++;
-            for (; AI != AE; ++AI) {
-                Type *element = AI->getType();
-                if (auto PTy = dyn_cast<PointerType>(element))
-                    element = PTy->getElementType();
-                if (const StructType *iSTy = dyn_cast<StructType>(element))
-                    structTemp[getStructName(iSTy)] = iSTy;
-            }
-        }
-    }
-    for (auto element: structTemp) {
-         if (structAlpha[element.first])
-             getDepend(element.second);
-         if (structAlpha[element.first]) {
-             structSeq.push_back(element.second);
-             structAlpha[element.first] = NULL;
-         }
-    }
-    std::string name = getStructName(STy);
-    if (structAlpha[name]) {
-        structSeq.push_back(STy);
-        structAlpha[name] = NULL;
-    }
-}
-
 void generateIR(std::string OutputDir)
 {
-    for (auto current : classCreate)
-        structAlpha[getStructName(current.first)] = current.first;
-    for (auto item : structAlpha)
-        if (item.second)
-            getDepend(item.second);
+    std::map<std::string, const StructType *> structAlpha;
+    for (auto current : classCreate) {
+        assert(current.first);
+        std::string sname = current.first->getName();
+        std::string strname = getStructName(current.first);
+        if (strncmp(sname.c_str(), "class.std::", 11) // don't generate anything for std classes
+         && strncmp(sname.c_str(), "struct.std::", 12))
+            structAlpha[((!strncmp(sname.c_str(), "struct.", 7)) ? '1' : '2') + strname] = current.first;
+    }
     FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
-    for (auto STy : structSeq)
-        processClass(getClass(STy), OStrIR);
+    for (auto item : structAlpha)
+        processClass(getClass(item.second), OStrIR);
     fclose(OStrIR);
 }

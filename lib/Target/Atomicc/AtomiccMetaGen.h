@@ -19,20 +19,20 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
     // write out metadata comments at end of the file
     metaList.push_front("//METASTART; " + IR->name);
     for (auto item: IR->outcall)
-        metaList.push_back("//METAEXTERNAL; " + item.fldName + "; " + item.IR->name + ";");
+        metaList.push_back("//METAEXTERNAL; " + item.fldName + "; " + lookupIR(item.type)->name + ";");
     for (auto item: IR->fields) {
         int64_t vecCount = item.vecCount;
         int dimIndex = 0;
-        if (item.IR)
+        if (lookupIR(item.type))
         do {
             std::string fldName = item.fldName;
             if (vecCount != -1)
                 fldName += autostr(dimIndex++);
             if (item.isPtr)
-                metaList.push_back("//METAEXTERNAL; " + fldName + "; " + item.IR->name + ";");
-            else if (item.IR->name.substr(0,12) != "l_struct_OC_"
-                 && item.IR->name.substr(0,12) != "l_ainterface")
-                metaList.push_back("//METAINTERNAL; " + fldName + "; " + item.IR->name + ";");
+                metaList.push_back("//METAEXTERNAL; " + fldName + "; " + lookupIR(item.type)->name + ";");
+            else if (lookupIR(item.type)->name.substr(0,12) != "l_struct_OC_"
+                 && lookupIR(item.type)->name.substr(0,12) != "l_ainterface")
+                metaList.push_back("//METAINTERNAL; " + fldName + "; " + lookupIR(item.type)->name + ";");
         } while(--vecCount > 0);
     }
     for (auto FI : IR->method) {
@@ -114,7 +114,7 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
         std::string tname = item.target;
         std::string sname = item.source;
 printf("[%s:%d] METACONNECT %s %s\n", __FUNCTION__, __LINE__, tname.c_str(), sname.c_str());
-        for (auto mitem: item.IR->method)
+        for (auto mitem: lookupIR(item.type)->method)
             metaList.push_back("//METACONNECT; " + tname + MODULE_SEPARATOR + mitem.first
                                               + "; " + sname + MODULE_SEPARATOR + mitem.first);
     }

@@ -135,7 +135,7 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
         if (lookInterface) {
         if (auto nextIR = iterInterface(searchIR, CBAct {
               if (ind != -1 && fldName == tname)
-                  return item.IR;
+                  return lookupIR(item.type);
               return nullptr; })) {
             searchIR = nextIR;
             goto next;
@@ -144,7 +144,7 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
         else {
         if (auto nextIR = iterField(searchIR, CBAct {
               if (ind != -1 && fldName == tname)
-                  return item.IR;
+                  return lookupIR(item.type);
               return nullptr; })) {
             searchIR = nextIR;
             goto next;
@@ -153,7 +153,7 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
         {
             for (auto item: searchIR->outcall)
                 if (item.fldName == tname) {
-                    searchIR = item.IR;
+                    searchIR = lookupIR(item.type);
                     goto next;
                 }
             return searchIR->method[searchStr];
@@ -174,8 +174,8 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
     }
     // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
     for (auto oitem: IR->outcall)
-        for (auto FI : oitem.IR->method) {
-            MethodInfo *MI = oitem.IR->method[FI.first];
+        for (auto FI : lookupIR(oitem.type)->method) {
+            MethodInfo *MI = lookupIR(oitem.type)->method[FI.first];
             if (!MI->rule)
                 setDir(oitem.fldName + MODULE_SEPARATOR + FI.first, instance == "", MI); // action -> out
         }
@@ -214,7 +214,7 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     modulePortList.push_back(inpClk + "nRST");
     // First handle all 'incoming' interface methods
     for (auto item : IR->interfaces) {
-        for (auto FI: item.IR->method) {
+        for (auto FI: lookupIR(item.type)->method) {
             std::string methodName = item.fldName + MODULE_SEPARATOR + FI.first;
             MethodInfo *MI = FI.second;
             checkWire(methodName, MI->type, outp);
@@ -224,8 +224,8 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     }
     // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
     for (auto oitem: IR->outcall)
-        for (auto FI : oitem.IR->method) {
-            MethodInfo *MI = oitem.IR->method[FI.first];
+        for (auto FI : lookupIR(oitem.type)->method) {
+            MethodInfo *MI = lookupIR(oitem.type)->method[FI.first];
             std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
             modulePortList.push_back((MI->type == ""/* action */ ? outp : inp + sizeT(MI->type)) + wparam);
             wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
@@ -269,16 +269,16 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     outList.clear();
     generateModuleSignatureList(IR, "");
     iterField(IR, CBAct {
-            if (item.IR && !item.isPtr)
-            if (item.IR->name.substr(0,12) != "l_struct_OC_")
-                generateModuleSignatureList(item.IR, fldName + MODULE_SEPARATOR);
+            if (lookupIR(item.type) && !item.isPtr)
+            if (lookupIR(item.type)->name.substr(0,12) != "l_struct_OC_")
+                generateModuleSignatureList(lookupIR(item.type), fldName + MODULE_SEPARATOR);
           return nullptr;
           });
 
     // Generate module header
     generateModuleSignature(OStr, IR, "");
     for (auto IC : IR->interfaceConnect)
-        for (auto FI : IC.IR->method) {
+        for (auto FI : lookupIR(IC.type)->method) {
             std::string tstr = IC.target + MODULE_SEPARATOR + FI.first,
                         sstr = IC.source + MODULE_SEPARATOR + FI.first;
 printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outList[tstr], sstr.c_str(), outList[sstr]);
@@ -374,13 +374,13 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     // generate local state element declarations
     iterField(IR, CBAct {
             uint64_t size = convertType(item.type);
-            if (item.IR && !item.isPtr) {
-                if (item.IR->name.substr(0,12) == "l_struct_OC_") {
+            if (lookupIR(item.type) && !item.isPtr) {
+                if (lookupIR(item.type)->name.substr(0,12) == "l_struct_OC_") {
                     fprintf(OStr, "    reg%s %s;\n", sizeProcess(item.type).c_str(), fldName.c_str());
                     resetList.push_back(fldName);
                 }
                 else
-                    generateModuleSignature(OStr, item.IR, fldName + MODULE_SEPARATOR);
+                    generateModuleSignature(OStr, lookupIR(item.type), fldName + MODULE_SEPARATOR);
             }
             else if (size != 0) {
                 std::string temp = "    reg";

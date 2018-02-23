@@ -62,7 +62,7 @@ static std::string inline cleanupValue(std::string arg)
 typedef struct {
     std::string target;
     std::string source;
-    struct ModuleIR *IR;
+    std::string type;
 } InterfaceConnectType;
 
 enum {MetaNone, MetaRead, MetaInvoke, MetaMax};
@@ -100,14 +100,13 @@ typedef struct {
 
 typedef struct {
     std::string      fldName;
-    struct ModuleIR *IR;
+    std::string      type;
 } OutcallInterface;
 
 typedef struct {
     std::string fldName;
     int64_t     vecCount;
     std::string type;
-    struct ModuleIR *IR;
     unsigned    arrayLen;
     bool        isPtr;
 } FieldElement;
