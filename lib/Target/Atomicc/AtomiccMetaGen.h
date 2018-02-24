@@ -67,7 +67,7 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
                     for (auto item: bm[MetaRead])
                         // if the current method reads a state element that
                         // is written by another method, add it to the 'before' list
-                        if (item.first == inneritem.dest && !inneritem.isAlloca) {
+                        if (item.first == inneritem.dest) {
 //printf("[%s:%d] before conflict '%s' innerunc %s methodName %s\n", __FUNCTION__, __LINE__, item.first.c_str(), innerFI.first.c_str(), methodName.c_str());
                             metaBefore[innermethodName] = "; :";
                             break;
@@ -75,7 +75,7 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
                     for (auto item: IR->method[methodName]->storeList)
                         // if the current method writes a state element that
                         // is written by another method, add it to the 'conflict' list
-                        if (item.dest == inneritem.dest && !item.isAlloca && !inneritem.isAlloca) {
+                        if (item.dest == inneritem.dest) {
                             metaConflict[innermethodName] = "; ";
                             break;
                         }

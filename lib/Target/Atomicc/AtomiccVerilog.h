@@ -167,15 +167,16 @@ next:
 static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
 {
     // First handle all 'incoming' interface methods
-    for (auto FI : IR->method) {
-        MethodInfo *MI = IR->method[FI.first];
-        if (!MI->rule || instance == "")
-            setDir(instance + FI.first, instance != "", MI); // if !instance, !action -> out
-    }
+    for (auto item : IR->interfaces)
+        for (auto FI: lookupIR(item.type)->method) {
+            MethodInfo *MI = FI.second;
+            if (!MI->rule || instance == "")
+                setDir(instance + item.fldName + MODULE_SEPARATOR + FI.first, instance != "", MI); // if !instance, !action -> out
+        }
     // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
     for (auto oitem: IR->outcall)
         for (auto FI : lookupIR(oitem.type)->method) {
-            MethodInfo *MI = lookupIR(oitem.type)->method[FI.first];
+            MethodInfo *MI = FI.second;
             if (!MI->rule)
                 setDir(oitem.fldName + MODULE_SEPARATOR + FI.first, instance == "", MI); // action -> out
         }
@@ -187,6 +188,7 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
  */
 static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instance)
 {
+std::list<std::string> modLine;
     std::list<std::string> modulePortList;
     std::string inp = "input ", outp = "output ", inpClk = "input ";
 
@@ -213,7 +215,7 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
     modulePortList.push_back(inpClk + "CLK");
     modulePortList.push_back(inpClk + "nRST");
     // First handle all 'incoming' interface methods
-    for (auto item : IR->interfaces) {
+    for (auto item : IR->interfaces)
         for (auto FI: lookupIR(item.type)->method) {
             std::string methodName = item.fldName + MODULE_SEPARATOR + FI.first;
             MethodInfo *MI = FI.second;
@@ -221,11 +223,10 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
             for (auto item: MI->params)
                 checkWire(methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + item.name, item.type, inp);
         }
-    }
     // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
     for (auto oitem: IR->outcall)
         for (auto FI : lookupIR(oitem.type)->method) {
-            MethodInfo *MI = lookupIR(oitem.type)->method[FI.first];
+            MethodInfo *MI = FI.second;
             std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
             modulePortList.push_back((MI->type == ""/* action */ ? outp : inp + sizeT(MI->type)) + wparam);
             wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
@@ -233,25 +234,24 @@ static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instan
                 modulePortList.push_back(outp + sizeT(item.type) + wparam + item.name);
         }
 
+    if (instance != "")
+        modLine.push_back("    " + IR->name + " " + instance.substr(0,instance.length()-1) + " (");
+    else
+        modLine.push_back("module " + IR->name + " (");
+    for (auto PI = modulePortList.begin(); PI != modulePortList.end();) {
+        std::string nline = "    " + *PI;
+        if (instance != "")
+            nline = "    " + nline;
+        PI++;
+        nline += (PI != modulePortList.end()) ? "," : ");";
+        modLine.push_back(nline);
+    }
     // now write actual module signature to output file
     for (auto item: wireList)
         if (item.second != "")
         fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
-    if (instance != "")
-        fprintf(OStr, "    %s %s (\n", IR->name.c_str(), instance.substr(0,instance.length()-1).c_str());
-    else
-        fprintf(OStr, "module %s (\n", IR->name.c_str());
-    for (auto PI = modulePortList.begin(); PI != modulePortList.end();) {
-        if (instance != "")
-            fprintf(OStr, "    ");
-        fprintf(OStr, "    %s", PI->c_str());
-        PI++;
-        if (PI != modulePortList.end())
-            fprintf(OStr, ",\n");
-    }
-    fprintf(OStr, ");\n");
-    for (auto item: IR->softwareName)
-        fprintf(OStr, "// software: %s\n", item.c_str());
+    for (auto item: modLine)
+        fprintf(OStr, "%s\n", item.c_str());
 }
 
 /*
@@ -277,6 +277,8 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
 
     // Generate module header
     generateModuleSignature(OStr, IR, "");
+    for (auto item: IR->softwareName)
+        fprintf(OStr, "// software: %s\n", item.c_str());
     for (auto IC : IR->interfaceConnect)
         for (auto FI : lookupIR(IC.type)->method) {
             std::string tstr = IC.target + MODULE_SEPARATOR + FI.first,
@@ -296,21 +298,22 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
     // from each method
     for (auto FI : IR->method) {
         std::string methodName = FI.first;
-        MethodInfo *MI = IR->method[methodName];
-        setAssign(methodName, MI->guard);  // collect the text of the return value into a single 'assign'
+        MethodInfo *MI = FI.second;
+        for (auto item: MI->alloca)
+            fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
         bool alwaysSeen = false;
+        for (auto info: MI->letList) {
+            std::string rval = cleanupValue(info.value);
+            muxValueList[info.dest].push_back(MuxValueEntry{info.cond, rval});
+        }
         for (auto info: MI->storeList) {
             std::string rval = cleanupValue(info.value);
-            if (info.isAlloca)
-                setAssign(info.dest, rval);
-            else {
-                if (!alwaysSeen)
-                    alwaysLines.push_back("if (" + methodName + ") begin");
-                alwaysSeen = true;
-                if (info.cond != "")
-                    alwaysLines.push_back("    if (" + info.cond + ")");
-                alwaysLines.push_back("    " + info.dest + " <= " + rval + ";");
-            }
+            if (!alwaysSeen)
+                alwaysLines.push_back("if (" + methodName + ") begin");
+            alwaysSeen = true;
+            if (info.cond != "")
+                alwaysLines.push_back("    if (" + info.cond + ")");
+            alwaysLines.push_back("    " + info.dest + " <= " + rval + ";");
         }
         if (alwaysSeen)
             alwaysLines.push_back("end; // End of " + methodName);
@@ -371,6 +374,8 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
         }
         setAssign(item.first, temp + prevValue);
     }
+    for (auto FI : IR->method)
+        setAssign(FI.first, FI.second->guard);  // collect the text of the return value into a single 'assign'
     // generate local state element declarations
     iterField(IR, CBAct {
             uint64_t size = convertType(item.type);
@@ -463,18 +468,15 @@ void promoteGuards(ModuleIR *IR)
         std::string methodName = FI.first, rdyName = getRdyName(methodName);
         if (endswith(methodName, "__RDY"))
             continue;
-        MethodInfo *MI = IR->method[methodName];
+        MethodInfo *MI = FI.second;
         MethodInfo *MIRdy = IR->method[rdyName];
         assert(MIRdy);
         for (auto info: MI->callList) {
             std::string rval = info.value; // get call info
             int ind = rval.find("{");
-            std::string calledName = getRdyName(rval.substr(0, ind));
-            std::string tempCond;
+            std::string tempCond = getRdyName(rval.substr(0, ind));
             if (info.cond != "")
-                tempCond = calledName + " | " + invertExpr(info.cond);
-            else
-                tempCond = calledName;
+                tempCond += " | " + invertExpr(info.cond);
             rval = cleanupValue(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
             if (MIRdy->guard == "1")
                 MIRdy->guard = tempCond;

@@ -280,7 +280,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             std::string dest = getExpression();
                             ParseCheck(checkItem("="), "store = missing");
                             std::string expr = insertRead(bufp, cond);
-                            MI->storeList.push_back(StoreListElement{dest, expr, cond, false});
+                            MI->storeList.push_back(StoreListElement{dest, expr, cond});
                         }
                         else if (checkItem("LET")) {
                             std::string type = getToken();
@@ -289,7 +289,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             std::string dest = getExpression();
                             ParseCheck(checkItem("="), "store = missing");
                             std::string expr = insertRead(bufp, cond);
-                            MI->storeList.push_back(StoreListElement{dest, expr, cond, true});
+                            MI->letList.push_back(StoreListElement{dest, expr, cond});
                         }
                         else if (checkItem("CALL")) {
                             bool isAction = checkItem("/Action");

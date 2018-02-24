@@ -73,7 +73,6 @@ typedef struct {
     std::string dest;
     std::string value;
     std::string cond;
-    bool        isAlloca;
 } StoreListElement;
 
 typedef struct {
@@ -91,6 +90,7 @@ typedef struct {
     std::string                guard;
     bool                       rule;
     std::list<StoreListElement> storeList;
+    std::list<StoreListElement> letList;
     std::list<CallListElement> callList;
     std::string                type;
     std::list<ParamElement>    params;
