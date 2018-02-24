@@ -190,8 +190,8 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 IR->softwareName.push_back(getToken());
             }
             else if (checkItem("EINTERFACE")) {
-                std::string      fldName = getToken();
                 std::string      type = getToken();
+                std::string      fldName = getToken();
                 IR->outcall.push_back(OutcallInterface{fldName, type});
             }
             else if (checkItem("PRIORITY")) {
@@ -212,8 +212,8 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     vecCount = atoi(getToken().c_str());
                 if (checkItem("/Array"))
                     arrayLen = atoi(getToken().c_str());
-                std::string fldName = getToken();
                 std::string type = getToken();
+                std::string fldName = getToken();
                 IR->fields.push_back(FieldElement{fldName, vecCount, type, arrayLen, isPtr});
             }
             else if (checkItem("INTERFACE")) {
@@ -224,8 +224,8 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     vecCount = atoi(getToken().c_str());
                 if (checkItem("/Array"))
                     arrayLen = atoi(getToken().c_str());
-                std::string fldName = getToken();
                 std::string type = getToken();
+                std::string fldName = getToken();
                 IR->interfaces.push_back(FieldElement{fldName, vecCount, type, arrayLen, isPtr});
             }
             else if (checkItem("METHOD")) {
@@ -270,8 +270,9 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 if (foundParen || checkItem("{")) {
                     while (readLine() && !checkItem("}")) {
                         if (checkItem("ALLOCA")) {
+                            std::string type = getToken();
                             std::string name = getToken();
-                            MI->alloca[name] = getToken();
+                            MI->alloca[name] = type;
                         }
                         else if (checkItem("STORE")) {
                             std::string cond = insertRead(getExpression(), "");

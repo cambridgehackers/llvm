@@ -1012,7 +1012,7 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         if (const PointerType *PTy = dyn_cast<PointerType>(element))
         if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
         if (isInterface(STy)) {
-            fprintf(OStr, "    EINTERFACE %s %s\n", fldName.c_str(), getClass(STy)->IR->name.c_str());
+            fprintf(OStr, "    EINTERFACE %s %s\n", getClass(STy)->IR->name.c_str(), fldName.c_str());
             continue;
         }
         std::string temp;
@@ -1023,9 +1023,9 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         if (arrayLen != 0)
             temp += "/Array " + utostr(arrayLen) + " ";
         if (isInterface(dyn_cast<StructType>(element)))
-            fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
+            fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), typeName(element).c_str(), fldName.c_str());
         else
-            fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), fldName.c_str(), typeName(element).c_str());
+            fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), typeName(element).c_str(), fldName.c_str());
     }
 }
 
@@ -1044,7 +1044,7 @@ static std::string processMethod(std::string methodName, const Function *func,
         if (II) {
         if (II->getOpcode() == Instruction::Alloca)
             allocaList[GetValueName(II)] = II->getType();
-        else for (int i = 0; i < II->getNumOperands(); i++)
+        else for (unsigned i = 0; i < II->getNumOperands(); i++)
             findAlloca(dyn_cast<Instruction>(II->getOperand(i)));
         }
     };
@@ -1100,7 +1100,7 @@ static std::string processMethod(std::string methodName, const Function *func,
         }
     }
     for (auto item: allocaList)
-        malines.push_back("ALLOCA " + item.first + " " + typeName(item.second));
+        malines.push_back("ALLOCA " + typeName(item.second) + " " + item.first);
     return cleanupValue(retGuard);
 }
 
