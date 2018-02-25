@@ -15,7 +15,11 @@
 static int dontInlineValues;//=1;
 static std::map<std::string, bool> inList, outList, seenList;
 static std::map<std::string, std::string> assignList;
-static std::map<std::string, std::string> wireList; // name -> type
+typedef struct {
+    std::string type;
+    std::string value;
+} WireData;
+static std::map<std::string, WireData> wireList; // name -> type
 static std::list<std::string> modLine;
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
@@ -61,8 +65,7 @@ static std::string inlineValue(std::string wname, std::string atype)
         }
     }
     // define 'wire' elements before instantiating instance
-    if (atype != "")
-        wireList[wname] = atype;
+    wireList[wname] = WireData{atype, ""};
     return wname;
 }
 
@@ -189,16 +192,14 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
  */
 static void generateModuleSignature(ModuleIR *IR, std::string instance)
 {
-    std::list<std::string> modulePortList;
     std::string inp = "input ", outp = "output ", inpClk = "input ";
-
     auto checkWire = [&](std::string wparam, std::string atype, std::string dir) -> void {
         std::string ret = inp + wparam;
         if (instance != "")
             ret = inlineValue(ret, atype);
         else if (atype != "") // !action
             ret = dir + sizeProcess(atype) + wparam;
-        modulePortList.push_back(ret);
+        modLine.push_back(ret);
     };
     auto sizeT = [&](std::string atype) -> std::string {
         if (instance == "")
@@ -206,13 +207,14 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance)
         return "";
     };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
+    modLine.push_back(IR->name + " " + ((instance != "") ? instance + " ":"") + "(");
     if (instance != "") {
         inp = instance + MODULE_SEPARATOR;
         outp = instance + MODULE_SEPARATOR;
         inpClk = "";
     }
-    modulePortList.push_back(inpClk + "CLK");
-    modulePortList.push_back(inpClk + "nRST");
+    modLine.push_back(inpClk + "CLK");
+    modLine.push_back(inpClk + "nRST");
     // First handle all 'incoming' interface methods
     for (auto item : IR->interfaces)
         for (auto FI: lookupIR(item.type)->method) {
@@ -227,20 +229,11 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance)
         for (auto FI : lookupIR(oitem.type)->method) {
             MethodInfo *MI = FI.second;
             std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
-            modulePortList.push_back((MI->type == ""/* action */ ? outp : inp + sizeT(MI->type)) + wparam);
+            modLine.push_back((MI->type == ""/* action */ ? outp : inp + sizeT(MI->type)) + wparam);
             wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
             for (auto item: MI->params)
-                modulePortList.push_back(outp + sizeT(item.type) + wparam + item.name);
+                modLine.push_back(outp + sizeT(item.type) + wparam + item.name);
         }
-
-    
-    modLine.push_back(IR->name + " " + ((instance != "") ? instance + " ":"") + "(");
-    for (auto PI = modulePortList.begin(); PI != modulePortList.end();) {
-        std::string nline = "    " + *PI;
-        PI++;
-        nline += (PI != modulePortList.end()) ? "," : ");";
-        modLine.push_back(nline);
-    }
 }
 
 /*
@@ -268,9 +261,15 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
 
     // Generate module header
     generateModuleSignature(IR, "");
-    fprintf(OStr, "module ");
-    for (auto item: modLine)
-        fprintf(OStr, "%s\n", item.c_str());
+    std::string sep = "module ";
+    for (auto item: modLine) {
+        fprintf(OStr, "%s", (sep + item).c_str());
+        if (item[item.length()-1] == '(')
+            sep = "\n    ";
+        else
+            sep = ",\n    ";
+    }
+    fprintf(OStr, ");\n");
     modLine.clear();
     for (auto item: IR->softwareName)
         fprintf(OStr, "// software: %s\n", item.c_str());
@@ -377,29 +376,40 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
                 if (itemIR->name.substr(0,12) == "l_struct_OC_") {
-                    modLine.push_back("reg" + sizeProcess(item.type) + " " + fldName + ";");
+                    fprintf(OStr, "    reg%s;\n", (sizeProcess(item.type) + " " + fldName).c_str());
                     resetList.push_back(fldName);
                 }
                 else
                     generateModuleSignature(itemIR, fldName);
             }
             else if (size != 0) {
-                std::string temp = "reg";
+                std::string temp;
                 if (size > 8)
                     temp += "[" + autostr(size - 1) + ":0]";
                 temp += " " + fldName;
                 if (item.arrayLen > 0)
                     temp += "[" + autostr(item.arrayLen) + ":0]";
-                modLine.push_back(temp + ";");
+                fprintf(OStr, "    reg%s;\n", temp.c_str());
                 resetList.push_back(fldName);
             }
             return nullptr; });
     // now write actual module signature to output file
     for (auto item: wireList)
-        if (item.second != "")
-        fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
-    for (auto item: modLine)
-        fprintf(OStr, "    %s\n", item.c_str());
+        if (item.second.type != "")
+        fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second.type) + item.first).c_str());
+    std::string endStr;
+    for (auto item: modLine) {
+        if (item[item.length()-1] == '(') {
+            fprintf(OStr, "%s", (endStr + "    " + item).c_str());
+            sep = "";
+        }
+        else {
+            fprintf(OStr, "%s", (sep + "\n        " + item).c_str());
+            sep = ",";
+        }
+        endStr = ");\n";
+    }
+    fprintf(OStr, "%s", endStr.c_str());
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
