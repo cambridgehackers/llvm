@@ -207,8 +207,8 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance)
     };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
     if (instance != "") {
-        inp = instance;
-        outp = instance;
+        inp = instance + MODULE_SEPARATOR;
+        outp = instance + MODULE_SEPARATOR;
         inpClk = "";
     }
     modulePortList.push_back(inpClk + "CLK");
@@ -233,14 +233,10 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance)
                 modulePortList.push_back(outp + sizeT(item.type) + wparam + item.name);
         }
 
-    if (instance != "")
-        modLine.push_back("    " + IR->name + " " + instance.substr(0,instance.length()-1) + " (");
-    else
-        modLine.push_back("module " + IR->name + " (");
+    
+    modLine.push_back(IR->name + " " + ((instance != "") ? instance + " ":"") + "(");
     for (auto PI = modulePortList.begin(); PI != modulePortList.end();) {
         std::string nline = "    " + *PI;
-        if (instance != "")
-            nline = "    " + nline;
         PI++;
         nline += (PI != modulePortList.end()) ? "," : ");";
         modLine.push_back(nline);
@@ -264,14 +260,15 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     modLine.clear();
     generateModuleSignatureList(IR, "");
     iterField(IR, CBAct {
-            if (lookupIR(item.type) && !item.isPtr)
-            if (lookupIR(item.type)->name.substr(0,12) != "l_struct_OC_")
-                generateModuleSignatureList(lookupIR(item.type), fldName + MODULE_SEPARATOR);
+            if (ModuleIR *itemIR = lookupIR(item.type))
+            if (!item.isPtr && itemIR->name.substr(0,12) != "l_struct_OC_")
+                generateModuleSignatureList(itemIR, fldName + MODULE_SEPARATOR);
           return nullptr;
           });
 
     // Generate module header
     generateModuleSignature(IR, "");
+    fprintf(OStr, "module ");
     for (auto item: modLine)
         fprintf(OStr, "%s\n", item.c_str());
     modLine.clear();
@@ -377,16 +374,17 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     // generate local state element declarations
     iterField(IR, CBAct {
             uint64_t size = convertType(item.type);
-            if (lookupIR(item.type) && !item.isPtr) {
-                if (lookupIR(item.type)->name.substr(0,12) == "l_struct_OC_") {
-                    modLine.push_back("    reg" + sizeProcess(item.type) + " " + fldName + ";");
+            ModuleIR *itemIR = lookupIR(item.type);
+            if (itemIR && !item.isPtr) {
+                if (itemIR->name.substr(0,12) == "l_struct_OC_") {
+                    modLine.push_back("reg" + sizeProcess(item.type) + " " + fldName + ";");
                     resetList.push_back(fldName);
                 }
                 else
-                    generateModuleSignature(lookupIR(item.type), fldName + MODULE_SEPARATOR);
+                    generateModuleSignature(itemIR, fldName);
             }
             else if (size != 0) {
-                std::string temp = "    reg";
+                std::string temp = "reg";
                 if (size > 8)
                     temp += "[" + autostr(size - 1) + ":0]";
                 temp += " " + fldName;
@@ -401,7 +399,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
         if (item.second != "")
         fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
     for (auto item: modLine)
-        fprintf(OStr, "%s\n", item.c_str());
+        fprintf(OStr, "    %s\n", item.c_str());
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
