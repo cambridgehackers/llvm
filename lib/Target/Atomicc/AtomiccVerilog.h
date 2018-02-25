@@ -13,9 +13,10 @@
 #include "AtomiccIR.h"
 
 static int dontInlineValues;//=1;
-std::map<std::string, bool> inList, outList, seenList;
-std::map<std::string, std::string> assignList;
-std::map<std::string, std::string> wireList; // name -> type
+static std::map<std::string, bool> inList, outList, seenList;
+static std::map<std::string, std::string> assignList;
+static std::map<std::string, std::string> wireList; // name -> type
+static std::list<std::string> modLine;
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 #define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
@@ -186,9 +187,8 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
 /*
  * Generate verilog module header for class definition or reference
  */
-static void generateModuleSignature(FILE *OStr, ModuleIR *IR, std::string instance)
+static void generateModuleSignature(ModuleIR *IR, std::string instance)
 {
-std::list<std::string> modLine;
     std::list<std::string> modulePortList;
     std::string inp = "input ", outp = "output ", inpClk = "input ";
 
@@ -206,7 +206,6 @@ std::list<std::string> modLine;
         return "";
     };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
-    wireList.clear();
     if (instance != "") {
         inp = instance;
         outp = instance;
@@ -246,12 +245,6 @@ std::list<std::string> modLine;
         nline += (PI != modulePortList.end()) ? "," : ");";
         modLine.push_back(nline);
     }
-    // now write actual module signature to output file
-    for (auto item: wireList)
-        if (item.second != "")
-        fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
-    for (auto item: modLine)
-        fprintf(OStr, "%s\n", item.c_str());
 }
 
 /*
@@ -267,6 +260,8 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     assignList.clear();
     inList.clear();
     outList.clear();
+    wireList.clear();
+    modLine.clear();
     generateModuleSignatureList(IR, "");
     iterField(IR, CBAct {
             if (lookupIR(item.type) && !item.isPtr)
@@ -276,7 +271,10 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
           });
 
     // Generate module header
-    generateModuleSignature(OStr, IR, "");
+    generateModuleSignature(IR, "");
+    for (auto item: modLine)
+        fprintf(OStr, "%s\n", item.c_str());
+    modLine.clear();
     for (auto item: IR->softwareName)
         fprintf(OStr, "// software: %s\n", item.c_str());
     for (auto IC : IR->interfaceConnect)
@@ -381,11 +379,11 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
             uint64_t size = convertType(item.type);
             if (lookupIR(item.type) && !item.isPtr) {
                 if (lookupIR(item.type)->name.substr(0,12) == "l_struct_OC_") {
-                    fprintf(OStr, "    reg%s %s;\n", sizeProcess(item.type).c_str(), fldName.c_str());
+                    modLine.push_back("    reg" + sizeProcess(item.type) + " " + fldName + ";");
                     resetList.push_back(fldName);
                 }
                 else
-                    generateModuleSignature(OStr, lookupIR(item.type), fldName + MODULE_SEPARATOR);
+                    generateModuleSignature(lookupIR(item.type), fldName + MODULE_SEPARATOR);
             }
             else if (size != 0) {
                 std::string temp = "    reg";
@@ -394,11 +392,16 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
                 temp += " " + fldName;
                 if (item.arrayLen > 0)
                     temp += "[" + autostr(item.arrayLen) + ":0]";
-                temp += ";\n";
-                fprintf(OStr, "%s", temp.c_str());
+                modLine.push_back(temp + ";");
                 resetList.push_back(fldName);
             }
             return nullptr; });
+    // now write actual module signature to output file
+    for (auto item: wireList)
+        if (item.second != "")
+        fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
+    for (auto item: modLine)
+        fprintf(OStr, "%s\n", item.c_str());
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
