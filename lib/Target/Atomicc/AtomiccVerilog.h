@@ -18,7 +18,7 @@ typedef struct {
 } AssignData;
 typedef struct {
     std::string type;
-    std::string value;
+    bool        used;
 } WireData;
 typedef struct {
     std::string value;
@@ -36,6 +36,80 @@ static std::list<ModData> modLine;
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 #define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
+
+bool isIdChar(char ch)
+{
+    return isalpha(ch) || ch == '_' || ch == '$';
+}
+
+std::list<std::string> tokenList;
+static void str2token(std::string arg)
+{
+    int total = arg.length();
+    int index = 0;
+    char ch = arg[index++];
+    tokenList.clear();
+    while(index <= total) {
+        std::string token;
+        auto getNext = [&] (void) -> void {
+            token += ch;
+            ch = arg[index++];
+        };
+
+        if (ch == ' ' || ch == '\t') {
+            ch = arg[index++];
+        }
+        else if (isIdChar(ch)) {
+            do {
+                getNext();
+            } while (isIdChar(ch) || isdigit(ch));
+//printf("[%s:%d] token %s\n", __FUNCTION__, __LINE__, token.c_str());
+            tokenList.push_back(token);
+        }
+        else if (isdigit(ch)) {
+            do {
+                getNext();
+            } while (isdigit(ch) || ch == '.');
+            tokenList.push_back(token);
+        }
+        else if (ch == '{') {
+            getNext();
+            tokenList.push_back(token);
+        }
+        else if (ch == '+' || ch == '-' || ch == '*' || ch == '&' || ch == '|') {
+            do {
+                getNext();
+            } while (ch == token[0]);
+            tokenList.push_back(token);
+        }
+        else if (ch == '=' || ch == '<' || ch == '>') {
+            do {
+                getNext();
+            } while (ch == '=' || ch == '<' || ch == '>');
+            tokenList.push_back(token);
+        }
+        else if (ch == '/' || ch == '%'
+            || ch == '}' || ch == '(' || ch == ')' || ch == '^' || ch == '!'
+            || ch == ',' || ch == '?' || ch == ':') {
+            getNext();
+            tokenList.push_back(token);
+        }
+        else {
+printf("[%s:%d] arg '%s' unknown ch %c\n", __FUNCTION__, __LINE__, arg.c_str(), ch);
+            exit(-1);
+        }
+    }
+}
+
+static std::string token2str(std::list<std::string> &argList)
+{
+    std::string ret, sep;
+    for (auto tok: argList) {
+        ret += sep + tok;
+        sep = " ";
+    }
+    return ret;
+}
 
 static void setAssign(std::string target, std::string value)
 {
@@ -163,7 +237,7 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance)
     auto checkWire = [&](std::string wparam, std::string atype, std::string dir, bool out) -> void {
         std::string ret = inp + wparam;
         if (instance != "")
-            wireList[ret] = WireData{atype, ""};
+            wireList[ret] = WireData{atype, false};
         else if (atype != "") // !action
             ret = dir + sizeProcess(atype) + wparam;
         modLine.push_back(ModData{ret, out});
@@ -212,6 +286,27 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     std::map<std::string, std::string> enableList;
     // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
+    auto lookupString = [&] (std::string arg) -> std::string {
+        str2token(arg);
+        std::list<std::string> tokNew;
+        for (auto item: tokenList) {
+            if (isIdChar(item[0]))
+            for (auto aitem: assignList)
+                if (aitem.second.value == item) {
+                    assignList[aitem.first].valid = false;
+                    item = aitem.first;
+                    break;
+                }
+                else if (aitem.first == item && aitem.second.value != "") {
+                    assignList[aitem.first].valid = false;
+                    item = aitem.second.value;
+                    break;
+                }
+            tokNew.push_back(item);
+        }
+        std::string ret = token2str(tokNew);
+        return ret;
+    };
 
     assignList.clear();
     inList.clear();
@@ -362,33 +457,34 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     bool changed = true;
     while (changed) {
         changed = false;
-        for (auto mitem: assignList)
+        for (auto outerItem: assignList)
             for (auto aitem: assignList)
-                if (aitem.first == mitem.second.value && aitem.second.value != "") {
+                if (aitem.first == outerItem.second.value && aitem.second.value != "") {
                     assignList[aitem.first].valid = false;
-                    assignList[mitem.first].value = aitem.second.value;
+                    assignList[outerItem.first].value = aitem.second.value;
                     changed = true;
                     break;
                 }
     }
-    for (auto mitem: modLine) {
-        std::string item = mitem.value;
-        for (auto aitem: assignList)
-            if (aitem.second.value == item) {
-                wireList[item].type = "";
-                assignList[aitem.first].valid = false;
-                item = aitem.first;
-                break;
-            }
-            else if (aitem.first == item && aitem.second.value != "") {
-                assignList[aitem.first].valid = false;
-                item = aitem.second.value;
-                break;
-            }
-         modNew.push_back(item);
+    for (auto mitem: modLine)
+        modNew.push_back(lookupString(mitem.value));
+    for (auto mitem: modNew) {
+        str2token(mitem);
+        for (auto item: tokenList)
+            if (isIdChar(item[0]))
+                wireList[item].used = true;
+    }
+    for (auto aitem: assignList) {
+        if (aitem.second.value != "" && aitem.second.valid) {
+        str2token(aitem.second.value);
+        wireList[aitem.first].used = true;
+        for (auto item: tokenList)
+            if (isIdChar(item[0]))
+                wireList[item].used = true;
+        }
     }
     for (auto item: wireList)
-        if (item.second.type != "")
+        if (item.second.type != "" && item.second.used)
         fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second.type) + item.first).c_str());
     std::string endStr;
     for (auto item: modNew) {
