@@ -356,7 +356,7 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
         std::string methodName = FI.first;
         MethodInfo *MI = FI.second;
         for (auto item: MI->alloca)
-            fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
+            wireList[item.first] = WireData{item.second, false};
         bool alwaysSeen = false;
         for (auto info: MI->letList)
             muxValueList[info.dest].push_back(MuxValueEntry{info.cond, cleanupValue(info.value)});
