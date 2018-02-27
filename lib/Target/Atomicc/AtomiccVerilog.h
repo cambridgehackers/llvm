@@ -277,6 +277,23 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance)
         }
 }
 
+typedef struct {
+    std::string name;
+    std::string type;
+} FieldItem;
+std::list<FieldItem> fieldList;
+
+static void getFieldList(std::string name, std::string type)
+{
+    ModuleIR *IR = lookupIR(type);
+    if (IR)
+        for (auto item: IR->fields) {
+            getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type);
+        }
+    else
+        fieldList.push_back(FieldItem{name, type});
+}
+
 /*
  * Generate *.v and *.vh for a Verilog module
  */
@@ -355,8 +372,16 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
     for (auto FI : IR->method) {
         std::string methodName = FI.first;
         MethodInfo *MI = FI.second;
-        for (auto item: MI->alloca)
-            wireList[item.first] = WireData{item.second, false};
+        for (auto item: MI->alloca) {
+            fieldList.clear();
+            getFieldList(item.first, item.second);
+            std::string itemList;
+            for (auto fitem : fieldList) {
+                wireList[fitem.name] = WireData{fitem.type, false};
+                itemList += " , " + fitem.name;
+            }
+            setAssign(item.first, "{" + itemList.substr(2) + " }");
+        }
         bool alwaysSeen = false;
         for (auto info: MI->letList)
             muxValueList[info.dest].push_back(MuxValueEntry{info.cond, cleanupValue(info.value)});
@@ -457,7 +482,8 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     bool changed = true;
     while (changed) {
         changed = false;
-        for (auto outerItem: assignList)
+        for (auto outerItem: assignList) {
+#if 1
             for (auto aitem: assignList)
                 if (aitem.first == outerItem.second.value && aitem.second.value != "") {
                     assignList[aitem.first].valid = false;
@@ -465,6 +491,17 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
                     changed = true;
                     break;
                 }
+#else
+            std::string newItem = lookupString(outerItem.second.value);
+            if (newItem != outerItem.second.value) {
+                assignList[outerItem.first].value = newItem;
+                changed = true;
+            }
+#endif
+        }
+    }
+    for (auto aitem: assignList) {
+printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(), aitem.second.value.c_str(), aitem.second.valid);
     }
     for (auto mitem: modLine)
         modNew.push_back(lookupString(mitem.value));
