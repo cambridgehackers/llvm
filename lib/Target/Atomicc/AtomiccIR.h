@@ -76,6 +76,13 @@ typedef struct {
 } StoreListElement;
 
 typedef struct {
+    std::string dest;
+    std::string value;
+    std::string cond;
+    std::string type;
+} LetListElement;
+
+typedef struct {
     std::string value;
     std::string cond;
     bool isAction;
@@ -90,7 +97,7 @@ typedef struct {
     std::string                guard;
     bool                       rule;
     std::list<StoreListElement> storeList;
-    std::list<StoreListElement> letList;
+    std::list<LetListElement> letList;
     std::list<CallListElement> callList;
     std::string                type;
     std::list<ParamElement>    params;
