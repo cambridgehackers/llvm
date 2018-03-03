@@ -24,11 +24,15 @@ typedef struct {
     std::string cond;
     std::string value;
 } MuxValueEntry;
+typedef struct {
+    std::string name;
+    std::string type;
+} FieldItem;
 
+static std::list<FieldItem> fieldList;
 static std::map<std::string, bool> inList, outList;
 static std::map<std::string, AssignData> assignList;
 static std::map<std::string, std::string> wireList; // name -> type
-static std::list<ModData> modLine;
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 #define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
@@ -68,10 +72,6 @@ static void str2token(std::string arg)
             } while (isdigit(ch) || ch == '.');
             tokenList.push_back(token);
         }
-        else if (ch == '{') {
-            getNext();
-            tokenList.push_back(token);
-        }
         else if (ch == '+' || ch == '-' || ch == '*' || ch == '&' || ch == '|') {
             do {
                 getNext();
@@ -84,7 +84,7 @@ static void str2token(std::string arg)
             } while (ch == '=' || ch == '<' || ch == '>');
             tokenList.push_back(token);
         }
-        else if (ch == '/' || ch == '%'
+        else if (ch == '/' || ch == '%' || ch == '{'
             || ch == '}' || ch == '(' || ch == ')' || ch == '^'
             || ch == ',' || ch == '?' || ch == ':' || ch == ';') {
             getNext();
@@ -228,7 +228,7 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
 /*
  * Generate verilog module header for class definition or reference
  */
-static void generateModuleSignature(ModuleIR *IR, std::string instance)
+static void generateModuleSignature(ModuleIR *IR, std::string instance, std::list<ModData> &modParam)
 {
     std::string inp = "input ", outp = "output ", inpClk = "input ";
     auto checkWire = [&](std::string wparam, std::string atype, std::string dir, bool out) -> void {
@@ -237,7 +237,7 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance)
             wireList[ret] = atype;
         else if (atype != "") // !action
             ret = dir + sizeProcess(atype) + wparam;
-        modLine.push_back(ModData{ret, out});
+        modParam.push_back(ModData{ret, out});
     };
     auto sizeT = [&](std::string atype) -> std::string {
         if (instance == "")
@@ -245,14 +245,14 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance)
         return "";
     };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
-    modLine.push_back(ModData{IR->name + " " + ((instance != "") ? instance + " ":"") + "(", false});
+    modParam.push_back(ModData{IR->name + " " + ((instance != "") ? instance + " ":"") + "(", false});
     if (instance != "") {
         inp = instance + MODULE_SEPARATOR;
         outp = instance + MODULE_SEPARATOR;
         inpClk = "";
     }
-    modLine.push_back(ModData{inpClk + "CLK", false});
-    modLine.push_back(ModData{inpClk + "nRST", false});
+    modParam.push_back(ModData{inpClk + "CLK", false});
+    modParam.push_back(ModData{inpClk + "nRST", false});
     // First handle all 'incoming' interface methods
     for (auto item : IR->interfaces)
         for (auto FI: lookupIR(item.type)->method) {
@@ -267,26 +267,18 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance)
         for (auto FI : lookupIR(oitem.type)->method) {
             MethodInfo *MI = FI.second;
             std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
-            modLine.push_back(ModData{(MI->type == ""/* action */ ? outp : inp + sizeT(MI->type)) + wparam, true});
+            modParam.push_back(ModData{(MI->type == ""/* action */ ? outp : inp + sizeT(MI->type)) + wparam, true});
             wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
             for (auto item: MI->params)
-                modLine.push_back(ModData{outp + sizeT(item.type) + wparam + item.name, true});
+                modParam.push_back(ModData{outp + sizeT(item.type) + wparam + item.name, true});
         }
 }
 
-typedef struct {
-    std::string name;
-    std::string type;
-} FieldItem;
-std::list<FieldItem> fieldList;
-
 static void getFieldList(std::string name, std::string type)
 {
-    ModuleIR *IR = lookupIR(type);
-    if (IR)
-        for (auto item: IR->fields) {
+    if (ModuleIR *IR = lookupIR(type))
+        for (auto item: IR->fields)
             getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type);
-        }
     else
         fieldList.push_back(FieldItem{name, type});
 }
@@ -294,12 +286,12 @@ static void getFieldList(std::string name, std::string type)
 /*
  * Generate *.v and *.vh for a Verilog module
  */
-static std::map<std::string, std::string> regList;
 void generateModuleDef(ModuleIR *IR, FILE *OStr)
 {
-    std::map<std::string, bool> refList;
-    __block std::list<std::string> resetList;
+static std::list<ModData> modLine;
+static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
     std::map<std::string, std::string> enableList;
+    std::map<std::string, bool> refList;
     // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
     auto lookupString = [&] (std::string arg) -> std::string {
@@ -330,6 +322,11 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
         for (auto item: tokenList)
             if (isIdChar(item[0]))
                 refList[item] = true;
+    };
+    auto lookupCheck = [&] (std::string arg) -> std::string {
+        std::string ret = lookupString(arg);
+        checkRef(ret);
+        return ret;
     };
 
     assignList.clear();
@@ -367,7 +364,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
           });
 
     // Generate module header
-    generateModuleSignature(IR, "");
+    generateModuleSignature(IR, "", modLine);
     std::string sep = "module ";
     for (auto mitem: modLine) {
         fprintf(OStr, "%s", (sep + mitem.value).c_str());
@@ -442,9 +439,8 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             int argCount = CI->params.size();
             while(rval.length() && argCount-- > 0) {
-                std::string rest;
                 std::string scanexp = scanExpression(rval.c_str());
-                rest = rval.substr(scanexp.length());
+                std::string rest = rval.substr(scanexp.length());
                 while (rest[0] == ' ')
                     rest = rest.substr(1);
                 if (rest.length()) {
@@ -509,21 +505,17 @@ printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(
     }
 
     // generate local state element declarations
-    for (auto item: regList) {
+    for (auto item: regList)
         fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
-        resetList.push_back(item.first);
-    }
     iterField(IR, CBAct {
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr && itemIR->name.substr(0,12) != "l_struct_OC_")
-                generateModuleSignature(itemIR, fldName);
+                generateModuleSignature(itemIR, fldName, modLine);
             return nullptr; });
+    // now write actual module signature to output file
     std::list<std::string> modNew;
-    for (auto mitem: modLine) {
-        std::string ret = lookupString(mitem.value);
-        checkRef(ret);
-        modNew.push_back(ret);
-    }
+    for (auto mitem: modLine)
+        modNew.push_back(lookupCheck(mitem.value));
     std::list<std::string> alwaysLines;
     for (auto FI : IR->method) {
         bool alwaysSeen = false;
@@ -532,15 +524,12 @@ printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(
                 alwaysLines.push_back("if (" + FI.first + ") begin");
             alwaysSeen = true;
             if (info.cond != "")
-                alwaysLines.push_back("    if (" + lookupString(info.cond) + ")");
-            alwaysLines.push_back("    " + info.dest + " <= " + lookupString(info.value) + ";");
+                alwaysLines.push_back("    if (" + lookupCheck(info.cond) + ")");
+            alwaysLines.push_back("    " + info.dest + " <= " + lookupCheck(info.value) + ";");
         }
         if (alwaysSeen)
             alwaysLines.push_back("end; // End of " + FI.first);
     }
-    for (auto info: alwaysLines)
-        checkRef(info);
-    // now write actual module signature to output file
     for (auto item: wireList)
         if (refList[item.first] && item.second != "")
             fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
@@ -575,10 +564,10 @@ printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(
             fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.value.c_str());
         }
     // generate clocked updates to state elements
-    if (resetList.size() > 0 || alwaysLines.size() > 0) {
+    if (regList.size() > 0 || alwaysLines.size() > 0) {
         fprintf(OStr, "\n    always @( posedge CLK) begin\n      if (!nRST) begin\n");
-        for (auto item: resetList)
-            fprintf(OStr, "        %s <= 0;\n", item.c_str());
+        for (auto item: regList)
+            fprintf(OStr, "        %s <= 0;\n", item.first.c_str());
         fprintf(OStr, "      end // nRST\n");
         if (alwaysLines.size() > 0) {
             fprintf(OStr, "      else begin\n");
