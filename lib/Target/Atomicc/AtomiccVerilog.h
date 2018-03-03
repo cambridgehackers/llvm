@@ -294,7 +294,7 @@ static void getFieldList(std::string name, std::string type)
 /*
  * Generate *.v and *.vh for a Verilog module
  */
-    std::map<std::string, std::string> regList;
+static std::map<std::string, std::string> regList;
 void generateModuleDef(ModuleIR *IR, FILE *OStr)
 {
     std::map<std::string, bool> refList;
@@ -346,7 +346,6 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
         if (item.second->rule)
             refList[item.first] = true;
     iterField(IR, CBAct {
-            uint64_t size = convertType(item.type);
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
             if (itemIR->name.substr(0,12) == "l_struct_OC_") {
@@ -362,19 +361,8 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
             else
                 generateModuleSignatureList(itemIR, fldName + MODULE_SEPARATOR);
             }
-            else if (size != 0) {
-#if 0
-                std::string temp;
-                if (size > 8)
-                    temp += "[" + autostr(size - 1) + ":0]";
-                temp += " " + fldName;
-                if (item.arrayLen > 0)
-                    temp += "[" + autostr(item.arrayLen) + ":0]";
-                fprintf(OStr, "    reg%s;\n", temp.c_str());
-                resetList.push_back(fldName);
-#endif
+            else if (convertType(item.type) != 0)
                 regList[fldName] = item.type;
-            }
           return nullptr;
           });
 
@@ -491,6 +479,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     }
     for (auto FI : IR->method)
         setAssign(FI.first, FI.second->guard);  // collect the text of the return value into a single 'assign'
+    // process all replacements within the list of 'setAssign' items
     bool changed = true;
     while (changed) {
         changed = false;
@@ -502,6 +491,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
             }
         }
     }
+    // Now calculated 'was referenced' from assignList items actually referenced
     changed = true;
     std::map<std::string, bool> excludeList;
     while (changed) {
@@ -517,30 +507,16 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     for (auto aitem: assignList) {
 printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(), aitem.second.value.c_str(), aitem.second.valid);
     }
+
     // generate local state element declarations
     for (auto item: regList) {
         fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
         resetList.push_back(item.first);
     }
     iterField(IR, CBAct {
-            uint64_t size = convertType(item.type);
             ModuleIR *itemIR = lookupIR(item.type);
-            if (itemIR && !item.isPtr) {
-                if (itemIR->name.substr(0,12) != "l_struct_OC_")
-                    generateModuleSignature(itemIR, fldName);
-            }
-#if 0
-            else if (size != 0) {
-                std::string temp;
-                if (size > 8)
-                    temp += "[" + autostr(size - 1) + ":0]";
-                temp += " " + fldName;
-                if (item.arrayLen > 0)
-                    temp += "[" + autostr(item.arrayLen) + ":0]";
-                fprintf(OStr, "    reg%s;\n", temp.c_str());
-                resetList.push_back(fldName);
-            }
-#endif
+            if (itemIR && !item.isPtr && itemIR->name.substr(0,12) != "l_struct_OC_")
+                generateModuleSignature(itemIR, fldName);
             return nullptr; });
     std::list<std::string> modNew;
     for (auto mitem: modLine) {
