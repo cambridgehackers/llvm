@@ -294,10 +294,11 @@ static void getFieldList(std::string name, std::string type)
 /*
  * Generate *.v and *.vh for a Verilog module
  */
+    std::map<std::string, std::string> regList;
 void generateModuleDef(ModuleIR *IR, FILE *OStr)
 {
     std::map<std::string, bool> refList;
-    __block std::list<std::string> alwaysLines, resetList;
+    __block std::list<std::string> resetList;
     std::map<std::string, std::string> enableList;
     // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
@@ -335,6 +336,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
     inList.clear();
     outList.clear();
     wireList.clear();
+    regList.clear();
     modLine.clear();
     generateModuleSignatureList(IR, "");
     for (auto item: outList)
@@ -344,9 +346,35 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
         if (item.second->rule)
             refList[item.first] = true;
     iterField(IR, CBAct {
-            if (ModuleIR *itemIR = lookupIR(item.type))
-            if (!item.isPtr && itemIR->name.substr(0,12) != "l_struct_OC_")
+            uint64_t size = convertType(item.type);
+            ModuleIR *itemIR = lookupIR(item.type);
+            if (itemIR && !item.isPtr) {
+            if (itemIR->name.substr(0,12) == "l_struct_OC_") {
+                fieldList.clear();
+                getFieldList(fldName, item.type);
+                std::string itemList;
+                for (auto fitem : fieldList) {
+                    regList[fitem.name] = fitem.type;
+                    itemList += " , " + fitem.name;
+                }
+                setAssign(fldName, "{" + itemList.substr(2) + " }");
+            }
+            else
                 generateModuleSignatureList(itemIR, fldName + MODULE_SEPARATOR);
+            }
+            else if (size != 0) {
+#if 0
+                std::string temp;
+                if (size > 8)
+                    temp += "[" + autostr(size - 1) + ":0]";
+                temp += " " + fldName;
+                if (item.arrayLen > 0)
+                    temp += "[" + autostr(item.arrayLen) + ":0]";
+                fprintf(OStr, "    reg%s;\n", temp.c_str());
+                resetList.push_back(fldName);
+#endif
+                regList[fldName] = item.type;
+            }
           return nullptr;
           });
 
@@ -395,7 +423,6 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
             wireList[item.first] = item.second;
             setAssign(item.first, "{" + itemList.substr(2) + " }");
         }
-        bool alwaysSeen = false;
         for (auto info: MI->letList) {
             fieldList.clear();
             getFieldList("", info.type);
@@ -405,16 +432,6 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
                 muxValueList[info.dest + fname].push_back(MuxValueEntry{info.cond, info.value + fname});
             }
         }
-        for (auto info: MI->storeList) {
-            if (!alwaysSeen)
-                alwaysLines.push_back("if (" + methodName + ") begin");
-            alwaysSeen = true;
-            if (info.cond != "")
-                alwaysLines.push_back("    if (" + lookupString(info.cond) + ")");
-            alwaysLines.push_back("    " + info.dest + " <= " + lookupString(info.value) + ";");
-        }
-        if (alwaysSeen)
-            alwaysLines.push_back("end; // End of " + methodName);
         for (auto info: MI->callList) {
             if (!info.isAction)
                 continue;
@@ -485,8 +502,6 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
             }
         }
     }
-    for (auto info: alwaysLines)
-        checkRef(info);
     changed = true;
     std::map<std::string, bool> excludeList;
     while (changed) {
@@ -503,17 +518,18 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
 printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(), aitem.second.value.c_str(), aitem.second.valid);
     }
     // generate local state element declarations
+    for (auto item: regList) {
+        fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
+        resetList.push_back(item.first);
+    }
     iterField(IR, CBAct {
             uint64_t size = convertType(item.type);
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
-                if (itemIR->name.substr(0,12) == "l_struct_OC_") {
-                    fprintf(OStr, "    reg%s;\n", (sizeProcess(item.type) + " " + fldName).c_str());
-                    resetList.push_back(fldName);
-                }
-                else
+                if (itemIR->name.substr(0,12) != "l_struct_OC_")
                     generateModuleSignature(itemIR, fldName);
             }
+#if 0
             else if (size != 0) {
                 std::string temp;
                 if (size > 8)
@@ -524,6 +540,7 @@ printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(
                 fprintf(OStr, "    reg%s;\n", temp.c_str());
                 resetList.push_back(fldName);
             }
+#endif
             return nullptr; });
     std::list<std::string> modNew;
     for (auto mitem: modLine) {
@@ -531,6 +548,22 @@ printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(
         checkRef(ret);
         modNew.push_back(ret);
     }
+    std::list<std::string> alwaysLines;
+    for (auto FI : IR->method) {
+        bool alwaysSeen = false;
+        for (auto info: FI.second->storeList) {
+            if (!alwaysSeen)
+                alwaysLines.push_back("if (" + FI.first + ") begin");
+            alwaysSeen = true;
+            if (info.cond != "")
+                alwaysLines.push_back("    if (" + lookupString(info.cond) + ")");
+            alwaysLines.push_back("    " + info.dest + " <= " + lookupString(info.value) + ";");
+        }
+        if (alwaysSeen)
+            alwaysLines.push_back("end; // End of " + FI.first);
+    }
+    for (auto info: alwaysLines)
+        checkRef(info);
     // now write actual module signature to output file
     for (auto item: wireList)
         if (refList[item.first] && item.second != "")
