@@ -152,58 +152,25 @@ static ModuleIR *iterField(ModuleIR *IR, CBFun cbWorker)
     return nullptr;
 }
 
-static ModuleIR *iterInterface(ModuleIR *IR, CBFun cbWorker)
-{
-    for (auto item: IR->interfaces) {
-        int64_t vecCount = item.vecCount;
-        int dimIndex = 0;
-        do {
-            std::string fldName = item.fldName;
-            if (vecCount != -1)
-                fldName += autostr(dimIndex++);
-            if (auto ret = (cbWorker)(item, fldName))
-                return ret;
-        } while(--vecCount > 0);
-    }
-    return nullptr;
-}
-
 static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
 {
-    bool lookInterface = false;
+    std::string fieldName;
     while (1) {
         int ind = searchStr.find(MODULE_SEPARATOR);
-        std::string tname = searchStr.substr(0, ind);
-        if (lookInterface) {
-        if (auto nextIR = iterInterface(searchIR, CBAct {
-              if (ind != -1 && fldName == tname)
-                  return lookupIR(item.type);
-              return nullptr; })) {
-            searchIR = nextIR;
-            goto next;
-            }
-        }
-        else {
-        if (auto nextIR = iterField(searchIR, CBAct {
-              if (ind != -1 && fldName == tname)
-                  return lookupIR(item.type);
-              return nullptr; })) {
-            searchIR = nextIR;
-            goto next;
-            }
-        }
-        {
-            for (auto item: searchIR->interfaces)
-                if (item.isPtr && item.fldName == tname) {
-                    searchIR = lookupIR(item.type);
-                    goto next;
-                }
-            return searchIR->method[searchStr];
-        }
-next:
-        lookInterface = !lookInterface;
+        fieldName = searchStr.substr(0, ind);
         searchStr = searchStr.substr(ind+1);
+        ModuleIR *nextIR = iterField(searchIR, CBAct {
+              if (ind != -1 && fldName == fieldName)
+                  return lookupIR(item.type);
+              return nullptr; });
+        if (!nextIR)
+            break;
+        searchIR = nextIR;
     };
+    for (auto item: searchIR->interfaces)
+        if (item.fldName == fieldName)
+            return lookupIR(item.type)->method[searchStr];
+    return NULL;
 }
 
 static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
@@ -359,7 +326,6 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
             for (auto info: FI.second->params)
                 setAssign(sstr + info.name, tstr + info.name);
         }
-    // generate local state element declarations
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : IR->method) {
