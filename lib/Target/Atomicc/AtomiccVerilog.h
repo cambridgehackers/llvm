@@ -42,8 +42,7 @@ bool isIdChar(char ch)
     return isalpha(ch) || ch == '_' || ch == '$';
 }
 
-std::list<std::string> tokenList;
-static void str2token(std::string arg)
+static void str2token(std::string arg, std::list<std::string> &tokenList)
 {
     int total = arg.length();
     int index = 0;
@@ -97,21 +96,17 @@ printf("[%s:%d] arg '%s' unknown ch %c\n", __FUNCTION__, __LINE__, arg.c_str(), 
     }
 }
 
-static std::string token2str(std::list<std::string> &argList)
-{
-    std::string ret, sep;
-    for (auto tok: argList) {
-        ret += sep + tok;
-        sep = " ";
-    }
-    return ret;
-}
-
 static void setAssign(std::string target, std::string value)
 {
 //printf("[%s:%d] [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
-    str2token(value);
-    assignList[target] = AssignData{token2str(tokenList), true};
+    std::string ret, sep;
+    std::list<std::string> tokenList;
+    str2token(value, tokenList);
+    for (auto tok: tokenList) {
+        ret += sep + tok;
+        sep = " ";
+    }
+    assignList[target] = AssignData{ret, true};
 }
 
 static std::string sizeProcess(std::string type)
@@ -120,20 +115,6 @@ static std::string sizeProcess(std::string type)
     if (val > 1)
         return "[" + autostr(val - 1) + ":0]";
     return "";
-}
-
-static void setDir(std::string name, bool out, MethodInfo *MI)
-{
-    auto setItem = [&](std::string extra, bool oo) {
-        if (oo)
-            outList[name + extra] = true;
-        else
-            inList[name + extra] = true;
-    };
-    setItem("", out == (MI->type == ""));
-    name = name.substr(0, name.length()-5) + MODULE_SEPARATOR;
-    for (auto item: MI->params)
-        setItem(item.name, out);
 }
 
 static ModuleIR *iterField(ModuleIR *IR, CBFun cbWorker)
@@ -173,17 +154,6 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
     return NULL;
 }
 
-static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
-{
-    // First handle all 'incoming' interface methods
-    for (auto item : IR->interfaces)
-        for (auto FI: lookupIR(item.type)->method) {
-            MethodInfo *MI = FI.second;
-            if (!MI->rule || instance == "")
-                setDir(instance + item.fldName + MODULE_SEPARATOR + FI.first, (instance != "") ^ item.isPtr, MI); // if !instance, !action -> out
-        }
-}
-
 /*
  * Generate verilog module header for class definition or reference
  */
@@ -200,10 +170,28 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
         modParam.push_back(ModData{ret, true});
     };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
-    modParam.push_back(ModData{IR->name + " " + ((instance != "") ? instance + " ":"") + "(", false});
+    for (auto item : IR->interfaces)
+        for (auto FI: lookupIR(item.type)->method) {
+            MethodInfo *MI = FI.second;
+            std::string name = instance + item.fldName + MODULE_SEPARATOR + FI.first;
+            bool out = (instance != "") ^ item.isPtr;
+            auto setItem = [&](std::string extra, bool oo) {
+                if (oo)
+                    outList[extra] = true;
+                else
+                    inList[extra] = true;
+            };
+            if (!MI->rule || instance == "") {
+                // if !instance, !action -> out
+                setItem(name, out == (MI->type == ""));
+                for (auto item: MI->params)
+                    setItem(name.substr(0, name.length()-5) + MODULE_SEPARATOR + item.name, out);
+            }
+        }
+    modParam.push_back(ModData{IR->name + " " + ((instance != "") ? instance.substr(0, instance.length()-1) + " ":"") + "(", false});
     if (instance != "") {
-        prefix[0] = instance + MODULE_SEPARATOR;
-        prefix[1] = instance + MODULE_SEPARATOR;
+        prefix[0] = instance;
+        prefix[1] = instance;
         inpClk = "";
     }
     modParam.push_back(ModData{inpClk + "CLK", false});
@@ -235,35 +223,29 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
 static std::list<ModData> modLine;
 static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
     std::map<std::string, std::string> enableList;
-    std::map<std::string, bool> refList;
+    std::map<std::string, bool> refList, refSource;
     // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
-    auto lookupString = [&] (std::string arg) -> std::string {
-        str2token(cleanupValue(arg));
-        std::list<std::string> tokNew;
+    auto lookupString = [&] (std::string arg, bool setReference) -> std::string {
+        std::list<std::string> tokenList;
+        str2token(cleanupValue(arg), tokenList);
+        std::string ret, sep;
         for (auto item: tokenList) {
             if (isIdChar(item[0])) {
             std::string temp = assignList[item].value;
             if (temp != "") {
                 assignList[item].valid = false;
+                if (setReference)
+                    refSource[item] = true;
+                refList[item] = false;
                 item = temp;
             }
-            }
-            tokNew.push_back(item);
-        }
-        std::string ret = token2str(tokNew);
-        return ret;
-    };
-    auto checkRef = [&] (std::string arg) -> void {
-        str2token(arg);
-        std::list<std::string> tokNew;
-        for (auto item: tokenList)
-            if (isIdChar(item[0]))
+            if (setReference)
                 refList[item] = true;
-    };
-    auto lookupCheck = [&] (std::string arg) -> std::string {
-        std::string ret = lookupString(arg);
-        checkRef(ret);
+            }
+            ret += sep + item;
+            sep = " ";
+        }
         return ret;
     };
 
@@ -273,10 +255,23 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
     wireList.clear();
     regList.clear();
     modLine.clear();
-    generateModuleSignatureList(IR, "");
+    generateModuleSignature(IR, "", modLine);
     for (auto item: outList)
         if (item.second)
             refList[item.first] = true;
+    // Generate module header
+    std::string sep = "module ";
+    for (auto mitem: modLine) {
+        fprintf(OStr, "%s", (sep + mitem.value).c_str());
+        if (mitem.value[mitem.value.length()-1] == '(')
+            sep = "\n    ";
+        else
+            sep = ",\n    ";
+    }
+    fprintf(OStr, ");\n");
+    modLine.clear();
+    for (auto item: IR->softwareName)
+        fprintf(OStr, "// software: %s\n", item.c_str());
     iterField(IR, CBAct {
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
@@ -291,27 +286,13 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
                 setAssign(fldName, "{" + itemList.substr(2) + " }");
             }
             else
-                generateModuleSignatureList(itemIR, fldName + MODULE_SEPARATOR);
+                generateModuleSignature(itemIR, fldName + MODULE_SEPARATOR, modLine);
             }
             else if (convertType(item.type) != 0)
                 regList[fldName] = item.type;
           return nullptr;
           });
 
-    // Generate module header
-    generateModuleSignature(IR, "", modLine);
-    std::string sep = "module ";
-    for (auto mitem: modLine) {
-        fprintf(OStr, "%s", (sep + mitem.value).c_str());
-        if (mitem.value[mitem.value.length()-1] == '(')
-            sep = "\n    ";
-        else
-            sep = ",\n    ";
-    }
-    fprintf(OStr, ");\n");
-    modLine.clear();
-    for (auto item: IR->softwareName)
-        fprintf(OStr, "// software: %s\n", item.c_str());
     for (auto IC : IR->interfaceConnect)
         for (auto FI : lookupIR(IC.type)->method) {
             std::string tstr = IC.target + MODULE_SEPARATOR + FI.first,
@@ -329,10 +310,10 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : IR->method) {
-        if (FI.second->rule)
-            refList[FI.first] = true;
         std::string methodName = FI.first;
         MethodInfo *MI = FI.second;
+        if (MI->rule)
+            refList[methodName] = true;
         for (auto item: MI->alloca) {
             fieldList.clear();
             getFieldList(item.first, item.second);
@@ -404,8 +385,8 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
         for (auto element: item.second) {
             if (prevCond != "")
                 temp += prevCond + " ? " + prevValue + " : ";
-            prevCond = lookupString(element.cond);
-            prevValue = lookupString(element.value);
+            prevCond = cleanupValue(element.cond);
+            prevValue = cleanupValue(element.value);
         }
         setAssign(item.first, temp + prevValue);
     }
@@ -416,7 +397,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     while (changed) {
         changed = false;
         for (auto outerItem: assignList) {
-            std::string newItem = lookupString(outerItem.second.value);
+            std::string newItem = lookupString(outerItem.second.value, false);
             if (newItem != outerItem.second.value) {
 //printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, outerItem.first.c_str(), outerItem.second.value.c_str(), newItem.c_str());
                 assignList[outerItem.first].value = newItem;
@@ -424,36 +405,14 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
             }
         }
     }
-    // Now calculated 'was referenced' from assignList items actually referenced
-    changed = true;
-    std::map<std::string, bool> excludeList;
-    while (changed) {
-        changed = false;
-        for (auto aitem: assignList) {
-            if (aitem.second.value != "" && refList[aitem.first] && !excludeList[aitem.first]) {
-                excludeList[aitem.first] = true;
-                checkRef(aitem.second.value);
-                changed = true;
-            }
-        }
-    }
-    for (auto aitem: assignList) {
-if (aitem.second.value != "")
-printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(), aitem.second.value.c_str(), aitem.second.valid);
-    }
 
     // generate local state element declarations
     for (auto item: regList)
         fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
-    iterField(IR, CBAct {
-            ModuleIR *itemIR = lookupIR(item.type);
-            if (itemIR && !item.isPtr && itemIR->name.substr(0,12) != "l_struct_OC_")
-                generateModuleSignature(itemIR, fldName, modLine);
-            return nullptr; });
     // now write actual module signature to output file
     std::list<std::string> modNew;
     for (auto mitem: modLine)
-        modNew.push_back(lookupCheck(mitem.value));
+        modNew.push_back(lookupString(mitem.value, true));
     std::list<std::string> alwaysLines;
     for (auto FI : IR->method) {
         bool alwaysSeen = false;
@@ -462,11 +421,33 @@ printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(
                 alwaysLines.push_back("if (" + FI.first + ") begin");
             alwaysSeen = true;
             if (info.cond != "")
-                alwaysLines.push_back("    if (" + lookupCheck(info.cond) + ")");
-            alwaysLines.push_back("    " + info.dest + " <= " + lookupCheck(info.value) + ";");
+                alwaysLines.push_back("    if (" + lookupString(info.cond, true) + ")");
+            alwaysLines.push_back("    " + info.dest + " <= " + lookupString(info.value, true) + ";");
         }
         if (alwaysSeen)
             alwaysLines.push_back("end; // End of " + FI.first);
+    }
+    // Now calculated 'was referenced' from assignList items actually referenced
+    changed = true;
+    std::map<std::string, bool> excludeList;
+    while (changed) {
+        changed = false;
+        for (auto aitem: assignList) {
+            if (aitem.second.value != "" && (refList[aitem.first] || refSource[aitem.first])
+              && !excludeList[aitem.first]) {
+                excludeList[aitem.first] = true;
+                std::list<std::string> tokenList;
+                str2token(aitem.second.value, tokenList);
+                for (auto item: tokenList)
+                    if (isIdChar(item[0]))
+                        refList[item] = true;
+                changed = true;
+            }
+        }
+    }
+    for (auto aitem: assignList) {
+if (aitem.second.value != "")
+printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(), aitem.second.value.c_str(), aitem.second.valid);
     }
     for (auto item: wireList)
         if (refList[item.first] && item.second != "")
