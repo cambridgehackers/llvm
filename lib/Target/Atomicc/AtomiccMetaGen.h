@@ -18,7 +18,8 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
     std::list<std::string>     metaList;
     // write out metadata comments at end of the file
     metaList.push_front("//METASTART; " + IR->name);
-    for (auto item: IR->outcall)
+    for (auto item: IR->interfaces)
+        if (item.isPtr)
         metaList.push_back("//METAEXTERNAL; " + item.fldName + "; " + lookupIR(item.type)->name + ";");
     for (auto item: IR->fields) {
         int64_t vecCount = item.vecCount;

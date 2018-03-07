@@ -193,8 +193,8 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
             }
         }
         {
-            for (auto item: searchIR->outcall)
-                if (item.fldName == tname) {
+            for (auto item: searchIR->interfaces)
+                if (item.isPtr && item.fldName == tname) {
                     searchIR = lookupIR(item.type);
                     goto next;
                 }
@@ -213,16 +213,8 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
         for (auto FI: lookupIR(item.type)->method) {
             MethodInfo *MI = FI.second;
             if (!MI->rule || instance == "")
-                setDir(instance + item.fldName + MODULE_SEPARATOR + FI.first, instance != "", MI); // if !instance, !action -> out
+                setDir(instance + item.fldName + MODULE_SEPARATOR + FI.first, (instance != "") ^ item.isPtr, MI); // if !instance, !action -> out
         }
-    // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
-    for (auto oitem: IR->outcall)
-        for (auto FI : lookupIR(oitem.type)->method) {
-            MethodInfo *MI = FI.second;
-            if (!MI->rule)
-                setDir(oitem.fldName + MODULE_SEPARATOR + FI.first, instance == "", MI); // action -> out
-        }
-
 }
 
 /*
@@ -240,15 +232,6 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
             ret = prefix[dir] + sizeProcess(atype) + wparam;
         modParam.push_back(ModData{ret, true});
     };
-    auto checkInterface = [&](std::string type, std::string fldName, int dir) -> void {
-        for (auto FI: lookupIR(type)->method) {
-            std::string methodName = fldName + MODULE_SEPARATOR + FI.first;
-            MethodInfo *MI = FI.second;
-            checkWire(methodName, MI->type, 1 - dir);
-            for (auto item: MI->params)
-                checkWire(methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + item.name, item.type, dir);
-        }
-    };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
     modParam.push_back(ModData{IR->name + " " + ((instance != "") ? instance + " ":"") + "(", false});
     if (instance != "") {
@@ -258,12 +241,14 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
     }
     modParam.push_back(ModData{inpClk + "CLK", false});
     modParam.push_back(ModData{inpClk + "nRST", false});
-    // First handle all 'incoming' interface methods
     for (auto item : IR->interfaces)
-        checkInterface(item.type, item.fldName, 0);
-    // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
-    for (auto oitem: IR->outcall)
-        checkInterface(oitem.type, oitem.fldName, 1);
+        for (auto FI: lookupIR(item.type)->method) {
+            std::string methodName = item.fldName + MODULE_SEPARATOR + FI.first;
+            MethodInfo *MI = FI.second;
+            checkWire(methodName, MI->type, 1 - item.isPtr);
+            for (auto pitem: MI->params)
+                checkWire(methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + pitem.name, pitem.type, item.isPtr);
+        }
 }
 
 static void getFieldList(std::string name, std::string type)

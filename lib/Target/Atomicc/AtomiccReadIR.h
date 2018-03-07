@@ -189,11 +189,6 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             if (checkItem("SOFTWARE")) {
                 IR->softwareName.push_back(getToken());
             }
-            else if (checkItem("EINTERFACE")) {
-                std::string      type = getToken();
-                std::string      fldName = getToken();
-                IR->outcall.push_back(OutcallInterface{fldName, type});
-            }
             else if (checkItem("PRIORITY")) {
                 std::string rule = getToken();
                 IR->priority[rule] = getToken();

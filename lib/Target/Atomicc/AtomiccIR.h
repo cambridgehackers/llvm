@@ -106,11 +106,6 @@ typedef struct {
 } MethodInfo;
 
 typedef struct {
-    std::string      fldName;
-    std::string      type;
-} OutcallInterface;
-
-typedef struct {
     std::string fldName;
     int64_t     vecCount;
     std::string type;
@@ -123,7 +118,6 @@ typedef struct ModuleIR {
     std::list<std::string>            metaList;
     std::list<std::string>            softwareName;
     std::map<std::string, MethodInfo *> method;
-    std::list<OutcallInterface>       outcall;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::list<FieldElement>           fields;
     std::list<FieldElement>           interfaces;

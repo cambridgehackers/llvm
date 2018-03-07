@@ -1009,15 +1009,12 @@ static void processField(ClassMethodTable *table, FILE *OStr)
             arrayLen = ATy->getNumElements();
             element = ATy->getElementType();
         }
-        if (const PointerType *PTy = dyn_cast<PointerType>(element))
-        if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
-        if (isInterface(STy)) {
-            fprintf(OStr, "    EINTERFACE %s %s\n", getClass(STy)->IR->name.c_str(), fldName.c_str());
-            continue;
-        }
         std::string temp;
         if (isa<PointerType>(element))
             temp += "/Ptr";
+        if (const PointerType *PTy = dyn_cast<PointerType>(element))
+        if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
+            element = STy;
         if (vecCount != -1)
             temp += "/Count " + utostr(vecCount) + " ";
         if (arrayLen != 0)
