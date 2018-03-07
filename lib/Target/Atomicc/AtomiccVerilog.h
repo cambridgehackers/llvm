@@ -304,12 +304,6 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
                 assignList[item].valid = false;
                 item = temp;
             }
-            else
-            for (auto aitem: assignList)
-                if (aitem.second.value == item && !outList[aitem.first] && wireList[aitem.first] == "") {
-                    item = aitem.first;
-                    break;
-                }
             }
             tokNew.push_back(item);
         }
@@ -321,7 +315,10 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
         std::list<std::string> tokNew;
         for (auto item: tokenList)
             if (isIdChar(item[0]))
+{
+printf("[%s:%d] refList[%s]\n", __FUNCTION__, __LINE__, item.c_str());
                 refList[item] = true;
+}
     };
     auto lookupCheck = [&] (std::string arg) -> std::string {
         std::string ret = lookupString(arg);
@@ -482,6 +479,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
         for (auto outerItem: assignList) {
             std::string newItem = lookupString(outerItem.second.value);
             if (newItem != outerItem.second.value) {
+printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, outerItem.first.c_str(), outerItem.second.value.c_str(), newItem.c_str());
                 assignList[outerItem.first].value = newItem;
                 changed = true;
             }
@@ -501,6 +499,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
         }
     }
     for (auto aitem: assignList) {
+if (aitem.second.value != "")
 printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(), aitem.second.value.c_str(), aitem.second.valid);
     }
 
