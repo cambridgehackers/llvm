@@ -230,48 +230,40 @@ static void generateModuleSignatureList(ModuleIR *IR, std::string instance)
  */
 static void generateModuleSignature(ModuleIR *IR, std::string instance, std::list<ModData> &modParam)
 {
-    std::string inp = "input ", outp = "output ", inpClk = "input ";
-    auto checkWire = [&](std::string wparam, std::string atype, std::string dir, bool out) -> void {
-        std::string ret = inp + wparam;
+    std::string prefix[2] = {"input ", "output "};
+    std::string inpClk = "input ";
+    auto checkWire = [&](std::string wparam, std::string atype, int dir) -> void {
+        std::string ret = prefix[1 - dir] + wparam;
         if (instance != "")
             wireList[ret] = atype;
         else if (atype != "") // !action
-            ret = dir + sizeProcess(atype) + wparam;
-        modParam.push_back(ModData{ret, out});
+            ret = prefix[dir] + sizeProcess(atype) + wparam;
+        modParam.push_back(ModData{ret, true});
     };
-    auto sizeT = [&](std::string atype) -> std::string {
-        if (instance == "")
-            return sizeProcess(atype);
-        return "";
+    auto checkInterface = [&](std::string type, std::string fldName, int dir) -> void {
+        for (auto FI: lookupIR(type)->method) {
+            std::string methodName = fldName + MODULE_SEPARATOR + FI.first;
+            MethodInfo *MI = FI.second;
+            checkWire(methodName, MI->type, 1 - dir);
+            for (auto item: MI->params)
+                checkWire(methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + item.name, item.type, dir);
+        }
     };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
     modParam.push_back(ModData{IR->name + " " + ((instance != "") ? instance + " ":"") + "(", false});
     if (instance != "") {
-        inp = instance + MODULE_SEPARATOR;
-        outp = instance + MODULE_SEPARATOR;
+        prefix[0] = instance + MODULE_SEPARATOR;
+        prefix[1] = instance + MODULE_SEPARATOR;
         inpClk = "";
     }
     modParam.push_back(ModData{inpClk + "CLK", false});
     modParam.push_back(ModData{inpClk + "nRST", false});
     // First handle all 'incoming' interface methods
     for (auto item : IR->interfaces)
-        for (auto FI: lookupIR(item.type)->method) {
-            std::string methodName = item.fldName + MODULE_SEPARATOR + FI.first;
-            MethodInfo *MI = FI.second;
-            checkWire(methodName, MI->type, outp, true);
-            for (auto item: MI->params)
-                checkWire(methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + item.name, item.type, inp, true);
-        }
+        checkInterface(item.type, item.fldName, 0);
     // Now handle 'outcalled' interfaces (class members that are pointers to interfaces)
     for (auto oitem: IR->outcall)
-        for (auto FI : lookupIR(oitem.type)->method) {
-            MethodInfo *MI = FI.second;
-            std::string wparam = oitem.fldName + MODULE_SEPARATOR + FI.first;
-            modParam.push_back(ModData{(MI->type == ""/* action */ ? outp : inp + sizeT(MI->type)) + wparam, true});
-            wparam = wparam.substr(0, wparam.length()-5) + MODULE_SEPARATOR;
-            for (auto item: MI->params)
-                modParam.push_back(ModData{outp + sizeT(item.type) + wparam + item.name, true});
-        }
+        checkInterface(oitem.type, oitem.fldName, 1);
 }
 
 static void getFieldList(std::string name, std::string type)
@@ -315,10 +307,7 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
         std::list<std::string> tokNew;
         for (auto item: tokenList)
             if (isIdChar(item[0]))
-{
-printf("[%s:%d] refList[%s]\n", __FUNCTION__, __LINE__, item.c_str());
                 refList[item] = true;
-}
     };
     auto lookupCheck = [&] (std::string arg) -> std::string {
         std::string ret = lookupString(arg);
@@ -335,9 +324,6 @@ printf("[%s:%d] refList[%s]\n", __FUNCTION__, __LINE__, item.c_str());
     generateModuleSignatureList(IR, "");
     for (auto item: outList)
         if (item.second)
-            refList[item.first] = true;
-    for (auto item: IR->method)
-        if (item.second->rule)
             refList[item.first] = true;
     iterField(IR, CBAct {
             ModuleIR *itemIR = lookupIR(item.type);
@@ -392,6 +378,8 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : IR->method) {
+        if (FI.second->rule)
+            refList[FI.first] = true;
         std::string methodName = FI.first;
         MethodInfo *MI = FI.second;
         for (auto item: MI->alloca) {
@@ -479,7 +467,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
         for (auto outerItem: assignList) {
             std::string newItem = lookupString(outerItem.second.value);
             if (newItem != outerItem.second.value) {
-printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, outerItem.first.c_str(), outerItem.second.value.c_str(), newItem.c_str());
+//printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, outerItem.first.c_str(), outerItem.second.value.c_str(), newItem.c_str());
                 assignList[outerItem.first].value = newItem;
                 changed = true;
             }
