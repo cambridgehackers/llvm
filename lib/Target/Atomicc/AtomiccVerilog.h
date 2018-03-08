@@ -292,7 +292,7 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
         for (auto FI : lookupIR(IC.type)->method) {
             std::string tstr = IC.target + MODULE_SEPARATOR + FI.first,
                         sstr = IC.source + MODULE_SEPARATOR + FI.first;
-printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outList[tstr], sstr.c_str(), outList[sstr]);
+//printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outList[tstr], sstr.c_str(), outList[sstr]);
             if (outList[sstr])
                 setAssign(sstr, tstr);
             else
@@ -326,7 +326,7 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
             std::string itemList;
             for (auto fitem : fieldList) {
                 std::string fname = fitem.name;
-                muxValueList[info.dest + fname].push_back(MuxValueEntry{info.cond, info.value + fname});
+                muxValueList[info.dest + fname].push_back(MuxValueEntry{cleanupValue(info.cond), cleanupValue(info.value + fname)});
             }
         }
         for (auto info: MI->callList) {
@@ -334,11 +334,11 @@ printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outL
                 continue;
             std::string tempCond = methodName;
             if (info.cond != "")
-                tempCond += " & " + info.cond;
+                tempCond += " & " + cleanupValue(info.cond);
             std::string rval = info.value; // get call info
             int ind = rval.find("{");
             std::string calledName = rval.substr(0, ind);
-            rval = rval.substr(ind+1, rval.length() - 1 - (ind+1));
+            rval = cleanupValue(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
             // 'Or' together ENA lines from all invocations of a method from this class
             if (info.isAction)
                 enableList[calledName] += " || " + tempCond;
@@ -380,8 +380,8 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
         for (auto element: item.second) {
             if (prevCond != "")
                 temp += prevCond + " ? " + prevValue + " : ";
-            prevCond = cleanupValue(element.cond);
-            prevValue = cleanupValue(element.value);
+            prevCond = element.cond;
+            prevValue = element.value;
         }
         setAssign(item.first, temp + prevValue);
     }
