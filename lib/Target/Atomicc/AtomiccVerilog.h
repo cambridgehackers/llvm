@@ -28,7 +28,6 @@ typedef struct {
 static std::list<FieldItem> fieldList;
 static std::map<std::string, bool> inList, outList;
 static std::map<std::string, std::string> assignList;
-static std::map<std::string, std::string> wireList; // name -> type
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 #define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
@@ -153,7 +152,8 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
 /*
  * Generate verilog module header for class definition or reference
  */
-static void generateModuleSignature(ModuleIR *IR, std::string instance, std::list<ModData> &modParam)
+static void generateModuleSignature(ModuleIR *IR, std::string instance, std::list<ModData> &modParam,
+    std::map<std::string, std::string> &wireList)
 {
     std::string prefix[2] = {"input ", "output "};
     std::string inpClk = "input ";
@@ -202,13 +202,27 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
         }
 }
 
-static void getFieldList(std::string name, std::string type)
+static void getFieldList(std::string name, std::string type, bool init)
 {
+    if (init)
+        fieldList.clear();
     if (ModuleIR *IR = lookupIR(type))
         for (auto item: IR->fields)
-            getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type);
+            getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type, false);
     else
         fieldList.push_back(FieldItem{name, type});
+}
+
+static void expandStruct(std::string fldName, std::string type,
+     std::map<std::string, std::string> &declList)
+{
+    getFieldList(fldName, type, true);
+    std::string itemList;
+    for (auto fitem : fieldList) {
+        declList[fitem.name] = fitem.type;
+        itemList += " , " + fitem.name;
+    }
+    setAssign(fldName, "{" + itemList.substr(2) + " }");
 }
 
 /*
@@ -218,6 +232,7 @@ void generateModuleDef(ModuleIR *IR, FILE *OStr)
 {
 static std::list<ModData> modLine;
 static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
+static std::map<std::string, std::string> wireList; // name -> type
     std::map<std::string, std::string> enableList;
     std::map<std::string, bool> refList, refSource;
     // 'Mux' together parameter settings from all invocations of a method from this class
@@ -250,7 +265,7 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
     wireList.clear();
     regList.clear();
     modLine.clear();
-    generateModuleSignature(IR, "", modLine);
+    generateModuleSignature(IR, "", modLine, wireList);
     for (auto item: outList)
         if (item.second)
             refList[item.first] = true;
@@ -270,18 +285,10 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
     iterField(IR, CBAct {
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
-            if (itemIR->name.substr(0,12) == "l_struct_OC_") {
-                fieldList.clear();
-                getFieldList(fldName, item.type);
-                std::string itemList;
-                for (auto fitem : fieldList) {
-                    regList[fitem.name] = fitem.type;
-                    itemList += " , " + fitem.name;
-                }
-                setAssign(fldName, "{" + itemList.substr(2) + " }");
-            }
+            if (itemIR->name.substr(0,12) == "l_struct_OC_")
+                expandStruct(fldName, item.type, regList);
             else
-                generateModuleSignature(itemIR, fldName + MODULE_SEPARATOR, modLine);
+                generateModuleSignature(itemIR, fldName + MODULE_SEPARATOR, modLine, wireList);
             }
             else if (convertType(item.type) != 0)
                 regList[fldName] = item.type;
@@ -309,25 +316,12 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
         MethodInfo *MI = FI.second;
         if (MI->rule)
             refList[methodName] = true;
-        for (auto item: MI->alloca) {
-            fieldList.clear();
-            getFieldList(item.first, item.second);
-            std::string itemList;
-            for (auto fitem : fieldList) {
-                wireList[fitem.name] = fitem.type;
-                itemList += " , " + fitem.name;
-            }
-            wireList[item.first] = item.second;
-            setAssign(item.first, "{" + itemList.substr(2) + " }");
-        }
+        for (auto item: MI->alloca)
+            expandStruct(item.first, item.second, wireList);
         for (auto info: MI->letList) {
-            fieldList.clear();
-            getFieldList("", info.type);
-            std::string itemList;
-            for (auto fitem : fieldList) {
-                std::string fname = fitem.name;
-                muxValueList[info.dest + fname].push_back(MuxValueEntry{cleanupValue(info.cond), cleanupValue(info.value + fname)});
-            }
+            getFieldList("", info.type, true);
+            for (auto fitem : fieldList)
+                muxValueList[info.dest + fitem.name].push_back(MuxValueEntry{cleanupValue(info.cond), cleanupValue(info.value + fitem.name)});
         }
         for (auto info: MI->callList) {
             if (!info.isAction)
