@@ -14,10 +14,6 @@
 
 typedef struct {
     std::string value;
-    bool        valid;
-} AssignData;
-typedef struct {
-    std::string value;
     bool        out;
 } ModData;
 typedef struct {
@@ -31,7 +27,7 @@ typedef struct {
 
 static std::list<FieldItem> fieldList;
 static std::map<std::string, bool> inList, outList;
-static std::map<std::string, AssignData> assignList;
+static std::map<std::string, std::string> assignList;
 static std::map<std::string, std::string> wireList; // name -> type
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
@@ -106,7 +102,7 @@ static void setAssign(std::string target, std::string value)
         ret += sep + tok;
         sep = " ";
     }
-    assignList[target] = AssignData{ret, true};
+    assignList[target] = ret;
 }
 
 static std::string sizeProcess(std::string type)
@@ -232,9 +228,8 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
         std::string ret, sep;
         for (auto item: tokenList) {
             if (isIdChar(item[0])) {
-            std::string temp = assignList[item].value;
+            std::string temp = assignList[item];
             if (temp != "") {
-                assignList[item].valid = false;
                 if (setReference)
                     refSource[item] = true;
                 refList[item] = false;
@@ -397,10 +392,10 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     while (changed) {
         changed = false;
         for (auto outerItem: assignList) {
-            std::string newItem = lookupString(outerItem.second.value, false);
-            if (newItem != outerItem.second.value) {
-//printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, outerItem.first.c_str(), outerItem.second.value.c_str(), newItem.c_str());
-                assignList[outerItem.first].value = newItem;
+            std::string newItem = lookupString(outerItem.second, false);
+            if (newItem != outerItem.second) {
+//printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, outerItem.first.c_str(), outerItem.second.c_str(), newItem.c_str());
+                assignList[outerItem.first] = newItem;
                 changed = true;
             }
         }
@@ -433,11 +428,11 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     while (changed) {
         changed = false;
         for (auto aitem: assignList) {
-            if (aitem.second.value != "" && (refList[aitem.first] || refSource[aitem.first])
+            if (aitem.second != "" && (refList[aitem.first] || refSource[aitem.first])
               && !excludeList[aitem.first]) {
                 excludeList[aitem.first] = true;
                 std::list<std::string> tokenList;
-                str2token(aitem.second.value, tokenList);
+                str2token(aitem.second, tokenList);
                 for (auto item: tokenList)
                     if (isIdChar(item[0]))
                         refList[item] = true;
@@ -446,8 +441,8 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
         }
     }
     for (auto aitem: assignList) {
-if (aitem.second.value != "")
-printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(), aitem.second.value.c_str(), aitem.second.valid);
+if (aitem.second != "")
+printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), aitem.second.c_str());
     }
     for (auto item: wireList)
         if (refList[item.first] && item.second != "")
@@ -468,19 +463,19 @@ printf("[%s:%d] ASSIGN %s = %s %d\n", __FUNCTION__, __LINE__, aitem.first.c_str(
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
-            if (assignList[item.first].value == "")
+            if (assignList[item.first] == "")
                 fprintf(OStr, "    // assign %s = MISSING_ASSIGNMENT_FOR_OUTPUT_VALUE;\n", item.first.c_str());
-            else if (assignList[item.first].valid && refList[item.first])
-                fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), assignList[item.first].value.c_str());
+            else if (refList[item.first])
+                fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), assignList[item.first].c_str());
             refList[item.first] = false;
         }
     bool seen = false;
     for (auto item: assignList)
-        if (item.second.value != "" && item.second.valid && refList[item.first]) {
+        if (item.second != "" && refList[item.first]) {
             if (!seen)
                 fprintf(OStr, "    // Extra assigments, not to output wires\n");
             seen = true;
-            fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.value.c_str());
+            fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.c_str());
         }
     // generate clocked updates to state elements
     if (regList.size() > 0 || alwaysLines.size() > 0) {
