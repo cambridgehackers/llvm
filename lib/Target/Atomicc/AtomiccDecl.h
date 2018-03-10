@@ -55,7 +55,6 @@ public:
     std::map<int, uint64_t>           replaceCount;
     std::list<std::string>            softwareName;
     std::map<std::string, bool>       ruleFunctions;
-    std::list<const StructType *>     typeRef;
     ModuleIR* IR;
     ClassMethodTable() {}
 };

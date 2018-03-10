@@ -32,63 +32,9 @@ static std::map<std::string, std::string> assignList;
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 #define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
 
-bool isIdChar(char ch)
+std::string cleanTrim(std::string arg)
 {
-    return isalpha(ch) || ch == '_' || ch == '$';
-}
-
-static void str2token(std::string arg, std::list<std::string> &tokenList)
-{
-    int total = arg.length();
-    int index = 0;
-    char ch = arg[index++];
-    tokenList.clear();
-    while(index <= total) {
-        std::string token;
-        auto getNext = [&] (void) -> void {
-            token += ch;
-            ch = arg[index++];
-        };
-
-        if (ch == ' ' || ch == '\t') {
-            ch = arg[index++];
-        }
-        else if (isIdChar(ch)) {
-            do {
-                getNext();
-            } while (isIdChar(ch) || isdigit(ch));
-//printf("[%s:%d] token %s\n", __FUNCTION__, __LINE__, token.c_str());
-            tokenList.push_back(token);
-        }
-        else if (isdigit(ch)) {
-            do {
-                getNext();
-            } while (isdigit(ch) || ch == '.');
-            tokenList.push_back(token);
-        }
-        else if (ch == '+' || ch == '-' || ch == '*' || ch == '&' || ch == '|') {
-            do {
-                getNext();
-            } while (ch == token[0]);
-            tokenList.push_back(token);
-        }
-        else if (ch == '=' || ch == '<' || ch == '>' || ch == '!') {
-            do {
-                getNext();
-            } while (ch == '=' || ch == '<' || ch == '>');
-            tokenList.push_back(token);
-        }
-        else if (ch == '/' || ch == '%' || ch == '{'
-            || ch == '}' || ch == '(' || ch == ')' || ch == '^'
-            || ch == ',' || ch == '?' || ch == ':' || ch == ';') {
-            getNext();
-            tokenList.push_back(token);
-        }
-        else {
-printf("[%s:%d] arg '%s' unknown ch %c\n", __FUNCTION__, __LINE__, arg.c_str(), ch);
-            exit(-1);
-        }
-    }
+    return trimStr(cleanupValue(arg));
 }
 
 static void setAssign(std::string target, std::string value)
@@ -239,7 +185,7 @@ static std::map<std::string, std::string> wireList; // name -> type
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
     auto lookupString = [&] (std::string arg, bool setReference) -> std::string {
         std::list<std::string> tokenList;
-        str2token(cleanupValue(arg), tokenList);
+        str2token(cleanTrim(arg), tokenList);
         std::string ret, sep;
         for (auto item: tokenList) {
             if (isIdChar(item[0])) {
@@ -321,18 +267,19 @@ static std::map<std::string, std::string> wireList; // name -> type
         for (auto info: MI->letList) {
             getFieldList("", info.type, true);
             for (auto fitem : fieldList)
-                muxValueList[info.dest + fitem.name].push_back(MuxValueEntry{cleanupValue(info.cond), cleanupValue(info.value + fitem.name)});
+                muxValueList[info.dest + fitem.name].push_back(MuxValueEntry{cleanTrim(info.cond), cleanTrim(info.value) + fitem.name});
         }
         for (auto info: MI->callList) {
             if (!info.isAction)
                 continue;
             std::string tempCond = methodName;
             if (info.cond != "")
-                tempCond += " & " + cleanupValue(info.cond);
+                tempCond += " & " + cleanTrim(info.cond);
             std::string rval = info.value; // get call info
             int ind = rval.find("{");
-            std::string calledName = rval.substr(0, ind);
-            rval = cleanupValue(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
+            std::string calledName = trimStr(rval.substr(0, ind));
+printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
+            rval = cleanTrim(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
             // 'Or' together ENA lines from all invocations of a method from this class
             if (info.isAction)
                 enableList[calledName] += " || " + tempCond;
@@ -351,7 +298,7 @@ static std::map<std::string, std::string> wireList; // name -> type
                     rest = rest.substr(1);
                 if (rest.length()) {
                     if (rest[0] == ',')
-                        rest = rest.substr(1);
+                        rest = trimStr(rest.substr(1));
                     else
                         printf("[%s:%d] cannot locate ',' in '%s'\n", __FUNCTION__, __LINE__, rest.c_str());
                 }
@@ -529,10 +476,10 @@ void promoteGuards(ModuleIR *IR)
         for (auto info: MI->callList) {
             std::string rval = info.value; // get call info
             int ind = rval.find("{");
-            std::string tempCond = getRdyName(rval.substr(0, ind));
+            std::string tempCond = getRdyName(trimStr(rval.substr(0, ind)));
             if (info.cond != "")
                 tempCond += " | " + invertExpr(info.cond);
-            rval = cleanupValue(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
+            rval = cleanTrim(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
             if (MIRdy->guard == "1")
                 MIRdy->guard = tempCond;
             else

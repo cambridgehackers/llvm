@@ -10,7 +10,6 @@
 // This file implements zzz
 //
 //===----------------------------------------------------------------------===//
-#include <cxxabi.h> // abi::__cxa_demangle
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Instructions.h"
@@ -56,15 +55,6 @@ restart:
                 }
                 }
                 break;
-            case Instruction::BitCast: {
-                if (auto PTy = dyn_cast<PointerType>(II->getType()))
-                if (auto STy = dyn_cast<StructType>(PTy->getElementType())) {
-                    getClass(STy);
-                    ClassMethodTable *table = getClass(findThisArgument(func));
-                    table->typeRef.push_back(STy);
-                }
-                break;
-                }
             case Instruction::Load:
                 if (Instruction *val = remapValue[II->getOperand(0)]) {
                     // replace loads from temp areas with stored values
@@ -75,24 +65,10 @@ restart:
                 break;
             case Instruction::Call: {
                 CallInst *ICL = dyn_cast<CallInst>(II);
-                Value *callV = ICL->getCalledValue();
                 IRBuilder<> builder(II->getParent());
                 builder.SetInsertPoint(II);
-                if (ICL->getDereferenceableBytes(0) > 0) {
-                    Value *newLoad = builder.CreateLoad(II->getOperand(1));
-                    builder.CreateStore(newLoad, II->getOperand(0));
-                    II->eraseFromParent();
-                }
-                else if (Function *cfunc = dyn_cast<Function>(callV)) {
-                    int status;
-                    std::string calledName = cfunc->getName();
-                    const char *ret = abi::__cxa_demangle(calledName.c_str(), 0, 0, &status);
-                    std::string temp;
-                    if (ret)
-                        temp = ret;
-                    int colon = temp.find("::");
-                    int lparen = temp.find("(");
-                    if (calledName == "llvm.memcpy.p0i8.p0i8.i64") {
+                if (Function *cfunc = dyn_cast<Function>(ICL->getCalledValue())) {
+                    if (cfunc->getName() == "llvm.memcpy.p0i8.p0i8.i64") {
                     if (Instruction *dest = dyn_cast<Instruction>(II->getOperand(0)))
                     if (dest->getOpcode() == Instruction::BitCast)
                     if (Instruction *src = dyn_cast<Instruction>(II->getOperand(1)))
@@ -103,35 +79,6 @@ restart:
                         recursiveDelete(II);
                         goto restart;
                     }
-                    }
-#if 1
-    else if (calledName == "fixedGet") {
-printf("[%s:%d]GET\n", __FUNCTION__, __LINE__);
-II->getParent()->getParent()->dump();
-II->dump();
-II->getOperand(0)->dump();
-        //II->replaceAllUsesWith(II->getOperand(0));
-        II->eraseFromParent();
-    }
-    else if (calledName == "fixedSet") {
-printf("[%s:%d]SET\n", __FUNCTION__, __LINE__);
-II->dump();
-        builder.CreateStore(II->getOperand(0), II->getOperand(1));
-        II->eraseFromParent();
-    }
-#endif
-                    else if (colon != -1 && lparen > colon) {
-                        std::string classname = temp.substr(0, colon);
-                        std::string fname = temp.substr(colon+2, lparen - colon - 2);
-                        int lt = classname.find("<");
-                        if (lt > 0)
-                            classname = classname.substr(0,lt);
-                        if (classname == fname) {
-                            processAlloca(cfunc);
-                            InlineFunctionInfo IFI;
-                            InlineFunction(ICL, IFI);//, false);
-                            goto restart;
-                        }
                     }
                 }
                 break;
@@ -189,7 +136,7 @@ restart: // restart here after inlining function.... basic block structure might
                 const StructType *STy = findThisArgument(func);
                 //printf("%s: %s CALLS %s cSTy %p STy %p parentFunc %p func %p thisFunc %p\n", __FUNCTION__, callingName.c_str(), calledName.c_str(), callingSTy, STy, parentFunc, func, thisFunc);
                 if (parentFunc != func && thisFunc != func)
-                if (callingSTy == STy || endswith(calledName, "C2Ev") || endswith(calledName, "D2Ev")) {
+                if (callingSTy == STy) {
                     //fprintf(stdout,"callProcess: %s cName %s single!!!!\n", callingName.c_str(), calledName.c_str());
                     processMethodInlining(func, parentFunc);
                     InlineFunctionInfo IFI;
@@ -252,32 +199,6 @@ extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
     }
     CloneFunctionInto(func, argFunc, VMap, false, Returnsfunc, "", nullptr);
     processAlloca(func);
-    for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
-        for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE; ) {
-            BasicBlock::iterator PI = std::next(BasicBlock::iterator(IIb));
-            Instruction *II = &*IIb;
-            switch (II->getOpcode()) {
-            case Instruction::SExt: {
-                if (const ConstantInt *CI = dyn_cast<ConstantInt>(II->getOperand(0))) {
-                    /* After inlining integers, we have some SExt references to constants
-                     * (these are for the offset parameters to GEP instructions.
-                     * Since the argument to SExt is just an integer, we can replace
-                     * all references to the SExt with the integer value itself
-                     * (using the datatype of the SExt).
-                     */
-                    IRBuilder<> builder(II->getParent());
-                    builder.SetInsertPoint(II);
-                    int64_t val = CI->getZExtValue();
-                    printf("%s: SExt %lld\n", __FUNCTION__, val);
-                    II->replaceAllUsesWith(ConstantInt::get(II->getType(), val));
-                    recursiveDelete(II);
-                }
-                break;
-                }
-            }
-            IIb = PI;
-        }
-    }
     if (trace_fixup) {
         printf("[%s:%d] AFTER\n", __FUNCTION__, __LINE__);
         func->dump();

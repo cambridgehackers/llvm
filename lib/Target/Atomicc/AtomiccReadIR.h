@@ -58,53 +58,68 @@ static std::string getToken()
         bufp++;
     return ret;
 }
-static std::string trimStr(std::string arg)
+
+bool isIdChar(char ch)
 {
-    const char *start = arg.c_str(), *end = start + arg.length() - 1;
-    while (start != end && *start == ' ')
-        start++;
-    while (start != end && *end == ' ')
-        --end;
-    std::string ret = std::string(start, end+1);
-    return ret;
+    return isalpha(ch) || ch == '_' || ch == '$';
 }
 std::list<std::string> readNameList;
-static void tokenizeStr(std::string arg)
+
+static void str2token(std::string arg, std::list<std::string> &tokenList)
 {
     int total = arg.length();
     int index = 0;
     char ch = arg[index++];
     readNameList.clear();
-    while(index < total) {
+    tokenList.clear();
+    while(index <= total) {
         std::string token;
+        auto getNext = [&] (void) -> void {
+            token += ch;
+            ch = arg[index++];
+        };
+
         if (ch == ' ' || ch == '\t') {
             ch = arg[index++];
         }
-        else if (isalpha(ch) || ch == '_' || ch == '$') {
+        else if (isIdChar(ch)) {
             do {
-                token += ch;
-                ch = arg[index++];
-            } while (isalpha(ch) || isdigit(ch) || ch == '_' || ch == '$');
+                getNext();
+            } while (isIdChar(ch) || isdigit(ch));
 //printf("[%s:%d] token %s\n", __FUNCTION__, __LINE__, token.c_str());
+            tokenList.push_back(token);
             readNameList.push_back(token);
         }
         else if (isdigit(ch)) {
             do {
-                token += ch;
-                ch = arg[index++];
+                getNext();
             } while (isdigit(ch) || ch == '.');
+            tokenList.push_back(token);
+        }
+        else if (ch == '+' || ch == '-' || ch == '*' || ch == '&' || ch == '|') {
+            do {
+                getNext();
+            } while (ch == token[0]);
+            tokenList.push_back(token);
+        }
+        else if (ch == '=' || ch == '<' || ch == '>' || ch == '!') {
+            do {
+                getNext();
+            } while (ch == '=' || ch == '<' || ch == '>');
+            tokenList.push_back(token);
         }
         else if (ch == '{') {
-            token += ch;
-            ch = arg[index++];
-            readNameList.pop_back();
+            getNext();
+            tokenList.push_back(token);
+            if (readNameList.size() > 0)
+                readNameList.pop_back();
         }
-        else if (ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '%'
-            || ch == '}' || ch == '(' || ch == ')' || ch == '<' || ch == '>'
-            || ch == '&' || ch == '|' || ch == '^' || ch == '!'
-            || ch == '=' || ch == ',' || ch == '?' || ch == ':') {
-            token += ch;
-            ch = arg[index++];
+        else if (ch == '/' || ch == '%'
+            || ch == '}' || ch == '(' || ch == ')' || ch == '^'
+            || ch == '[' || ch == ']'
+            || ch == ',' || ch == '?' || ch == ':' || ch == ';') {
+            getNext();
+            tokenList.push_back(token);
         }
         else {
 printf("[%s:%d] arg '%s' unknown ch %c\n", __FUNCTION__, __LINE__, arg.c_str(), ch);
@@ -127,7 +142,58 @@ std::string scanExpression(const char *val)
     }
     return std::string(startp, val);
 }
-static std::string getExpression()
+
+std::string expandExpression(ModuleIR *IR, std::list<std::string> &tokenList)
+{
+    std::string ret, sep;
+    std::string lastToken;
+    for (auto TI = tokenList.begin(), TE = tokenList.end(); TI != TE; ) {
+        std::string tok = *TI++;
+        if (*TI == "[") {
+            std::string fieldName = tok;
+            int size = -1;
+            for (auto item: IR->fields)
+{
+printf("[%s:%d] name '%s' fieldName '%s'\n", __FUNCTION__, __LINE__, item.fldName.c_str(), fieldName.c_str());
+                if (item.fldName == fieldName) {
+                    size = item.vecCount;
+                    break;
+                }
+}
+            TI++; // skip '['
+            std::string subscript = *TI++; // get subscript
+            sep = "";
+            while ((tok = *TI++) != "]") {
+                subscript += sep + tok;
+                sep = " ";
+            }
+            tok = *TI;
+            std::string post;
+            sep = " ";
+            if (isIdChar(tok[0]))
+                post = *TI++;
+printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), subscript.c_str(), post.c_str());
+            std::string expand = fieldName + subscript + post;
+            if (!isdigit(subscript[0])) {
+                expand = " ( ";
+                for (int i = 0; i < size - 1; i++)
+                    expand += " ( " + subscript + " == " + autostr(i) + " ) ? "
+                        + fieldName + autostr(i) + post + " : ";
+                expand += fieldName + autostr(size - 1) + post + " ) ";
+            }
+            ret += expand;
+printf("[%s:%d] expand '%s'\n", __FUNCTION__, __LINE__, expand.c_str());
+        }
+        else {
+            ret += sep + tok;
+            sep = " ";
+        }
+        lastToken = tok;
+    }
+    return ret;
+}
+
+static std::string getExpression(ModuleIR *IR)
 {
     std::string scanexp = scanExpression(bufp);
     bufp += scanexp.length();
@@ -136,7 +202,9 @@ static std::string getExpression()
         ret = ret.substr(1, ret.length()-2);
     while (*bufp == ' ')
         bufp++;
-    return ret;
+    std::list<std::string> tokenList;
+    str2token(ret, tokenList);
+    return expandExpression(IR, tokenList);
 }
 static std::map<std::string, ModuleIR *> mapIndex;
 static ModuleIR *lookupIR(std::string ind)
@@ -173,6 +241,7 @@ static uint64_t convertType(std::string arg)
     printf("[%s:%d] convertType FAILED '%s'\n", __FUNCTION__, __LINE__, bp);
     exit(-1);
 }
+
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
 {
     OStrGlobal = OStr;
@@ -229,10 +298,11 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     MI->rule = true;
                 std::string methodName = getToken();
                 auto insertRead = [&](std::string expr, std::string cond) -> std::string {
-                    tokenizeStr(expr);
+                    std::list<std::string> tokenList;
+                    str2token(expr, tokenList);
                     for (auto item: readNameList)
                         MI->meta[MetaRead][item].insert(cond);
-                    return expr;
+                    return expandExpression(IR, tokenList);
                 };
                 if (checkItem("(")) {
                     bool first = true;
@@ -252,14 +322,14 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                         MI->type = getToken();
                 }
                 if (checkItem("="))
-                    MI->guard = insertRead(getExpression(), "");
+                    MI->guard = insertRead(getExpression(IR), "");
                 IR->method[methodName] = MI;
                 if (foundIf || (!foundParen && checkItem("if"))) {
                     std::string rdyName = getRdyName(methodName);
                     MethodInfo *MIRdy = new MethodInfo{""};
                     MIRdy->rule = MI->rule;
                     MIRdy->type = "INTEGER_1";
-                    MIRdy->guard = getExpression();
+                    MIRdy->guard = getExpression(IR);
                     IR->method[rdyName] = MIRdy;
                 }
                 if (foundParen || checkItem("{")) {
@@ -270,29 +340,29 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             MI->alloca[name] = type;
                         }
                         else if (checkItem("STORE")) {
-                            std::string cond = insertRead(getExpression(), "");
+                            std::string cond = insertRead(getExpression(IR), "");
                             ParseCheck(checkItem(":"), "':' missing");
-                            std::string dest = getExpression();
+                            std::string dest = getExpression(IR);
                             ParseCheck(checkItem("="), "store = missing");
                             std::string expr = insertRead(bufp, cond);
                             MI->storeList.push_back(StoreListElement{dest, expr, cond});
                         }
                         else if (checkItem("LET")) {
                             std::string type = getToken();
-                            std::string cond = insertRead(getExpression(), "");
+                            std::string cond = insertRead(getExpression(IR), "");
                             ParseCheck(checkItem(":"), "':' missing");
-                            std::string dest = getExpression();
+                            std::string dest = getExpression(IR);
                             ParseCheck(checkItem("="), "store = missing");
                             std::string expr = insertRead(bufp, cond);
                             MI->letList.push_back(LetListElement{dest, expr, cond, type});
                         }
                         else if (checkItem("CALL")) {
                             bool isAction = checkItem("/Action");
-                            std::string cond = insertRead(getExpression(), "");
+                            std::string cond = insertRead(getExpression(IR), "");
                             ParseCheck(checkItem(":"), "':' missing");
                             std::string expr = insertRead(bufp, cond);
                             MI->callList.push_back(CallListElement{expr, cond, isAction});
-                            MI->meta[MetaInvoke][expr.substr(0,expr.find("{"))].insert(cond);
+                            MI->meta[MetaInvoke][trimStr(expr.substr(0,expr.find("{")))].insert(cond);
                         }
                         else
                             ParseCheck(false, "unknown method item");

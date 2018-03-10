@@ -22,9 +22,6 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
-#define MODULE_ARROW MODULE_SEPARATOR
-#define MODULE_DOT   MODULE_SEPARATOR
-
 static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
@@ -380,7 +377,6 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
     for (; I != E; ++I) {
         if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
-            std::string dot = MODULE_DOT;
             std::string fname = fieldName(STy, foffset);
             if (trace_gep)
                 printf("[%s:%d] expose %d referstr %s cbuffer %s STy %s fname %s\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str());
@@ -389,22 +385,17 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
                 referstr = referstr.substr(1);
             }
             if (expose)
-                referstr += dot;
+                referstr += MODULE_SEPARATOR;
             else if (referstr == "this")
                 referstr = "";
             else {
-                std::string arrow = MODULE_ARROW;
-                arrow = MODULE_DOT;
-                if (referstr == "this") {
-                    arrow = MODULE_ARROW;
+                if (referstr == "this")
                     referstr = "thisp";
-                }
-                else if (arrow == "->" || referstr.find(" ") != std::string::npos) {
+                else if (referstr.find(" ") != std::string::npos) {
                     // HACK: spaces mean "has expression inside"
                     referstr = "(" + referstr + ")";
-                    arrow = MODULE_ARROW;
                 }
-                referstr += arrow;
+                referstr += MODULE_SEPARATOR;
             }
             cbuffer += referstr + fname;
         }
@@ -416,17 +407,17 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
                 if (referstr[0] == '&')
                     referstr = referstr.substr(1);
                 cbuffer += referstr;
-                //cbuffer += "[" + printOperand(I.getOperand(), false) + "]";
-                cbuffer += printOperand(I.getOperand(), false);
+                cbuffer += "[" + printOperand(I.getOperand(), false) + "]";
+                //cbuffer += printOperand(I.getOperand(), false);
             }
             else if (!Ty->isVectorTy()) {
                 if (referstr[0] == '&')
                     referstr = referstr.substr(1);
                 cbuffer += referstr;
-                //cbuffer += "[" + printOperand(I.getOperand(), false) + "]";
-                // HACK HACK HACK HACK: we append the offset for ivector.  lpm and precision tests have an i8* here.
-                if (Ty !=  Type::getInt8PtrTy(globalMod->getContext()))
-                    cbuffer += printOperand(I.getOperand(), false);
+                cbuffer += "[" + printOperand(I.getOperand(), false) + "]";
+                //// HACK HACK HACK HACK: we append the offset for ivector.  lpm and precision tests have an i8* here.
+                //if (Ty !=  Type::getInt8PtrTy(globalMod->getContext()))
+                    //cbuffer += printOperand(I.getOperand(), false);
             }
             else {
                 cbuffer += referstr;
@@ -470,7 +461,7 @@ static std::string printCall(const Instruction *I)
     const CallInst *ICL = dyn_cast<CallInst>(I);
     const Function *func = ICL->getCalledFunction();
     std::string calledName = func->getName();
-    std::string vout, sep, fname = getMethodName(func), prefix = MODULE_ARROW;
+    std::string vout, sep, fname = getMethodName(func);
     CallSite CS(const_cast<Instruction *>(I));
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
     if (!func) {
@@ -478,34 +469,25 @@ static std::string printCall(const Instruction *I)
         I->dump();
         I->getParent()->getParent()->dump();
         parseError();
-return "";
         exit(-1);
     }
     std::string pcalledFunction = printOperand(*AI++, false); // skips 'this' param
-    if (pcalledFunction[0] == '&') {
+    if (pcalledFunction[0] == '&')
         pcalledFunction = pcalledFunction.substr(1);
-        //prefix = MODULE_DOT;
-    }
-    prefix = pcalledFunction + prefix;
-    if (pcalledFunction == "this") {
-        pcalledFunction = "";
-        prefix = "";
-    }
     if (trace_call || fname == "")
         printf("CALL: CALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
         fname = "[ERROR_" + calledName + "_ERROR]";
-        //exit(-1);
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+        exit(-1);
     }
     if (calledName == "printf") {
         //printf("CALL: PRINTFCALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf{" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ",";
     }
-    else {
-        std::string methodName = prefix + fname;
-        vout += methodName + "{";
-    }
+    else
+        vout = pcalledFunction + MODULE_SEPARATOR + fname + "{";
     for (; AI != AE; ++AI) { // first param processed as pcalledFunction
         bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
         if (auto *ins = dyn_cast<Instruction>(*AI)) {
@@ -799,132 +781,6 @@ std::string printOperand(const Value *Operand, bool Indirect)
     return cbuffer;
 }
 
-#if 0
-static std::list<Instruction *> preCopy;
-// This code recursively expands an expression tree that has PHI instructions
-// into a list of trees that for each possible incoming value to the PHI.
-// It is used when computing guard expressions to calculate the 'AND' of all
-// possible targets (ignoring which ones are actually going to be used
-// dynamically).
-static Instruction *defactorTree(Instruction *insertPoint, Instruction *top, Instruction *arg)
-{
-    if (const PHINode *PN = dyn_cast<PHINode>(arg)) {
-        for (unsigned opIndex = 1, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
-            prepareReplace(arg, PN->getIncomingValue(opIndex));
-            preCopy.push_back(cloneTree(top, insertPoint));
-        }
-        return dyn_cast<Instruction>(PN->getIncomingValue(0));
-    }
-    else
-        for (unsigned int i = 0; i < arg->getNumOperands(); i++) {
-            if (Instruction *param = dyn_cast<Instruction>(arg->getOperand(i))) {
-                Instruction *ret = defactorTree(insertPoint, top, param);
-                if (ret) {
-                    arg->setOperand(i, ret);
-                    recursiveDelete(param);
-                }
-            }
-        }
-    return NULL; // nothing to expand
-}
-static Instruction *expandTreeOptions(Instruction *insertPoint, const Instruction *I, Function *func)
-{
-    std::list<Instruction *> postCopy;
-    preCopy.clear();
-    Instruction *retItem = NULL;
-    prepareClone(insertPoint, I->getParent()->getParent());
-    Value *new_thisp = I->getOperand(0);
-    if (Instruction *orig_thisp = dyn_cast<Instruction>(new_thisp))
-        new_thisp = cloneTree(orig_thisp, insertPoint);
-    preCopy.push_back(dyn_cast<Instruction>(new_thisp));
-    for (auto item: preCopy) {
-        defactorTree(insertPoint, item, item);
-        postCopy.push_back(item);
-    }
-    for (auto item: postCopy) {
-        Value *Params[] = {item};
-        IRBuilder<> builder(insertPoint->getParent());
-        builder.SetInsertPoint(insertPoint);
-        CallInst *newCall = builder.CreateCall(func, ArrayRef<Value*>(Params, 1));
-        //newCall->addAttribute(AttributeSet::ReturnIndex, Attribute::ZExt);
-        if (retItem)
-            retItem = BinaryOperator::Create(Instruction::And, retItem, newCall, "newand", insertPoint);
-        else
-            retItem = newCall;
-    }
-    return retItem;
-}
-#endif
-
-static void processIndexRef(Function *currentFunction)
-{
-restart:
-    for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
-        for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE;) {
-            auto INEXT = std::next(BasicBlock::iterator(IIb));
-            Instruction *II = &*IIb;
-            switch (II->getOpcode()) {
-            case Instruction::GetElementPtr:
-                // Expand out index expression references
-                if (II->getNumOperands() == 2)
-                if (Instruction *switchIndex = dyn_cast<Instruction>(II->getOperand(1))) {
-                    int Values_size = 2;
-                    if (Instruction *ins = dyn_cast<Instruction>(II->getOperand(0))) {
-                        if (PointerType *PTy = dyn_cast<PointerType>(ins->getOperand(0)->getType()))
-                        if (StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
-                            int Idx = 0, eleIndex = -1;
-                            if (const ConstantInt *CI = dyn_cast<ConstantInt>(ins->getOperand(2)))
-                                eleIndex = CI->getZExtValue();
-                            for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++)
-                                if (Idx == eleIndex)
-                                if (ClassMethodTable *table = getClass(STy))
-                                    if (table->replaceType[Idx]) {
-                                        Values_size = table->replaceCount[Idx];
-printf("[%s:%d] get dyn size (static not handled) %d\n", __FUNCTION__, __LINE__, Values_size);
-if (Values_size < 0 || Values_size > 100) Values_size = 2;
-                                        //II->getParent()->dump();
-                                    }
-                        }
-                        ins->getOperand(0)->dump();
-                    }
-                    II->getOperand(0)->dump();
-                    BasicBlock *afterswitchBB = BBI->splitBasicBlock(II, "afterswitch");
-                    IRBuilder<> afterBuilder(afterswitchBB);
-                    afterBuilder.SetInsertPoint(II);
-                    // Build Switch instruction in starting block
-                    IRBuilder<> startBuilder(&*BBI);
-                    startBuilder.SetInsertPoint(BBI->getTerminator());
-                    BasicBlock *lastCaseBB = BasicBlock::Create(BBI->getContext(), "lastcase", currentFunction, afterswitchBB);
-                    SwitchInst *switchInst = startBuilder.CreateSwitch(switchIndex, lastCaseBB, Values_size - 1);
-                    BBI->getTerminator()->eraseFromParent();
-                    // Build PHI in end block
-                    PHINode *phi = afterBuilder.CreatePHI(II->getType(), Values_size, "phi");
-                    // Add all of the 'cases' to the switch instruction.
-                    for (int caseIndex = 0; caseIndex < Values_size; ++caseIndex) {
-                        ConstantInt *caseInt = startBuilder.getInt64(caseIndex);
-                        BasicBlock *caseBB = lastCaseBB;
-                        if (caseIndex != Values_size - 1) { // already created a block for 'default'
-                            caseBB = BasicBlock::Create(BBI->getContext(), "switchcase", currentFunction, afterswitchBB);
-                            switchInst->addCase(caseInt, caseBB);
-                        }
-                        IRBuilder<> cbuilder(caseBB);
-                        cbuilder.CreateBr(afterswitchBB);
-                        prepareReplace(NULL, NULL);
-                        Instruction *val = cloneTree(II, caseBB->getTerminator());
-                        val->setOperand(1, caseInt);
-                        phi->addIncoming(val, caseBB);
-                    }
-                    II->replaceAllUsesWith(phi);
-                    recursiveDelete(II);
-                    goto restart;  // the instruction INEXT is no longer in the block BBI
-                }
-                break;
-            }
-            IIb = INEXT;
-        }
-    }
-}
-
 static void processBlockConditions(Function *currentFunction)
 {
     for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
@@ -1046,8 +902,6 @@ static std::string processMethod(std::string methodName, const Function *func,
         }
     };
     globalMethodName = methodName;
-    // Expand array indexing into Switch/PHI
-    processIndexRef(const_cast<Function *>(func));
     // Set up condition expressions for all BasicBlocks 
     processBlockConditions(const_cast<Function *>(func));
     NextAnonValueNumber = 0;

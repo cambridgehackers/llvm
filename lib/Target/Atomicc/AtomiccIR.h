@@ -51,12 +51,23 @@ static bool inline endswith(std::string str, std::string suffix)
     return skipl >= 0 && str.substr(skipl) == suffix;
 }
 
+static std::string trimStr(const std::string& str)
+{
+    size_t first = str.find_first_not_of(' ');
+    if (std::string::npos == first)
+        return "";
+    size_t last = str.find_last_not_of(' ');
+    return str.substr(first, (last - first + 1));
+}
+
 static std::string inline cleanupValue(std::string arg)
 {
     int ind;
     while((ind = arg.find("{}")) > 0)
         arg = arg.substr(0, ind) + arg.substr(ind+2); // remove '{}'
-    return arg;
+    while((ind = arg.find("{ }")) > 0)
+        arg = arg.substr(0, ind) + arg.substr(ind+3); // remove '{ }'
+    return trimStr(arg);
 }
 
 typedef struct {
