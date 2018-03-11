@@ -118,7 +118,7 @@ restart: // restart here after inlining function.... basic block structure might
                 Value *callV = ICL->getCalledValue();
                 Function *func = dyn_cast<Function>(callV);
                 if (Instruction *oldOp = dyn_cast<Instruction>(callV)) {
-                    std::string opName = printOperand(callV, false);
+                    std::string opName = printOperand(callV);
                     func = dyn_cast_or_null<Function>(Mod->getNamedValue(opName));
                     if (!func) {
                         printf("%s: %s not an instantiable call!!!! %s\n", __FUNCTION__, parentFunc->getName().str().c_str(), opName.c_str());

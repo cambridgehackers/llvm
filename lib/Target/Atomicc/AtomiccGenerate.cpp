@@ -331,13 +331,13 @@ int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_ty
  */
 static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep_type_iterator E)
 {
-    std::string cbuffer, amper = "&";
+    std::string cbuffer;
     const ConstantDataArray *CPA;
     int64_t Total = 0;
     VectorType *LastIndexIsVector = 0;
     const Constant *FirstOp = dyn_cast<Constant>(I.getOperand());
     bool expose = isAddressExposed(Ptr);
-    std::string referstr = printOperand(Ptr, false);
+    std::string referstr = printOperand(Ptr);
 
     Total = getGEPOffset(&LastIndexIsVector, I, E);
     ERRORIF(LastIndexIsVector);
@@ -352,8 +352,7 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
         ++I;  // Skip the zero index.
         if (I == E) { // off the end of parameters
             // HACK HACK HACK HACK for 'fifo0'
-            printf("[%s:%d] amper %s expose %d referstr %s\n", __FUNCTION__, __LINE__, amper.c_str(), expose, referstr.c_str());
-            amper = "";
+            printf("[%s:%d] expose %d referstr %s\n", __FUNCTION__, __LINE__, expose, referstr.c_str());
             referstr += "0";
         } else
         if (I != E && (I.getIndexedType())->isArrayTy())
@@ -367,13 +366,11 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
                 }
                 if (val)
                     referstr += '+' + utostr(val);
-                amper = "";
                 if (trace_gep)
                     printf("[%s:%d] expose %d referstr %s\n", __FUNCTION__, __LINE__, expose, referstr.c_str());
                 ++I;     // we processed this index
             }
     }
-    cbuffer += amper;
     for (; I != E; ++I) {
         if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
@@ -407,22 +404,22 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
                 if (referstr[0] == '&')
                     referstr = referstr.substr(1);
                 cbuffer += referstr;
-                cbuffer += "[" + printOperand(I.getOperand(), false) + "]";
-                //cbuffer += printOperand(I.getOperand(), false);
+                cbuffer += "[" + printOperand(I.getOperand()) + "]";
+                //cbuffer += printOperand(I.getOperand());
             }
             else if (!Ty->isVectorTy()) {
                 if (referstr[0] == '&')
                     referstr = referstr.substr(1);
                 cbuffer += referstr;
-                cbuffer += "[" + printOperand(I.getOperand(), false) + "]";
+                cbuffer += "[" + printOperand(I.getOperand()) + "]";
                 //// HACK HACK HACK HACK: we append the offset for ivector.  lpm and precision tests have an i8* here.
                 //if (Ty !=  Type::getInt8PtrTy(globalMod->getContext()))
-                    //cbuffer += printOperand(I.getOperand(), false);
+                    //cbuffer += printOperand(I.getOperand());
             }
             else {
                 cbuffer += referstr;
                 if (!isa<Constant>(I.getOperand()) || !cast<Constant>(I.getOperand())->isNullValue())
-                    cbuffer += ")+(" + printOperand(I.getOperand(), false);
+                    cbuffer += ")+(" + printOperand(I.getOperand());
                 cbuffer += "))";
             }
         }
@@ -465,13 +462,13 @@ static std::string printCall(const Instruction *I)
     CallSite CS(const_cast<Instruction *>(I));
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
     if (!func) {
-        printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI, false).c_str());
+        printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI).c_str());
         I->dump();
         I->getParent()->getParent()->dump();
         parseError();
         exit(-1);
     }
-    std::string pcalledFunction = printOperand(*AI++, false); // skips 'this' param
+    std::string pcalledFunction = printOperand(*AI++); // skips 'this' param
     if (pcalledFunction[0] == '&')
         pcalledFunction = pcalledFunction.substr(1);
     if (trace_call || fname == "")
@@ -489,14 +486,7 @@ printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     else
         vout = pcalledFunction + MODULE_SEPARATOR + fname + "{";
     for (; AI != AE; ++AI) { // first param processed as pcalledFunction
-        bool indirect = dyn_cast<PointerType>((*AI)->getType()) != NULL;
-        if (auto *ins = dyn_cast<Instruction>(*AI)) {
-            if (ins->getOpcode() == Instruction::GetElementPtr)
-                indirect = true;
-        }
-        if (dyn_cast<Argument>(*AI))
-            indirect = false;
-        vout += sep + printOperand(*AI, indirect);
+        vout += sep + printOperand(*AI);
         sep = ",";
     }
     return vout + "}";
@@ -504,7 +494,7 @@ printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 
 std::string parenOperand(const Value *Operand)
 {
-    std::string temp = printOperand(Operand, false);
+    std::string temp = printOperand(Operand);
     int indent = 0;
     for (auto ch: temp)
         if (ch == '{')
@@ -580,7 +570,7 @@ static Value *getACondition(BasicBlock *bb, bool invert)
 static std::string getCondStr(BasicBlock *bb)
 {
     if (Value *cond = getACondition(bb, false))
-        return printOperand(cond, false);
+        return printOperand(cond);
     return "";
 }
 
@@ -607,7 +597,7 @@ static std::string typeName(const Type *Ty)
 /*
  * Generate a string for the value generated by an Instruction DAG
  */
-std::string printOperand(const Value *Operand, bool Indirect)
+std::string printOperand(const Value *Operand)
 {
     static int depth;
     std::string cbuffer;
@@ -615,16 +605,6 @@ std::string printOperand(const Value *Operand, bool Indirect)
         return "";
     depth++;
     if (const Instruction *I = dyn_cast<Instruction>(Operand)) {
-        std::string prefix;
-        bool isAddressImplicit = isAddressExposed(Operand);
-        if (Indirect && isAddressImplicit) {
-            isAddressImplicit = false;
-            Indirect = false;
-        }
-        if (Indirect)
-            prefix = "*";
-        if (isAddressImplicit)
-            prefix = "&";  // Global variables are referenced as their addresses by llvm
         std::string vout;
         int opcode = I->getOpcode();
         if (trace_operand)
@@ -639,7 +619,7 @@ std::string printOperand(const Value *Operand, bool Indirect)
             break;
             }
         case Instruction::Load:
-            vout = printOperand(I->getOperand(0), true);
+            vout = printOperand(I->getOperand(0));
             break;
 
         // Standard binary operators...
@@ -653,9 +633,9 @@ std::string printOperand(const Value *Operand, bool Indirect)
         case Instruction::And: case Instruction::Or: case Instruction::Xor:
             assert(!I->getType()->isPointerTy());
             if (BinaryOperator::isNeg(I))
-                vout += "-(" + printOperand(BinaryOperator::getNegArgument(cast<BinaryOperator>(I)), false) + ")";
+                vout += "-(" + printOperand(BinaryOperator::getNegArgument(cast<BinaryOperator>(I))) + ")";
             else if (BinaryOperator::isFNeg(I))
-                vout += "-(" + printOperand(BinaryOperator::getFNegArgument(cast<BinaryOperator>(I)), false) + ")";
+                vout += "-(" + printOperand(BinaryOperator::getFNegArgument(cast<BinaryOperator>(I))) + ")";
             else if (I->getOpcode() == Instruction::FRem) {
                 if (I->getType() == Type::getFloatTy(I->getContext()))
                     vout += "fmodf(";
@@ -663,8 +643,8 @@ std::string printOperand(const Value *Operand, bool Indirect)
                     vout += "fmod(";
                 else  // all 3 flavors of long double
                     vout += "fmodl(";
-                vout += printOperand(I->getOperand(0), false) + ", "
-                     + printOperand(I->getOperand(1), false) + ")";
+                vout += printOperand(I->getOperand(0)) + ", "
+                     + printOperand(I->getOperand(1)) + ")";
             } else
                 vout += parenOperand(I->getOperand(0))
                      + " " + intmapLookup(opcodeMap, I->getOpcode()) + " "
@@ -680,7 +660,7 @@ std::string printOperand(const Value *Operand, bool Indirect)
         case Instruction::AddrSpaceCast:
         case Instruction::Trunc: case Instruction::ZExt:
             printf("printOperand: CASTTTTINNNNNNNNNNNNNNNN opcode %d.=%s\n", opcode, I->getOpcodeName());
-            vout += printOperand(I->getOperand(0), false);
+            vout += printOperand(I->getOperand(0));
             break;
         case Instruction::BitCast: {
             std::string ctype;
@@ -689,9 +669,9 @@ std::string printOperand(const Value *Operand, bool Indirect)
             if (auto STy = dyn_cast<StructType>(PTy->getElementType()))
                 ctype = typeName(STy);
 #if 0
-            vout += "BITCAST(" + printOperand(I->getOperand(0), false) + ", " + ctype + ")";
+            vout += "BITCAST(" + printOperand(I->getOperand(0)) + ", " + ctype + ")";
 #else
-            vout += printOperand(I->getOperand(0), false);
+            vout += printOperand(I->getOperand(0));
 #endif
             break;
             }
@@ -713,14 +693,13 @@ std::string printOperand(const Value *Operand, bool Indirect)
                 if (cStr != "" && (opIndex != Eop - 1 || getACondition(inBlock, true) != prevCond))
                     vout += cStr + " ? ";
                 prevCond = getACondition(inBlock, false);
-                vout += printOperand(PN->getIncomingValue(opIndex), false);
+                vout += printOperand(PN->getIncomingValue(opIndex));
                 if (opIndex != Eop - 1)
                     vout += ":";
             }
             break;
             }
         case Instruction::Alloca:
-            prefix = "";
             vout += GetValueName(I);
             break;
         default:
@@ -729,14 +708,7 @@ std::string printOperand(const Value *Operand, bool Indirect)
             exit(1);
             break;
         }
-        if (prefix == "*" && vout[0] == '&') {
-            prefix = "";
-            vout = vout.substr(1);
-        }
-        if (prefix == "")
-            cbuffer += vout;
-        else
-            cbuffer += prefix + "(" + vout + ")";
+        cbuffer += vout;
         if (trace_operand)
              printf("[%s:%d] after depth %d op %s\n", __FUNCTION__, __LINE__, depth, I->getOpcodeName());
     }
@@ -792,14 +764,14 @@ static void processBlockConditions(Function *currentFunction)
                 // BUG BUG BUG -> combine the condition for the current block with the getConditions for this instruction
                 const BranchInst *BI = dyn_cast<BranchInst>(II);
                 if (BI && BI->isConditional()) {
-                    //printf("[%s:%d] condition %s [%p, %p]\n", __FUNCTION__, __LINE__, printOperand(BI->getCondition(), false).c_str(), BI->getSuccessor(0), BI->getSuccessor(1));
+                    //printf("[%s:%d] condition %s [%p, %p]\n", __FUNCTION__, __LINE__, printOperand(BI->getCondition()).c_str(), BI->getSuccessor(0), BI->getSuccessor(1));
                     setCondition(BI->getSuccessor(0), false, BI->getCondition(), &*BBI); // 'true' condition
                     setCondition(BI->getSuccessor(1), true, BI->getCondition(), &*BBI); // 'inverted' condition
                 }
                 else if (isa<IndirectBrInst>(II)) {
                     printf("[%s:%d] indirect\n", __FUNCTION__, __LINE__);
                     for (unsigned i = 0, e = II->getNumOperands(); i != e; ++i) {
-                        printf("[%d] = %s\n", i, printOperand(II->getOperand(i), false).c_str());
+                        printf("[%d] = %s\n", i, printOperand(II->getOperand(i)).c_str());
                     }
                 }
                 else {
@@ -914,11 +886,11 @@ static std::string processMethod(std::string methodName, const Function *func,
             switch(II->getOpcode()) {
             case Instruction::Store: {
                 const StoreInst *SI = cast<StoreInst>(II);
-                std::string value = printOperand(SI->getOperand(0), false);
+                std::string value = printOperand(SI->getOperand(0));
                 findAlloca(dyn_cast<Instruction>(SI->getPointerOperand()));
-                std::string dest = printOperand(SI->getPointerOperand(), true);
-                if (dest[0] == '&')
-                    dest = dest.substr(1);
+                std::string dest = printOperand(SI->getPointerOperand());
+                //if (dest[0] == '&')
+                    //dest = dest.substr(1);
                 std::string alloc = "STORE ";
                 if (isAlloca(SI->getPointerOperand()))
                     alloc = "LET " + typeName(cast<PointerType>(
@@ -936,7 +908,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 if (tempCond != "")
                     retGuard += tempCond + " ? ";
                 valsep = " : ";
-                retGuard += printOperand(II->getOperand(0), false);
+                retGuard += printOperand(II->getOperand(0));
                 break;
             case Instruction::Call: { // can have value
                 if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
