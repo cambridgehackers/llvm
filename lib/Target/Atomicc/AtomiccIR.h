@@ -105,6 +105,11 @@ typedef struct {
 } ParamElement;
 
 typedef struct {
+    std::string name;
+    std::string type;
+} UnionItem;
+
+typedef struct {
     std::string                guard;
     bool                       rule;
     std::list<StoreListElement> storeList;
@@ -131,6 +136,7 @@ typedef struct ModuleIR {
     std::map<std::string, MethodInfo *> method;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::list<FieldElement>           fields;
+    std::list<UnionItem>              unionList;
     std::list<FieldElement>           interfaces;
     std::list<InterfaceConnectType>   interfaceConnect;
 } ModuleIR;

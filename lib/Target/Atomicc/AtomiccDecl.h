@@ -104,3 +104,4 @@ void generateVerilog(std::string OutputDir);
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);
 void metaGenerate(ModuleIR *IR, FILE *OStr);
 void generateModuleDef(ModuleIR *IR, FILE *OStr);
+int checkDerived(const Type *A, const Type *B);

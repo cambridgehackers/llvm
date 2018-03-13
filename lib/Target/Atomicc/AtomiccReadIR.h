@@ -268,6 +268,10 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 std::string type = getToken();
                 IR->interfaceConnect.push_back(InterfaceConnectType{target, source, type});
             }
+            else if (checkItem("UNION")) {
+                std::string type = getToken();
+                IR->unionList.push_back(UnionItem{getToken(), type});
+            }
             else if (checkItem("FIELD")) {
                 int64_t     vecCount = -1;
                 unsigned    arrayLen = 0;

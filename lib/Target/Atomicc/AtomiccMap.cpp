@@ -168,7 +168,7 @@ static int derivedStruct(const StructType *STyA, const StructType *STyB)
     return 0;
 }
 
-static int checkDerived(const Type *A, const Type *B)
+int checkDerived(const Type *A, const Type *B)
 {
     if (const PointerType *PTyA = cast_or_null<PointerType>(A))
     if (const PointerType *PTyB = cast_or_null<PointerType>(B))

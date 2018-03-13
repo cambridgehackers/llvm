@@ -23,6 +23,7 @@ typedef struct {
 typedef struct {
     std::string name;
     std::string type;
+    bool        alias;
 } FieldItem;
 
 static std::list<FieldItem> fieldList;
@@ -148,27 +149,52 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
         }
 }
 
-static void getFieldList(std::string name, std::string type, bool init)
+static void getFieldList(std::string name, std::string type, bool alias = false, bool init = true)
 {
     if (init)
         fieldList.clear();
-    if (ModuleIR *IR = lookupIR(type))
-        for (auto item: IR->fields)
-            getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type, false);
+    if (ModuleIR *IR = lookupIR(type)) {
+        if (IR->unionList.size() > 0) {
+            for (auto item: IR->unionList)
+                getFieldList(name + MODULE_SEPARATOR + item.name, item.type, true, false);
+            for (auto item: IR->fields)
+                fieldList.push_back(FieldItem{name, item.type, false}); // aggregate data
+        }
+        else
+            for (auto item: IR->fields)
+                getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type, alias, false);
+    }
     else
-        fieldList.push_back(FieldItem{name, type});
+        fieldList.push_back(FieldItem{name, type, alias});
 }
 
 static void expandStruct(std::string fldName, std::string type,
      std::map<std::string, std::string> &declList)
 {
-    getFieldList(fldName, type, true);
+    getFieldList(fldName, type);
     std::string itemList;
     for (auto fitem : fieldList) {
         declList[fitem.name] = fitem.type;
-        itemList += " , " + fitem.name;
+        if (!fitem.alias)
+            itemList += " , " + fitem.name;
     }
     setAssign(fldName, "{" + itemList.substr(2) + " }");
+}
+
+static std::string scanParam(const char *val)
+{
+    const char *startp = val;
+    int level = 0;
+    while (*val == ' ')
+        val++;
+    while (*val && ((*val != ')' && *val != ',') || level != 0)) {
+        if (*val == '(')
+            level++;
+        else if (*val == ')')
+            level--;
+        val++;
+    }
+    return std::string(startp, val);
 }
 
 /*
@@ -265,7 +291,7 @@ static std::map<std::string, std::string> wireList; // name -> type
         for (auto item: MI->alloca)
             expandStruct(item.first, item.second, wireList);
         for (auto info: MI->letList) {
-            getFieldList("", info.type, true);
+            getFieldList("", info.type);
             for (auto fitem : fieldList)
                 muxValueList[info.dest + fitem.name].push_back(MuxValueEntry{cleanTrim(info.cond), cleanTrim(info.value) + fitem.name});
         }
@@ -292,7 +318,7 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             int argCount = CI->params.size();
             while(rval.length() && argCount-- > 0) {
-                std::string scanexp = scanExpression(rval.c_str());
+                std::string scanexp = scanParam(rval.c_str());
                 std::string rest = rval.substr(scanexp.length());
                 while (rest[0] == ' ')
                     rest = rest.substr(1);
