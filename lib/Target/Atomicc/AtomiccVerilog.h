@@ -41,13 +41,8 @@ std::string cleanTrim(std::string arg)
 static void setAssign(std::string target, std::string value)
 {
 //printf("[%s:%d] [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
-    std::string ret, sep;
-    std::list<std::string> tokenList;
-    str2token(value, tokenList);
-    for (auto tok: tokenList) {
-        ret += sep + tok;
-        sep = " ";
-    }
+    ACCExpr *expr = str2tree(value);
+    std::string ret = tree2str(expr);
     assignList[target] = ret;
 }
 
@@ -197,6 +192,42 @@ static std::string scanParam(const char *val)
     return std::string(startp, val);
 }
 
+static std::map<std::string, bool> refList, refSource;
+static std::string walkTree (ACCExpr *expr, bool setReference) {
+    std::string ret;
+    if (expr) {
+        std::string item = expr->value;
+        if (isIdChar(item[0])) {
+        std::string temp = assignList[item];
+        if (temp != "") {
+            if (setReference)
+                refSource[item] = true;
+            refList[item] = false;
+            item = temp;
+        }
+        if (setReference)
+            refList[item] = true;
+        }
+        ret = item;
+    for (auto item: expr->operands)
+        ret += " " + walkTree(item, setReference);
+    if (expr->next)
+        ret += " " + walkTree(expr->next, setReference);
+    }
+    return ret;
+}
+static void walkRef (ACCExpr *expr) {
+    if (expr) {
+        std::string item = expr->value;
+        if (isIdChar(item[0]))
+            refList[item] = true;
+        for (auto item: expr->operands)
+            walkRef(item);
+        if (expr->next)
+            walkRef(expr->next);
+    }
+}
+
 /*
  * Generate *.v and *.vh for a Verilog module
  */
@@ -206,29 +237,13 @@ static std::list<ModData> modLine;
 static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
 static std::map<std::string, std::string> wireList; // name -> type
     std::map<std::string, std::string> enableList;
-    std::map<std::string, bool> refList, refSource;
+    refList.clear();
+    refSource.clear();
     // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
     auto lookupString = [&] (std::string arg, bool setReference) -> std::string {
-        std::list<std::string> tokenList;
-        str2token(cleanTrim(arg), tokenList);
-        std::string ret, sep;
-        for (auto item: tokenList) {
-            if (isIdChar(item[0])) {
-            std::string temp = assignList[item];
-            if (temp != "") {
-                if (setReference)
-                    refSource[item] = true;
-                refList[item] = false;
-                item = temp;
-            }
-            if (setReference)
-                refList[item] = true;
-            }
-            ret += sep + item;
-            sep = " ";
-        }
-        return ret;
+        ACCExpr *expr = str2tree(cleanTrim(arg));
+        return walkTree(expr, setReference);
     };
 
     assignList.clear();
@@ -398,11 +413,8 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
             if (aitem.second != "" && (refList[aitem.first] || refSource[aitem.first])
               && !excludeList[aitem.first]) {
                 excludeList[aitem.first] = true;
-                std::list<std::string> tokenList;
-                str2token(aitem.second, tokenList);
-                for (auto item: tokenList)
-                    if (isIdChar(item[0]))
-                        refList[item] = true;
+                ACCExpr *expr = str2tree(aitem.second);
+                walkRef(expr);
                 changed = true;
             }
         }

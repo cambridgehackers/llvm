@@ -12,10 +12,25 @@
 //===----------------------------------------------------------------------===//
 #include "AtomiccIR.h"
 
+enum TokType {TOK_NONE, TOK_ID, TOK_NUMBER, TOK_ARITHOP, TOK_RELOP, TOK_LBRACE, TOK_MISCOP,
+    TOK_EOF};
+typedef struct {
+    TokType type;
+    std::string value;
+} TokenValue;
+typedef struct ACCExpr {
+    std::string op;
+    std::list<ACCExpr *>operands;
+    ACCExpr *next;
+    std::string value;
+} ACCExpr;
+
 static char buf[MAX_READ_LINE];
 static char *bufp;
 static int lineNumber = 0;
 static FILE *OStrGlobal;
+std::list<std::string> readNameList;
+
 static bool checkItem(const char *val)
 {
      while (*bufp == ' ')
@@ -63,70 +78,131 @@ bool isIdChar(char ch)
 {
     return isalpha(ch) || ch == '_' || ch == '$';
 }
-std::list<std::string> readNameList;
 
-static void str2token(std::string arg, std::list<std::string> &tokenList)
+static std::string lexString;
+static int lexTotal;
+static int lexIndex;
+static char lexChar;
+static TokenValue get1Token(void)
 {
-    int total = arg.length();
-    int index = 0;
-    char ch = arg[index++];
-    readNameList.clear();
-    tokenList.clear();
-    while(index <= total) {
-        std::string token;
-        auto getNext = [&] (void) -> void {
-            token += ch;
-            ch = arg[index++];
-        };
+    std::string lexToken;
+    auto getNext = [&] (void) -> void {
+        lexToken += lexChar;
+        lexChar = lexString[lexIndex++];
+    };
 
-        if (ch == ' ' || ch == '\t') {
-            ch = arg[index++];
-        }
-        else if (isIdChar(ch)) {
-            do {
-                getNext();
-            } while (isIdChar(ch) || isdigit(ch));
-//printf("[%s:%d] token %s\n", __FUNCTION__, __LINE__, token.c_str());
-            tokenList.push_back(token);
-            readNameList.push_back(token);
-        }
-        else if (isdigit(ch)) {
-            do {
-                getNext();
-            } while (isdigit(ch) || ch == '.');
-            tokenList.push_back(token);
-        }
-        else if (ch == '+' || ch == '-' || ch == '*' || ch == '&' || ch == '|') {
-            do {
-                getNext();
-            } while (ch == token[0]);
-            tokenList.push_back(token);
-        }
-        else if (ch == '=' || ch == '<' || ch == '>' || ch == '!') {
-            do {
-                getNext();
-            } while (ch == '=' || ch == '<' || ch == '>');
-            tokenList.push_back(token);
-        }
-        else if (ch == '{') {
-            getNext();
-            tokenList.push_back(token);
-            if (readNameList.size() > 0)
-                readNameList.pop_back();
-        }
-        else if (ch == '/' || ch == '%'
-            || ch == '}' || ch == '(' || ch == ')' || ch == '^'
-            || ch == '[' || ch == ']'
-            || ch == ',' || ch == '?' || ch == ':' || ch == ';') {
-            getNext();
-            tokenList.push_back(token);
-        }
-        else {
-printf("[%s:%d] arg '%s' unknown ch %c\n", __FUNCTION__, __LINE__, arg.c_str(), ch);
-            exit(-1);
-        }
+    while (lexChar == ' ' || lexChar == '\t') {
+        lexChar = lexString[lexIndex++];
     }
+    if(lexIndex > lexTotal || lexChar == 0)
+        return TokenValue{TOK_EOF, ""};
+    if (isIdChar(lexChar)) {
+        do {
+            getNext();
+        } while (isIdChar(lexChar) || isdigit(lexChar));
+//printf("[%s:%d] lexToken %s\n", __FUNCTION__, __LINE__, lexToken.c_str());
+        readNameList.push_back(lexToken);
+        return TokenValue{TOK_ID, lexToken};
+    }
+    else if (isdigit(lexChar)) {
+        do {
+            getNext();
+        } while (isdigit(lexChar) || lexChar == '.');
+        return TokenValue{TOK_NUMBER, lexToken};
+    }
+    else if (lexChar == '+' || lexChar == '-' || lexChar == '*' || lexChar == '&' || lexChar == '|') {
+        do {
+            getNext();
+        } while (lexChar == lexToken[0]);
+        return TokenValue{TOK_ARITHOP, lexToken};
+    }
+    else if (lexChar == '=' || lexChar == '<' || lexChar == '>' || lexChar == '!') {
+        do {
+            getNext();
+        } while (lexChar == '=' || lexChar == '<' || lexChar == '>');
+        return TokenValue{TOK_RELOP, lexToken};
+    }
+    else if (lexChar == '{') {
+        getNext();
+        if (readNameList.size() > 0)
+            readNameList.pop_back();
+        return TokenValue{TOK_LBRACE, lexToken};
+    }
+    else if (lexChar == '/' || lexChar == '%'
+        || lexChar == '}' || lexChar == '(' || lexChar == ')' || lexChar == '^'
+        || lexChar == '[' || lexChar == ']'
+        || lexChar == ',' || lexChar == '?' || lexChar == ':' || lexChar == ';') {
+        getNext();
+        return TokenValue{TOK_MISCOP, lexToken};
+    }
+printf("[%s:%d] lexString '%s' unknown lexChar %c %x\n", __FUNCTION__, __LINE__, lexString.c_str(), lexChar, lexChar);
+    //return TokenValue{TOK_EOF, ""};
+    exit(-1);
 }
+
+static ACCExpr *allocExpr(void)
+{
+    ACCExpr *ret = new ACCExpr;
+    ret->op = "";
+    ret->value = "";
+    ret->operands.clear();
+    ret->next = nullptr;
+    return ret;
+}
+static ACCExpr *list2tree(void)
+{
+     TokenValue tok = get1Token();
+     if (tok.type == TOK_EOF)
+         return nullptr;
+     ACCExpr *ret = allocExpr();
+     ret->value = tok.value;
+//printf("[%s:%d] ret %p tok %s\n", __FUNCTION__, __LINE__, ret, tok.value.c_str());
+     if (isIdChar(ret->value[0])) {
+         ACCExpr *tt = list2tree();
+         if (tt)
+             ret->operands.push_back(tt);
+         return ret;
+     }
+     else if (ret->value == "[") {
+         while (1) {
+             TokenValue tok = get1Token();
+             if (tok.type == TOK_EOF)
+                 break;
+             ACCExpr *rop = allocExpr();
+             rop->value = tok.value;
+             ret->operands.push_back(rop);
+             if (rop->value == "]")
+                 break;
+         }
+     }
+     ret->next = list2tree();
+     return ret;
+}
+
+static ACCExpr *str2tree(std::string arg)
+{
+    lexString = arg;
+    lexTotal = lexString.length();
+    lexIndex = 0;
+    lexChar = lexString[lexIndex++];
+    readNameList.clear();
+    return list2tree();
+}
+
+static std::string tree2str(ACCExpr *arg)
+{
+     std::string ret;
+//printf("[%s:%d] arg %p\n", __FUNCTION__, __LINE__, arg);
+     if (arg) {
+     ret += arg->value;
+     for (auto item: arg->operands)
+          ret += " " + tree2str(item);
+     if (arg->next)
+          ret += " " + tree2str(arg->next);
+     }
+     return ret;
+}
+
 std::string scanExpression(const char *val)
 {
     const char *startp = val;
@@ -143,14 +219,16 @@ std::string scanExpression(const char *val)
     return std::string(startp, val);
 }
 
-std::string expandExpression(ModuleIR *IR, std::list<std::string> &tokenList)
+std::string expandExpression(ModuleIR *IR, ACCExpr *expr)
 {
-    std::string ret, sep;
-    std::string lastToken;
-    for (auto TI = tokenList.begin(), TE = tokenList.end(); TI != TE; ) {
-        std::string tok = *TI++;
-        if (*TI == "[") {
-            std::string fieldName = tok;
+    std::string ret;
+    bool skip = false;
+    if (expr) {
+        std::string fieldName = expr->value;
+        ACCExpr *sub;
+        if (isIdChar(fieldName[0]) && expr->operands.size() && (sub = expr->operands.front())
+            && sub->value == "[") {
+            skip = true;
             int size = -1;
             for (auto item: IR->fields)
 {
@@ -160,18 +238,19 @@ printf("[%s:%d] name '%s' fieldName '%s'\n", __FUNCTION__, __LINE__, item.fldNam
                     break;
                 }
 }
-            TI++; // skip '['
-            std::string subscript = *TI++; // get subscript
-            sep = "";
-            while ((tok = *TI++) != "]") {
-                subscript += sep + tok;
+            std::string subscript, sep;
+            for (auto item: sub->operands) {
+                if (item->value == "]")
+                    break;
+                subscript += sep + item->value;
                 sep = " ";
             }
-            tok = *TI;
             std::string post;
-            sep = " ";
-            if (isIdChar(tok[0]))
-                post = *TI++;
+            ACCExpr *process = sub->next;
+            if (process && isIdChar(process->value[0])) {
+                post = process->value;
+                process = sub->next->next;
+            }
 printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), subscript.c_str(), post.c_str());
             std::string expand = fieldName + subscript + post;
             if (!isdigit(subscript[0])) {
@@ -181,14 +260,21 @@ printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE_
                         + fieldName + autostr(i) + post + " : ";
                 expand += fieldName + autostr(size - 1) + post + " ) ";
             }
-            ret += expand;
+            ret = expand;
 printf("[%s:%d] expand '%s'\n", __FUNCTION__, __LINE__, expand.c_str());
+            if (post != "" && sub->next)
+                for (auto item: sub->next->operands)
+                    ret += " " + expandExpression(IR, item);
+            if (process)
+                ret += " " + expandExpression(IR, process);
         }
-        else {
-            ret += sep + tok;
-            sep = " ";
-        }
-        lastToken = tok;
+        else
+        ret = fieldName;
+    if (!skip)
+    for (auto item: expr->operands)
+        ret += " " + expandExpression(IR, item);
+    if (expr->next)
+        ret += " " + expandExpression(IR, expr->next);
     }
     return ret;
 }
@@ -202,9 +288,7 @@ static std::string getExpression(ModuleIR *IR)
         ret = ret.substr(1, ret.length()-2);
     while (*bufp == ' ')
         bufp++;
-    std::list<std::string> tokenList;
-    str2token(ret, tokenList);
-    return expandExpression(IR, tokenList);
+    return expandExpression(IR, str2tree(ret));
 }
 static std::map<std::string, ModuleIR *> mapIndex;
 static ModuleIR *lookupIR(std::string ind)
@@ -302,11 +386,10 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                     MI->rule = true;
                 std::string methodName = getToken();
                 auto insertRead = [&](std::string expr, std::string cond) -> std::string {
-                    std::list<std::string> tokenList;
-                    str2token(expr, tokenList);
+                    ACCExpr *exprp = str2tree(expr);
                     for (auto item: readNameList)
                         MI->meta[MetaRead][item].insert(cond);
-                    return expandExpression(IR, tokenList);
+                    return expandExpression(IR, exprp);
                 };
                 if (checkItem("(")) {
                     bool first = true;
