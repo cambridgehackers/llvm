@@ -14,6 +14,7 @@
 
 typedef struct {
     std::string value;
+    bool        moduleStart;
     bool        out;
 } ModData;
 typedef struct {
@@ -40,10 +41,13 @@ std::string cleanTrim(std::string arg)
 
 static void setAssign(std::string target, std::string value)
 {
-//printf("[%s:%d] [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
-    ACCExpr *expr = str2tree(value);
-    std::string ret = tree2str(expr);
-    assignList[target] = ret;
+printf("[%s:%d] start [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
+    if (value != "") {
+        ACCExpr *expr = str2tree(value);
+        value = tree2str(expr);
+printf("[%s:%d] aftertree [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
+    }
+    assignList[target] = value;
 }
 
 static std::string sizeProcess(std::string type)
@@ -105,7 +109,7 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
             wireList[ret] = atype;
         else if (atype != "") // !action
             ret = prefix[dir] + sizeProcess(atype) + wparam;
-        modParam.push_back(ModData{ret, true});
+        modParam.push_back(ModData{ret, false, true});
     };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
     for (auto item : IR->interfaces)
@@ -126,14 +130,14 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
                     setItem(name.substr(0, name.length()-5) + MODULE_SEPARATOR + item.name, out);
             }
         }
-    modParam.push_back(ModData{IR->name + " " + ((instance != "") ? instance.substr(0, instance.length()-1) + " ":"") + "(", false});
+    modParam.push_back(ModData{IR->name + " " + ((instance != "") ? instance.substr(0, instance.length()-1) + " ":""), true, false});
     if (instance != "") {
         prefix[0] = instance;
         prefix[1] = instance;
         inpClk = "";
     }
-    modParam.push_back(ModData{inpClk + "CLK", false});
-    modParam.push_back(ModData{inpClk + "nRST", false});
+    modParam.push_back(ModData{inpClk + "CLK", false, false});
+    modParam.push_back(ModData{inpClk + "nRST", false, false});
     for (auto item : IR->interfaces)
         for (auto FI: lookupIR(item.type)->method) {
             std::string methodName = item.fldName + MODULE_SEPARATOR + FI.first;
@@ -211,6 +215,7 @@ static std::string walkTree (ACCExpr *expr, bool setReference) {
         ret = item;
     for (auto item: expr->operands)
         ret += " " + walkTree(item, setReference);
+    ret += treePost(expr);
     if (expr->next)
         ret += " " + walkTree(expr->next, setReference);
     }
@@ -260,8 +265,8 @@ static std::map<std::string, std::string> wireList; // name -> type
     std::string sep = "module ";
     for (auto mitem: modLine) {
         fprintf(OStr, "%s", (sep + mitem.value).c_str());
-        if (mitem.value[mitem.value.length()-1] == '(')
-            sep = "\n    ";
+        if (mitem.moduleStart)
+            sep = "(\n    ";
         else
             sep = ",\n    ";
     }
@@ -387,9 +392,9 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     for (auto item: regList)
         fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
     // now write actual module signature to output file
-    std::list<std::string> modNew;
+    std::list<ModData> modNew;
     for (auto mitem: modLine)
-        modNew.push_back(lookupString(mitem.value, true));
+        modNew.push_back(ModData{lookupString(mitem.value, true), mitem.moduleStart, mitem.out});
     std::list<std::string> alwaysLines;
     for (auto FI : IR->method) {
         bool alwaysSeen = false;
@@ -428,12 +433,12 @@ printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), 
             fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
     std::string endStr;
     for (auto item: modNew) {
-        if (item[item.length()-1] == '(') {
-            fprintf(OStr, "%s", (endStr + "    " + item).c_str());
+        if (item.moduleStart) {
+            fprintf(OStr, "%s (", (endStr + "    " + item.value).c_str());
             sep = "";
         }
         else {
-            fprintf(OStr, "%s", (sep + "\n        " + item).c_str());
+            fprintf(OStr, "%s", (sep + "\n        " + item.value).c_str());
             sep = ",";
         }
         endStr = ");\n";
