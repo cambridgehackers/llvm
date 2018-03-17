@@ -77,6 +77,7 @@ static ACCExpr *allocExpr(std::string value)
     ret->value = value;
     ret->operands.clear();
     ret->next = nullptr;
+    ret->param = nullptr;
     return ret;
 }
 
@@ -150,10 +151,15 @@ static ACCExpr *get1Tokene(void)
     TokenValue tok = get1Token();
     if (tok.type == TOK_EOF)
         return nullptr;
-    ACCExpr *ret = allocExpr(tok.value), *etok;
+    ACCExpr *etok, *ret = allocExpr(tok.value), *plist = nullptr;
     if (ret->value == "[" || ret->value == "(" || ret->value == "{")
-        while ((etok = get1Tokene()) && etok->value != treePost(ret).substr(1))
-            ret->operands.push_back(etok);
+        while ((etok = get1Tokene()) && etok->value != treePost(ret).substr(1)) {
+            if (!plist)
+                ret->param = etok;
+            else
+                plist->next = etok;
+            plist = etok;
+        }
     return ret;
 }
 
@@ -169,13 +175,17 @@ static void list2tree(ACCExpr *ret)
 
 static void dumpExpr(std::string tag, ACCExpr *next)
 {
+    bool hadWhile = next != nullptr;
     while (next) {
-        printf("[%s:%d] %s value %s next %p\n", __FUNCTION__, __LINE__, tag.c_str(), next->value.c_str(), next->next);
+        printf("[%s:%d] %s value %s next %p param %p\n", __FUNCTION__, __LINE__, tag.c_str(), next->value.c_str(), next->next, next->param);
         for (auto item: next->operands)
             printf("[%s:%d] operand %s\n", __FUNCTION__, __LINE__, tree2str(item).c_str());
+        if (next->param)
+            dumpExpr(tag + "__PARAM", next->param);
         next = next->next;
     }
-    printf("EEEEEEEEnd\n");
+    if (hadWhile)
+        printf("EEEEEEEEnd %s\n", tag.c_str());
 }
 
 static void walkSubscript(ACCExpr *expr)
@@ -187,15 +197,12 @@ static void walkSubscript(ACCExpr *expr)
             sub->next = nullptr;
             expr->operands.push_back(sub);
             expr->next = next;
-            if (next && next->value[0] == '$') {
-                sub->next = next;
-                expr->next = next->next;
-                next->next = nullptr;
-            }
         }
     }
     for (auto item: expr->operands)
         walkSubscript(item);
+    if (expr->param)
+        walkSubscript(expr->param);
     if (expr->next)
         walkSubscript(expr->next);
 }
@@ -222,6 +229,8 @@ static std::string tree2str(ACCExpr *arg)
     ret += arg->value;
     for (auto item: arg->operands)
         ret += " " + tree2str(item);
+    if (arg->param)
+        ret += " " + tree2str(arg->param);
     ret += treePost(arg);
     if (arg->next)
         ret += " " + tree2str(arg->next);
@@ -248,21 +257,22 @@ static void expandExpression(ModuleIR *IR, ACCExpr *expr)
 {
     if (isIdChar(expr->value[0]) && expr->operands.size()) {
         int size = -1;
-        std::string subscript, sep, post, fieldName = expr->value;
+        std::string subscript, post, fieldName = expr->value;
         ACCExpr *sub = expr->operands.front();
+printf("[%s:%d] ZZZZZZ %p ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n", __FUNCTION__, __LINE__, sub);
+        subscript = tree2str(sub->param);
+        sub->operands.clear();
         expr->operands.pop_front();
-        if (sub->next)
-            post = sub->next->value;
+        ACCExpr *next = expr->next;
+        if (next && isIdChar(next->value[0])) {
+            post = next->value;
+            expr->next = next->next;
+        }
         for (auto item: IR->fields)
             if (item.fldName == fieldName) {
                 size = item.vecCount;
                 break;
             }
-        for (auto item: sub->operands) {
-            subscript += sep + item->value;
-            sep = " ";
-        }
-        sub->operands.clear();
 printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), subscript.c_str(), post.c_str());
         expr->value = fieldName + subscript + post;
         if (!isdigit(subscript[0])) {
@@ -271,17 +281,16 @@ printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE_
                 ret += " ( " + subscript + " == " + autostr(i) + " ) ? "
                     + fieldName + autostr(i) + post + " : ";
             ret += fieldName + autostr(size - 1) + post + " ) ";
-            ACCExpr *newTree = str2tree(ret), *oldNext = expr->next;
-            expr->next = newTree->next;
+            ACCExpr *newTree = str2tree(ret);
             expr->value = newTree->value;
-            expr->operands.splice(expr->operands.begin(), newTree->operands);
-            while (newTree->next)
-                newTree = newTree->next;
-            newTree->next = oldNext;
+            expr->param = newTree->param;
         }
+printf("[%s:%d] afterexpr %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
     }
     for (auto item: expr->operands)
         expandExpression(IR, item);
+    if (expr->param)
+        expandExpression(IR, expr->param);
     if (expr->next)
         expandExpression(IR, expr->next);
 }
@@ -293,17 +302,9 @@ static ACCExpr *getExpression(ModuleIR *IR)
     while (*bufp == ' ')
         bufp++;
     ACCExpr *expr = str2tree(scanexp);
-    if (expr && expr->value == "(" && !expr->next && expr->operands.size()) {
-        ACCExpr *head = nullptr, *tail;
-        for (auto item: expr->operands) {
-            if (!head)
-                head = item;
-            else
-                tail->next = item;
-            tail = item;
-        }
-        expr = head;
-        walkSubscript(expr);
+    if (expr && expr->value == "(" && !expr->next) {
+        expr = expr->param;
+        //walkSubscript(expr);
     }
     if (expr)
         expandExpression(IR, expr);
@@ -352,6 +353,8 @@ static void walkName (MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
              MI->meta[MetaRead][expr->value].insert(tree2str(cond));
     for (auto item: expr->operands)
         walkName(MI, item, cond);
+    if (expr->param)
+        walkName(MI, expr->param, cond);
     if (expr->next)
         walkName(MI, expr->next, cond);
 }

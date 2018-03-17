@@ -210,6 +210,8 @@ static std::string walkTree (ACCExpr *expr, bool setReference)
     ret = item;
     for (auto item: expr->operands)
         ret += " " + walkTree(item, setReference);
+    if (expr->param)
+        ret += " " + walkTree(expr->param, setReference);
     ret += treePost(expr);
     if (expr->next)
         ret += " " + walkTree(expr->next, setReference);
@@ -222,6 +224,8 @@ static void walkRef (ACCExpr *expr)
         refList[item] = true;
     for (auto item: expr->operands)
         walkRef(item);
+    if (expr->param)
+        walkRef(expr->param);
     if (expr->next)
         walkRef(expr->next);
 }
