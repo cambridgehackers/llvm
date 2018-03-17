@@ -70,6 +70,20 @@ static std::string inline cleanupValue(std::string arg)
     return trimStr(arg);
 }
 
+enum TokType {TOK_NONE, TOK_ID, TOK_NUMBER, TOK_ARITHOP, TOK_RELOP, TOK_LBRACE, TOK_MISCOP,
+    TOK_EOF};
+typedef struct {
+    TokType type;
+    std::string value;
+} TokenValue;
+
+typedef struct ACCExpr {
+    std::string op;
+    std::list<ACCExpr *>operands;
+    ACCExpr *next;
+    std::string value;
+} ACCExpr;
+
 typedef struct {
     std::string target;
     std::string source;
@@ -81,21 +95,21 @@ enum {MetaNone, MetaRead, MetaInvoke, MetaMax};
 typedef std::map<std::string,std::set<std::string>> MetaRef;
 
 typedef struct {
-    std::string dest;
-    std::string value;
-    std::string cond;
+    ACCExpr *dest;
+    ACCExpr *value;
+    ACCExpr *cond;
 } StoreListElement;
 
 typedef struct {
-    std::string dest;
-    std::string value;
-    std::string cond;
+    ACCExpr *dest;
+    ACCExpr *value;
+    ACCExpr *cond;
     std::string type;
 } LetListElement;
 
 typedef struct {
-    std::string value;
-    std::string cond;
+    ACCExpr *value;
+    ACCExpr *cond;
     bool isAction;
 } CallListElement;
 
@@ -110,7 +124,7 @@ typedef struct {
 } UnionItem;
 
 typedef struct {
-    std::string                guard;
+    ACCExpr                   *guard;
     bool                       rule;
     std::list<StoreListElement> storeList;
     std::list<LetListElement> letList;

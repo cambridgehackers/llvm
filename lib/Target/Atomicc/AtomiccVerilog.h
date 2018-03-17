@@ -18,8 +18,8 @@ typedef struct {
     bool        out;
 } ModData;
 typedef struct {
-    std::string cond;
-    std::string value;
+    ACCExpr *cond;
+    ACCExpr *value;
 } MuxValueEntry;
 typedef struct {
     std::string name;
@@ -29,7 +29,7 @@ typedef struct {
 
 static std::list<FieldItem> fieldList;
 static std::map<std::string, bool> inList, outList;
-static std::map<std::string, std::string> assignList;
+static std::map<std::string, ACCExpr *> assignList;
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 #define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
@@ -39,11 +39,10 @@ std::string cleanTrim(std::string arg)
     return trimStr(cleanupValue(arg));
 }
 
-static void setAssign(std::string target, std::string value)
+static void setAssign(std::string target, ACCExpr *value)
 {
 //printf("[%s:%d] start [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
-    if (value != "")
-        assignList[target] = tree2str(str2tree(value));
+    assignList[target] = value;
 }
 
 static std::string sizeProcess(std::string type)
@@ -173,7 +172,7 @@ static void expandStruct(std::string fldName, std::string type,
         if (!fitem.alias)
             itemList += " , " + fitem.name;
     }
-    setAssign(fldName, "{" + itemList.substr(2) + " }");
+    setAssign(fldName, str2tree("{" + itemList.substr(2) + " }"));
 }
 
 static std::string scanParam(const char *val)
@@ -198,12 +197,12 @@ static std::string walkTree (ACCExpr *expr, bool setReference)
     std::string ret;
     std::string item = expr->value;
     if (isIdChar(item[0])) {
-        std::string temp = assignList[item];
-        if (temp != "") {
+        ACCExpr *temp = assignList[item];
+        if (temp) {
             if (setReference)
                 refSource[item] = true;
             refList[item] = false;
-            item = temp;
+            item = tree2str(temp);
         }
         if (setReference)
             refList[item] = true;
@@ -283,13 +282,13 @@ static std::map<std::string, std::string> wireList; // name -> type
                         sstr = IC.source + MODULE_SEPARATOR + FI.first;
 //printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outList[tstr], sstr.c_str(), outList[sstr]);
             if (outList[sstr])
-                setAssign(sstr, tstr);
+                setAssign(sstr, str2tree(tstr));
             else
-                setAssign(tstr, sstr);
+                setAssign(tstr, str2tree(sstr));
             tstr = tstr.substr(0, tstr.length()-5) + MODULE_SEPARATOR;
             sstr = sstr.substr(0, sstr.length()-5) + MODULE_SEPARATOR;
             for (auto info: FI.second->params)
-                setAssign(sstr + info.name, tstr + info.name);
+                setAssign(sstr + info.name, str2tree(tstr + info.name));
         }
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
@@ -303,22 +302,22 @@ static std::map<std::string, std::string> wireList; // name -> type
         for (auto info: MI->letList) {
             getFieldList("", info.type);
             for (auto fitem : fieldList)
-                muxValueList[info.dest + fitem.name].push_back(MuxValueEntry{cleanTrim(info.cond), cleanTrim(info.value) + fitem.name});
+                muxValueList[tree2str(info.dest) + fitem.name].push_back(MuxValueEntry{info.cond, str2tree(cleanTrim(tree2str(info.value)) + fitem.name)});
         }
         for (auto info: MI->callList) {
             if (!info.isAction)
                 continue;
-            std::string tempCond = methodName;
-            if (info.cond != "")
-                tempCond += " & " + cleanTrim(info.cond);
-            std::string rval = info.value; // get call info
+            ACCExpr *tempCond = str2tree(methodName);
+            if (info.cond)
+                tempCond = str2tree(methodName + " & " + tree2str(info.cond));
+            std::string rval = tree2str(info.value); // get call info
             int ind = rval.find("{");
             std::string calledName = trimStr(rval.substr(0, ind));
 printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             rval = cleanTrim(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
             // 'Or' together ENA lines from all invocations of a method from this class
             if (info.isAction)
-                enableList[calledName] += " || " + tempCond;
+                enableList[calledName] += " || " + tree2str(tempCond);
             MethodInfo *CI = lookupQualName(IR, calledName);
             if (!CI) {
                 printf("[%s:%d] method %s not found\n", __FUNCTION__, __LINE__, calledName.c_str());
@@ -338,18 +337,18 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
                     else
                         printf("[%s:%d] cannot locate ',' in '%s'\n", __FUNCTION__, __LINE__, rest.c_str());
                 }
-                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, scanexp});
+                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
                 rval = rest;
                 AI++;
             }
             if (rval.length()) {
-printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval.c_str(), info.value.c_str());
+printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval.c_str(), tree2str(info.value).c_str());
                 exit(-1);
             }
         }
     }
     for (auto item: enableList)
-        setAssign(item.first, item.second.substr(4) /* remove leading '||'*/);
+        setAssign(item.first, str2tree(item.second.substr(4)) /* remove leading '||'*/);
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
     for (auto item: muxValueList) {
@@ -357,10 +356,10 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
         for (auto element: item.second) {
             if (prevCond != "")
                 temp += prevCond + " ? " + prevValue + " : ";
-            prevCond = element.cond;
-            prevValue = element.value;
+            prevCond = tree2str(element.cond);
+            prevValue = tree2str(element.value);
         }
-        setAssign(item.first, temp + prevValue);
+        setAssign(item.first, str2tree(temp + prevValue));
     }
     for (auto FI : IR->method)
         setAssign(FI.first, FI.second->guard);  // collect the text of the return value into a single 'assign'
@@ -369,11 +368,11 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     while (changed) {
         changed = false;
         for (auto outerItem: assignList) {
-            if (outerItem.second != "") {
-            std::string newItem = walkTree(str2tree(outerItem.second), false);
-            if (newItem != outerItem.second) {
+            if (outerItem.second) {
+            std::string newItem = walkTree(outerItem.second, false);
+            if (newItem != tree2str(outerItem.second)) {
 //printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, outerItem.first.c_str(), outerItem.second.c_str(), newItem.c_str());
-                assignList[outerItem.first] = newItem;
+                assignList[outerItem.first] = str2tree(newItem);
                 changed = true;
             }
             }
@@ -394,9 +393,9 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
             if (!alwaysSeen)
                 alwaysLines.push_back("if (" + FI.first + ") begin");
             alwaysSeen = true;
-            if (info.cond != "")
-                alwaysLines.push_back("    if (" + walkTree(str2tree(info.cond), true) + ")");
-            alwaysLines.push_back("    " + info.dest + " <= " + walkTree(str2tree(info.value), true) + ";");
+            if (info.cond)
+                alwaysLines.push_back("    if (" + walkTree(info.cond, true) + ")");
+            alwaysLines.push_back("    " + tree2str(info.dest) + " <= " + walkTree(info.value, true) + ";");
         }
         if (alwaysSeen)
             alwaysLines.push_back("end; // End of " + FI.first);
@@ -407,17 +406,17 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     while (changed) {
         changed = false;
         for (auto aitem: assignList) {
-            if (aitem.second != "" && (refList[aitem.first] || refSource[aitem.first])
+            if (aitem.second && (refList[aitem.first] || refSource[aitem.first])
               && !excludeList[aitem.first]) {
                 excludeList[aitem.first] = true;
-                walkRef(str2tree(aitem.second));
+                walkRef(aitem.second);
                 changed = true;
             }
         }
     }
     for (auto aitem: assignList) {
-if (aitem.second != "")
-printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), aitem.second.c_str());
+if (aitem.second)
+printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), tree2str(aitem.second).c_str());
     }
     for (auto item: wireList)
         if (refList[item.first] && item.second != "")
@@ -438,19 +437,19 @@ printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), 
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
-            if (assignList[item.first] == "")
+            if (!assignList[item.first])
                 fprintf(OStr, "    // assign %s = MISSING_ASSIGNMENT_FOR_OUTPUT_VALUE;\n", item.first.c_str());
             else if (refList[item.first])
-                fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), assignList[item.first].c_str());
+                fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), tree2str(assignList[item.first]).c_str());
             refList[item.first] = false;
         }
     bool seen = false;
     for (auto item: assignList)
-        if (item.second != "" && refList[item.first]) {
+        if (item.second && refList[item.first]) {
             if (!seen)
                 fprintf(OStr, "    // Extra assigments, not to output wires\n");
             seen = true;
-            fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), item.second.c_str());
+            fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), tree2str(item.second).c_str());
         }
     // generate clocked updates to state elements
     if (regList.size() > 0 || alwaysLines.size() > 0) {
@@ -508,16 +507,16 @@ void promoteGuards(ModuleIR *IR)
         MethodInfo *MIRdy = IR->method[rdyName];
         assert(MIRdy);
         for (auto info: MI->callList) {
-            std::string rval = info.value; // get call info
+            std::string rval = tree2str(info.value); // get call info
             int ind = rval.find("{");
             std::string tempCond = getRdyName(trimStr(rval.substr(0, ind)));
-            if (info.cond != "")
-                tempCond += " | " + invertExpr(info.cond);
+            if (info.cond)
+                tempCond += " | " + invertExpr(tree2str(info.cond));
             rval = cleanTrim(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
-            if (MIRdy->guard == "1")
-                MIRdy->guard = tempCond;
+            if (tree2str(MIRdy->guard) == "1")
+                MIRdy->guard = str2tree(tempCond);
             else
-                MIRdy->guard = encapExpr(MIRdy->guard) + " & " + encapExpr(tempCond);
+                MIRdy->guard = str2tree(encapExpr(tree2str(MIRdy->guard)) + " & " + encapExpr(tempCond));
         }
     }
 }
