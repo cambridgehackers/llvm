@@ -41,13 +41,9 @@ std::string cleanTrim(std::string arg)
 
 static void setAssign(std::string target, std::string value)
 {
-printf("[%s:%d] start [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
-    if (value != "") {
-        ACCExpr *expr = str2tree(value);
-        value = tree2str(expr);
-printf("[%s:%d] aftertree [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
-    }
-    assignList[target] = value;
+//printf("[%s:%d] start [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
+    if (value != "")
+        assignList[target] = tree2str(str2tree(value));
 }
 
 static std::string sizeProcess(std::string type)
@@ -197,11 +193,11 @@ static std::string scanParam(const char *val)
 }
 
 static std::map<std::string, bool> refList, refSource;
-static std::string walkTree (ACCExpr *expr, bool setReference) {
+static std::string walkTree (ACCExpr *expr, bool setReference)
+{
     std::string ret;
-    if (expr) {
-        std::string item = expr->value;
-        if (isIdChar(item[0])) {
+    std::string item = expr->value;
+    if (isIdChar(item[0])) {
         std::string temp = assignList[item];
         if (temp != "") {
             if (setReference)
@@ -211,26 +207,24 @@ static std::string walkTree (ACCExpr *expr, bool setReference) {
         }
         if (setReference)
             refList[item] = true;
-        }
-        ret = item;
+    }
+    ret = item;
     for (auto item: expr->operands)
         ret += " " + walkTree(item, setReference);
     ret += treePost(expr);
     if (expr->next)
         ret += " " + walkTree(expr->next, setReference);
-    }
     return ret;
 }
-static void walkRef (ACCExpr *expr) {
-    if (expr) {
-        std::string item = expr->value;
-        if (isIdChar(item[0]))
-            refList[item] = true;
-        for (auto item: expr->operands)
-            walkRef(item);
-        if (expr->next)
-            walkRef(expr->next);
-    }
+static void walkRef (ACCExpr *expr)
+{
+    std::string item = expr->value;
+    if (isIdChar(item[0]))
+        refList[item] = true;
+    for (auto item: expr->operands)
+        walkRef(item);
+    if (expr->next)
+        walkRef(expr->next);
 }
 
 /*
@@ -246,10 +240,6 @@ static std::map<std::string, std::string> wireList; // name -> type
     refSource.clear();
     // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
-    auto lookupString = [&] (std::string arg, bool setReference) -> std::string {
-        ACCExpr *expr = str2tree(cleanTrim(arg));
-        return walkTree(expr, setReference);
-    };
 
     assignList.clear();
     inList.clear();
@@ -379,11 +369,13 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     while (changed) {
         changed = false;
         for (auto outerItem: assignList) {
-            std::string newItem = lookupString(outerItem.second, false);
+            if (outerItem.second != "") {
+            std::string newItem = walkTree(str2tree(outerItem.second), false);
             if (newItem != outerItem.second) {
 //printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, outerItem.first.c_str(), outerItem.second.c_str(), newItem.c_str());
                 assignList[outerItem.first] = newItem;
                 changed = true;
+            }
             }
         }
     }
@@ -394,7 +386,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
     // now write actual module signature to output file
     std::list<ModData> modNew;
     for (auto mitem: modLine)
-        modNew.push_back(ModData{lookupString(mitem.value, true), mitem.moduleStart, mitem.out});
+        modNew.push_back(ModData{walkTree(str2tree(mitem.value), true), mitem.moduleStart, mitem.out});
     std::list<std::string> alwaysLines;
     for (auto FI : IR->method) {
         bool alwaysSeen = false;
@@ -403,8 +395,8 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
                 alwaysLines.push_back("if (" + FI.first + ") begin");
             alwaysSeen = true;
             if (info.cond != "")
-                alwaysLines.push_back("    if (" + lookupString(info.cond, true) + ")");
-            alwaysLines.push_back("    " + info.dest + " <= " + lookupString(info.value, true) + ";");
+                alwaysLines.push_back("    if (" + walkTree(str2tree(info.cond), true) + ")");
+            alwaysLines.push_back("    " + info.dest + " <= " + walkTree(str2tree(info.value), true) + ";");
         }
         if (alwaysSeen)
             alwaysLines.push_back("end; // End of " + FI.first);
@@ -418,8 +410,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval
             if (aitem.second != "" && (refList[aitem.first] || refSource[aitem.first])
               && !excludeList[aitem.first]) {
                 excludeList[aitem.first] = true;
-                ACCExpr *expr = str2tree(aitem.second);
-                walkRef(expr);
+                walkRef(str2tree(aitem.second));
                 changed = true;
             }
         }

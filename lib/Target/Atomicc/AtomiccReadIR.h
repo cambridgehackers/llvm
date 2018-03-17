@@ -150,13 +150,16 @@ static TokenValue get1Token(void)
     exit(-1);
 }
 
-static ACCExpr *get1Tokene(void);
-static std::string tree2str(ACCExpr *arg);
-static void recurseTree(ACCExpr *expr, std::string closing)
+static std::string treePost(ACCExpr *arg)
 {
-    ACCExpr *etok;
-    while ((etok = get1Tokene()) && etok->value != closing)
-        expr->operands.push_back(etok);
+    std::string ret;
+    if (arg->value == "[")
+        return " ]";
+    else if (arg->value == "(")
+        return " )";
+    else if (arg->value == "{")
+        return " }";
+    return ret;
 }
 
 static ACCExpr *get1Tokene(void)
@@ -164,13 +167,10 @@ static ACCExpr *get1Tokene(void)
     TokenValue tok = get1Token();
     if (tok.type == TOK_EOF)
         return nullptr;
-    ACCExpr *ret = allocExpr(tok.value);
-    if (ret->value == "[")
-        recurseTree(ret, "]");
-    else if (ret->value == "(")
-        recurseTree(ret, ")");
-    else if (ret->value == "{")
-        recurseTree(ret, "}");
+    ACCExpr *ret = allocExpr(tok.value), *etok;
+    if (ret->value == "[" || ret->value == "(" || ret->value == "{")
+        while ((etok = get1Tokene()) && etok->value != treePost(ret).substr(1))
+            ret->operands.push_back(etok);
     return ret;
 }
 
@@ -205,34 +205,16 @@ static ACCExpr *str2tree(std::string arg)
     return list2tree(get1Tokene());
 }
 
-static std::string treePost(ACCExpr *arg)
-{
-    std::string ret;
-    if (arg->value == "[")
-        return " ]";
-    else if (arg->value == "(")
-        return " )";
-    else if (arg->value == "{")
-        return " }";
-    return ret;
-}
-
-static std::string tree2strr(ACCExpr *arg)
+static std::string tree2str(ACCExpr *arg)
 {
     std::string ret;
     ret += arg->value;
     for (auto item: arg->operands)
-        ret += " " + tree2strr(item);
+        ret += " " + tree2str(item);
     ret += treePost(arg);
     if (arg->next)
-        ret += " " + tree2strr(arg->next);
+        ret += " " + tree2str(arg->next);
     return ret;
-}
-static std::string tree2str(ACCExpr *arg)
-{
-    std::string ret = tree2strr(arg);
-//printf("[%s:%d] ret '%s'\n", __FUNCTION__, __LINE__, ret.c_str());
-     return ret;
 }
 
 std::string scanExpression(const char *val)
