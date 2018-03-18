@@ -65,6 +65,49 @@ bool isIdChar(char ch)
     return isalpha(ch) || ch == '_' || ch == '$';
 }
 
+static std::string treePost(ACCExpr *arg)
+{
+    std::string ret;
+    if (arg->value == "[")
+        return " ]";
+    else if (arg->value == "(")
+        return " )";
+    else if (arg->value == "{")
+        return " }";
+    return ret;
+}
+
+static std::string tree2str(ACCExpr *arg)
+{
+    std::string ret;
+    if (!arg)
+        return "";
+    ret += arg->value;
+    for (auto item: arg->operands)
+        ret += " " + tree2str(item);
+    if (arg->param)
+        ret += " " + tree2str(arg->param);
+    ret += treePost(arg);
+    if (arg->next)
+        ret += " " + tree2str(arg->next);
+    return ret;
+}
+
+static void dumpExpr(std::string tag, ACCExpr *next)
+{
+    bool hadWhile = next != nullptr;
+    while (next) {
+        printf("[%s:%d] %s value %s next %p param %p\n", __FUNCTION__, __LINE__, tag.c_str(), next->value.c_str(), next->next, next->param);
+        for (auto item: next->operands)
+            printf("[%s:%d] operand %s\n", __FUNCTION__, __LINE__, tree2str(item).c_str());
+        if (next->param)
+            dumpExpr(tag + "__PARAM", next->param);
+        next = next->next;
+    }
+    if (hadWhile)
+        printf("EEEEEEEEnd %s\n", tag.c_str());
+}
+
 static std::string lexString;
 static int lexTotal;
 static int lexIndex;
@@ -134,18 +177,6 @@ static TokenValue get1Token(void)
     exit(-1);
 }
 
-static std::string treePost(ACCExpr *arg)
-{
-    std::string ret;
-    if (arg->value == "[")
-        return " ]";
-    else if (arg->value == "(")
-        return " )";
-    else if (arg->value == "{")
-        return " }";
-    return ret;
-}
-
 static ACCExpr *get1Tokene(ACCExpr *prev)
 {
     TokenValue tok = get1Token();
@@ -183,38 +214,12 @@ static ACCExpr *str2tree(std::string arg)
     if (tok)
         while ((prev = get1Tokene(prev)))
             ;
+    if (tok && tok->value == "(" && !tok->next)
+{
+printf("[%s:%d] REPLACEEEEEEE '%s' -> '%s'\n", __FUNCTION__, __LINE__, tree2str(tok).c_str(), tree2str(tok->param).c_str());
+        return tok->param;
+}
     return tok;
-}
-
-static std::string tree2str(ACCExpr *arg)
-{
-    std::string ret;
-    if (!arg)
-        return "";
-    ret += arg->value;
-    for (auto item: arg->operands)
-        ret += " " + tree2str(item);
-    if (arg->param)
-        ret += " " + tree2str(arg->param);
-    ret += treePost(arg);
-    if (arg->next)
-        ret += " " + tree2str(arg->next);
-    return ret;
-}
-
-static void dumpExpr(std::string tag, ACCExpr *next)
-{
-    bool hadWhile = next != nullptr;
-    while (next) {
-        printf("[%s:%d] %s value %s next %p param %p\n", __FUNCTION__, __LINE__, tag.c_str(), next->value.c_str(), next->next, next->param);
-        for (auto item: next->operands)
-            printf("[%s:%d] operand %s\n", __FUNCTION__, __LINE__, tree2str(item).c_str());
-        if (next->param)
-            dumpExpr(tag + "__PARAM", next->param);
-        next = next->next;
-    }
-    if (hadWhile)
-        printf("EEEEEEEEnd %s\n", tag.c_str());
 }
 
 std::string scanExpression(const char *val)
@@ -261,9 +266,13 @@ printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE_
                 ret += " ( " + subscript + " == " + autostr(i) + " ) ? "
                     + fieldName + autostr(i) + post + " : ";
             ret += fieldName + autostr(size - 1) + post + " ) ";
-            ACCExpr *newTree = str2tree(ret);
+            ACCExpr *next = expr->next, *newTree = str2tree(ret);
             expr->value = newTree->value;
             expr->param = newTree->param;
+            expr->next = newTree->next;
+            while(newTree->next)
+                newTree = newTree->next;
+            newTree->next = next;
         }
 printf("[%s:%d] afterexpr %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
     }
@@ -282,10 +291,6 @@ static ACCExpr *getExpression(ModuleIR *IR)
     while (*bufp == ' ')
         bufp++;
     ACCExpr *expr = str2tree(scanexp);
-    if (expr && expr->value == "(" && !expr->next) {
-        expr = expr->param;
-        //walkSubscript(expr);
-    }
     if (expr)
         expandExpression(IR, expr);
     return expr;
@@ -326,17 +331,17 @@ static uint64_t convertType(std::string arg)
     exit(-1);
 }
 
-static void walkName (MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
+static void walkRead (MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
 {
     if (isIdChar(expr->value[0]))
         if (!expr->next || expr->next->value != "{")
              MI->meta[MetaRead][expr->value].insert(tree2str(cond));
     for (auto item: expr->operands)
-        walkName(MI, item, cond);
+        walkRead(MI, item, cond);
     if (expr->param)
-        walkName(MI, expr->param, cond);
+        walkRead(MI, expr->param, cond);
     if (expr->next)
-        walkName(MI, expr->next, cond);
+        walkRead(MI, expr->next, cond);
 }
 
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
@@ -401,7 +406,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 auto insertRead = [&](ACCExpr *exprp, ACCExpr *cond) -> ACCExpr * {
                     if (!exprp)
                         return nullptr;
-                    walkName(MI, exprp, cond);
+                    walkRead(MI, exprp, cond);
                     expandExpression(IR, exprp);
                     return exprp;
                 };
