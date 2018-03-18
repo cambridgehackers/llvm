@@ -175,22 +175,6 @@ static void expandStruct(std::string fldName, std::string type,
     setAssign(fldName, str2tree("{" + itemList.substr(2) + " }"));
 }
 
-static std::string scanParam(const char *val)
-{
-    const char *startp = val;
-    int level = 0;
-    while (*val == ' ')
-        val++;
-    while (*val && ((*val != ')' && *val != ',') || level != 0)) {
-        if (*val == '(')
-            level++;
-        else if (*val == ')')
-            level--;
-        val++;
-    }
-    return std::string(startp, val);
-}
-
 static std::map<std::string, bool> refList, refSource;
 static std::string walkTree (ACCExpr *expr, bool setReference)
 {
@@ -314,11 +298,12 @@ static std::map<std::string, std::string> wireList; // name -> type
             ACCExpr *tempCond = str2tree(methodName);
             if (info.cond)
                 tempCond = str2tree(methodName + " & " + tree2str(info.cond));
-            std::string rval = tree2str(info.value); // get call info
-            int ind = rval.find("{");
-            std::string calledName = trimStr(rval.substr(0, ind));
+            std::string calledName = info.value->value;
 printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
-            rval = cleanTrim(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
+            if (!info.value->next || info.value->next->value != "{") {
+                printf("[%s:%d] incorrectly formed call expression\n", __FUNCTION__, __LINE__);
+                exit(-1);
+            }
             // 'Or' together ENA lines from all invocations of a method from this class
             if (info.isAction)
                 enableList[calledName] += " || " + tree2str(tempCond);
@@ -330,23 +315,28 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             auto AI = CI->params.begin();
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             int argCount = CI->params.size();
-            while(rval.length() && argCount-- > 0) {
-                std::string scanexp = scanParam(rval.c_str());
-                std::string rest = rval.substr(scanexp.length());
-                while (rest[0] == ' ')
-                    rest = rest.substr(1);
-                if (rest.length()) {
-                    if (rest[0] == ',')
-                        rest = trimStr(rest.substr(1));
-                    else
-                        printf("[%s:%d] cannot locate ',' in '%s'\n", __FUNCTION__, __LINE__, rest.c_str());
+            ACCExpr *param = info.value->next->param;
+            while(param && argCount-- > 0) {
+                std::string scanexp, sep;
+                while(param && param->value != ",") {
+                    if (param->value != "{") {
+                        scanexp += sep + param->value;
+                        for (auto item: param->operands)
+                            scanexp += " " + tree2str(item);
+                        if (param->param)
+                            scanexp += " " + tree2str(param->param);
+                        scanexp += treePost(param);
+                        sep = " ";
+                    }
+                    param = param->next;
                 }
+                if (param)
+                    param = param->next;
                 muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
-                rval = rest;
                 AI++;
             }
-            if (rval.length()) {
-printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, rval.c_str(), tree2str(info.value).c_str());
+            if (param) {
+printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree2str(param).c_str(), tree2str(info.value).c_str());
                 exit(-1);
             }
         }
