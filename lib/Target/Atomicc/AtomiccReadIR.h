@@ -146,65 +146,30 @@ static std::string treePost(ACCExpr *arg)
     return ret;
 }
 
-static ACCExpr *get1Tokene(void)
+static ACCExpr *get1Tokene(ACCExpr *prev)
 {
     TokenValue tok = get1Token();
     if (tok.type == TOK_EOF)
         return nullptr;
-    ACCExpr *etok, *ret = allocExpr(tok.value), *plist = nullptr;
-    if (ret->value == "[" || ret->value == "(" || ret->value == "{")
-        while ((etok = get1Tokene()) && etok->value != treePost(ret).substr(1)) {
+    ACCExpr *etok, *ret = allocExpr(tok.value), *plist = nullptr, *retptr = ret;
+    if (prev) {
+        if (isIdChar(prev->value[0]) && ret->value == "[") {
+            prev->operands.push_back(ret);
+            retptr = prev;
+        }
+        else
+            prev->next = ret;
+    }
+    if (ret->value == "[" || ret->value == "(" || ret->value == "{") {
+        while ((etok = get1Tokene(plist)) && etok->value != treePost(ret).substr(1)) {
             if (!plist)
                 ret->param = etok;
-            else
-                plist->next = etok;
             plist = etok;
         }
-    return ret;
-}
-
-static std::string tree2str(ACCExpr *arg);
-static void list2tree(ACCExpr *ret)
-{
-//printf("[%s:%d] ret %s\n", __FUNCTION__, __LINE__, tree2str(ret).c_str());
-     ACCExpr *tok = get1Tokene();
-     ret->next = tok;
-     if (tok)
-         list2tree(tok);
-}
-
-static void dumpExpr(std::string tag, ACCExpr *next)
-{
-    bool hadWhile = next != nullptr;
-    while (next) {
-        printf("[%s:%d] %s value %s next %p param %p\n", __FUNCTION__, __LINE__, tag.c_str(), next->value.c_str(), next->next, next->param);
-        for (auto item: next->operands)
-            printf("[%s:%d] operand %s\n", __FUNCTION__, __LINE__, tree2str(item).c_str());
-        if (next->param)
-            dumpExpr(tag + "__PARAM", next->param);
-        next = next->next;
+        if (plist)
+            plist->next = nullptr;
     }
-    if (hadWhile)
-        printf("EEEEEEEEnd %s\n", tag.c_str());
-}
-
-static void walkSubscript(ACCExpr *expr)
-{
-    if (isIdChar(expr->value[0])) {
-        ACCExpr *sub = expr->next;
-        if (sub && sub->value == "[") {
-            ACCExpr *next = sub->next;
-            sub->next = nullptr;
-            expr->operands.push_back(sub);
-            expr->next = next;
-        }
-    }
-    for (auto item: expr->operands)
-        walkSubscript(item);
-    if (expr->param)
-        walkSubscript(expr->param);
-    if (expr->next)
-        walkSubscript(expr->next);
+    return retptr;
 }
 
 static ACCExpr *str2tree(std::string arg)
@@ -213,11 +178,11 @@ static ACCExpr *str2tree(std::string arg)
     lexTotal = lexString.length();
     lexIndex = 0;
     lexChar = lexString[lexIndex++];
-    ACCExpr *tok = get1Tokene();
-    if (tok) {
-        list2tree(tok);
-        walkSubscript(tok);
-    }
+    ACCExpr *tok = get1Tokene(nullptr);
+    ACCExpr *prev = tok;
+    if (tok)
+        while ((prev = get1Tokene(prev)))
+            ;
     return tok;
 }
 
@@ -235,6 +200,21 @@ static std::string tree2str(ACCExpr *arg)
     if (arg->next)
         ret += " " + tree2str(arg->next);
     return ret;
+}
+
+static void dumpExpr(std::string tag, ACCExpr *next)
+{
+    bool hadWhile = next != nullptr;
+    while (next) {
+        printf("[%s:%d] %s value %s next %p param %p\n", __FUNCTION__, __LINE__, tag.c_str(), next->value.c_str(), next->next, next->param);
+        for (auto item: next->operands)
+            printf("[%s:%d] operand %s\n", __FUNCTION__, __LINE__, tree2str(item).c_str());
+        if (next->param)
+            dumpExpr(tag + "__PARAM", next->param);
+        next = next->next;
+    }
+    if (hadWhile)
+        printf("EEEEEEEEnd %s\n", tag.c_str());
 }
 
 std::string scanExpression(const char *val)
