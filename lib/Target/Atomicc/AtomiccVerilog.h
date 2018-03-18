@@ -175,32 +175,7 @@ static void expandStruct(std::string fldName, std::string type,
     setAssign(fldName, str2tree("{" + itemList.substr(2) + " }"));
 }
 
-static std::map<std::string, bool> refList, refSource;
-static std::string walkTree (ACCExpr *expr, bool setReference)
-{
-    std::string ret;
-    std::string item = expr->value;
-    if (isIdChar(item[0])) {
-        ACCExpr *temp = assignList[item];
-        if (temp) {
-            if (setReference)
-                refSource[item] = true;
-            refList[item] = false;
-            item = tree2str(temp);
-        }
-        if (setReference)
-            refList[item] = true;
-    }
-    ret = item;
-    for (auto item: expr->operands)
-        ret += " " + walkTree(item, setReference);
-    if (expr->param)
-        ret += " " + walkTree(expr->param, setReference);
-    ret += treePost(expr);
-    if (expr->next)
-        ret += " " + walkTree(expr->next, setReference);
-    return ret;
-}
+static std::map<std::string, bool> refList;
 static void walkRef (ACCExpr *expr)
 {
     std::string item = expr->value;
@@ -213,6 +188,30 @@ static void walkRef (ACCExpr *expr)
     if (expr->next)
         walkRef(expr->next);
 }
+static std::string walkTree (ACCExpr *expr, bool *changed)
+{
+    std::string ret = expr->value;
+    if (isIdChar(ret[0])) {
+        if (ACCExpr *temp = assignList[ret]) {
+            refList[ret] = false;
+            ret = walkTree(temp, changed);
+            if (changed)
+                *changed = true;
+            else
+                walkRef(temp);
+        }
+        else if (!changed)
+            refList[ret] = true;
+    }
+    for (auto item: expr->operands)
+        ret += " " + walkTree(item, changed);
+    if (expr->param)
+        ret += " " + walkTree(expr->param, changed);
+    ret += treePost(expr);
+    if (expr->next)
+        ret += " " + walkTree(expr->next, changed);
+    return ret;
+}
 
 /*
  * Generate *.v and *.vh for a Verilog module
@@ -224,7 +223,6 @@ static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
 static std::map<std::string, std::string> wireList; // name -> type
     std::map<std::string, std::string> enableList;
     refList.clear();
-    refSource.clear();
     // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
 
@@ -283,6 +281,7 @@ static std::map<std::string, std::string> wireList; // name -> type
     for (auto FI : IR->method) {
         std::string methodName = FI.first;
         MethodInfo *MI = FI.second;
+        setAssign(methodName, MI->guard);  // collect the text of the return value into a single 'assign'
         if (MI->rule)
             refList[methodName] = true;
         for (auto item: MI->alloca)
@@ -355,31 +354,21 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
         }
         setAssign(item.first, str2tree(temp + prevValue));
     }
-    for (auto FI : IR->method)
-        setAssign(FI.first, FI.second->guard);  // collect the text of the return value into a single 'assign'
-    // process all replacements within the list of 'setAssign' items
-    bool changed = true;
-    while (changed) {
-        changed = false;
-        for (auto outerItem: assignList) {
-            if (outerItem.second) {
-            std::string newItem = walkTree(outerItem.second, false);
-            if (newItem != tree2str(outerItem.second)) {
-//printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, outerItem.first.c_str(), outerItem.second.c_str(), newItem.c_str());
-                assignList[outerItem.first] = str2tree(newItem);
-                changed = true;
-            }
+    // recursively process all replacements internal to the list of 'setAssign' items
+    for (auto item: assignList)
+        if (item.second) {
+            bool treeChanged = false;
+            std::string newItem = walkTree(item.second, &treeChanged);
+            if (treeChanged) {
+//printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.c_str(), newItem.c_str());
+                assignList[item.first] = str2tree(newItem);
             }
         }
-    }
 
-    // generate local state element declarations
-    for (auto item: regList)
-        fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
-    // now write actual module signature to output file
+    // process assignList replacements, mark referenced items
     std::list<ModData> modNew;
     for (auto mitem: modLine)
-        modNew.push_back(ModData{walkTree(str2tree(mitem.value), true), mitem.moduleStart, mitem.out});
+        modNew.push_back(ModData{walkTree(str2tree(mitem.value), nullptr), mitem.moduleStart, mitem.out});
     std::list<std::string> alwaysLines;
     for (auto FI : IR->method) {
         bool alwaysSeen = false;
@@ -388,30 +377,24 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
                 alwaysLines.push_back("if (" + FI.first + ") begin");
             alwaysSeen = true;
             if (info.cond)
-                alwaysLines.push_back("    if (" + walkTree(info.cond, true) + ")");
-            alwaysLines.push_back("    " + tree2str(info.dest) + " <= " + walkTree(info.value, true) + ";");
+                alwaysLines.push_back("    if (" + walkTree(info.cond, nullptr) + ")");
+            alwaysLines.push_back("    " + tree2str(info.dest) + " <= " + walkTree(info.value, nullptr) + ";");
         }
         if (alwaysSeen)
             alwaysLines.push_back("end; // End of " + FI.first);
     }
-    // Now calculated 'was referenced' from assignList items actually referenced
-    changed = true;
-    std::map<std::string, bool> excludeList;
-    while (changed) {
-        changed = false;
-        for (auto aitem: assignList) {
-            if (aitem.second && (refList[aitem.first] || refSource[aitem.first])
-              && !excludeList[aitem.first]) {
-                excludeList[aitem.first] = true;
-                walkRef(aitem.second);
-                changed = true;
-            }
-        }
-    }
-    for (auto aitem: assignList) {
-if (aitem.second)
-printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), tree2str(aitem.second).c_str());
-    }
+
+    // Now extend 'was referenced' from assignList items actually referenced
+    for (auto aitem: assignList)
+        if (aitem.second && refList[aitem.first])
+            walkRef(aitem.second);
+    for (auto aitem: assignList)
+        if (aitem.second)
+            printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), tree2str(aitem.second).c_str());
+
+    // generate local state element declarations and wires
+    for (auto item: regList)
+        fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
     for (auto item: wireList)
         if (refList[item.first] && item.second != "")
             fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
