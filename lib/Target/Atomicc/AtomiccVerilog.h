@@ -501,12 +501,9 @@ void promoteGuards(ModuleIR *IR)
         MethodInfo *MIRdy = IR->method[rdyName];
         assert(MIRdy);
         for (auto info: MI->callList) {
-            std::string rval = tree2str(info.value); // get call info
-            int ind = rval.find("{");
-            std::string tempCond = getRdyName(trimStr(rval.substr(0, ind)));
+            std::string tempCond = getRdyName(info.value->value);
             if (info.cond)
                 tempCond += " | " + invertExpr(tree2str(info.cond));
-            rval = cleanTrim(rval.substr(ind+1, rval.length() - 1 - (ind+1)));
             if (tree2str(MIRdy->guard) == "1")
                 MIRdy->guard = str2tree(tempCond);
             else
