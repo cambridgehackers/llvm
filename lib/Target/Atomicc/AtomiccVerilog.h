@@ -162,7 +162,7 @@ static void getFieldList(std::string name, std::string type, bool alias = false,
         fieldList.push_back(FieldItem{name, type, alias});
 }
 
-static void expandStruct(std::string fldName, std::string type,
+static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
      std::map<std::string, std::string> &declList)
 {
     getFieldList(fldName, type);
@@ -172,7 +172,7 @@ static void expandStruct(std::string fldName, std::string type,
         if (!fitem.alias)
             itemList += " , " + fitem.name;
     }
-    setAssign(fldName, str2tree("{" + itemList.substr(2) + " }"));
+    setAssign(fldName, str2tree(IR, "{" + itemList.substr(2) + " }"));
 }
 
 static std::map<std::string, bool> refList;
@@ -253,7 +253,7 @@ static std::map<std::string, std::string> wireList; // name -> type
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
             if (itemIR->name.substr(0,12) == "l_struct_OC_")
-                expandStruct(fldName, item.type, regList);
+                expandStruct(IR, fldName, item.type, regList);
             else
                 generateModuleSignature(itemIR, fldName + MODULE_SEPARATOR, modLine, wireList);
             }
@@ -268,13 +268,13 @@ static std::map<std::string, std::string> wireList; // name -> type
                         sstr = IC.source + MODULE_SEPARATOR + FI.first;
 //printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outList[tstr], sstr.c_str(), outList[sstr]);
             if (outList[sstr])
-                setAssign(sstr, str2tree(tstr));
+                setAssign(sstr, str2tree(IR, tstr));
             else
-                setAssign(tstr, str2tree(sstr));
+                setAssign(tstr, str2tree(IR, sstr));
             tstr = tstr.substr(0, tstr.length()-5) + MODULE_SEPARATOR;
             sstr = sstr.substr(0, sstr.length()-5) + MODULE_SEPARATOR;
             for (auto info: FI.second->params)
-                setAssign(sstr + info.name, str2tree(tstr + info.name));
+                setAssign(sstr + info.name, str2tree(IR, tstr + info.name));
         }
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
@@ -285,18 +285,18 @@ static std::map<std::string, std::string> wireList; // name -> type
         if (MI->rule)
             refList[methodName] = true;
         for (auto item: MI->alloca)
-            expandStruct(item.first, item.second, wireList);
+            expandStruct(IR, item.first, item.second, wireList);
         for (auto info: MI->letList) {
             getFieldList("", info.type);
             for (auto fitem : fieldList)
-                muxValueList[tree2str(info.dest) + fitem.name].push_back(MuxValueEntry{info.cond, str2tree(cleanTrim(tree2str(info.value)) + fitem.name)});
+                muxValueList[tree2str(info.dest) + fitem.name].push_back(MuxValueEntry{info.cond, str2tree(IR, cleanTrim(tree2str(info.value)) + fitem.name)});
         }
         for (auto info: MI->callList) {
             if (!info.isAction)
                 continue;
-            ACCExpr *tempCond = str2tree(methodName);
+            ACCExpr *tempCond = str2tree(IR, methodName);
             if (info.cond)
-                tempCond = str2tree(methodName + " & " + tree2str(info.cond));
+                tempCond = str2tree(IR, methodName + " & " + tree2str(info.cond));
             std::string calledName = info.value->value;
 printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             if (!info.value->next || info.value->next->value != "{") {
@@ -331,7 +331,7 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
                 }
                 if (param)
                     param = param->next;
-                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
+                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(IR, scanexp)});
                 AI++;
             }
             if (param) {
@@ -341,7 +341,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
         }
     }
     for (auto item: enableList)
-        setAssign(item.first, str2tree(item.second.substr(4)) /* remove leading '||'*/);
+        setAssign(item.first, str2tree(IR, item.second.substr(4)) /* remove leading '||'*/);
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
     for (auto item: muxValueList) {
@@ -352,7 +352,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
             prevCond = tree2str(element.cond);
             prevValue = tree2str(element.value);
         }
-        setAssign(item.first, str2tree(temp + prevValue));
+        setAssign(item.first, str2tree(IR, temp + prevValue));
     }
     // recursively process all replacements internal to the list of 'setAssign' items
     for (auto item: assignList)
@@ -361,14 +361,14 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
             std::string newItem = walkTree(item.second, &treeChanged);
             if (treeChanged) {
 //printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.c_str(), newItem.c_str());
-                assignList[item.first] = str2tree(newItem);
+                assignList[item.first] = str2tree(IR, newItem);
             }
         }
 
     // process assignList replacements, mark referenced items
     std::list<ModData> modNew;
     for (auto mitem: modLine)
-        modNew.push_back(ModData{walkTree(str2tree(mitem.value), nullptr), mitem.moduleStart, mitem.out});
+        modNew.push_back(ModData{walkTree(str2tree(IR, mitem.value), nullptr), mitem.moduleStart, mitem.out});
     std::list<std::string> alwaysLines;
     for (auto FI : IR->method) {
         bool alwaysSeen = false;
@@ -488,9 +488,9 @@ void promoteGuards(ModuleIR *IR)
             if (info.cond)
                 tempCond += " | " + invertExpr(tree2str(info.cond));
             if (tree2str(MIRdy->guard) == "1")
-                MIRdy->guard = str2tree(tempCond);
+                MIRdy->guard = str2tree(IR, tempCond);
             else
-                MIRdy->guard = str2tree(encapExpr(tree2str(MIRdy->guard)) + " & " + encapExpr(tempCond));
+                MIRdy->guard = str2tree(IR, encapExpr(tree2str(MIRdy->guard)) + " & " + encapExpr(tempCond));
         }
     }
 }

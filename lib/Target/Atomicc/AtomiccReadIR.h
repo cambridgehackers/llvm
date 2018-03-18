@@ -93,7 +93,7 @@ static std::string tree2str(ACCExpr *arg)
     return ret;
 }
 
-static void dumpExpr(std::string tag, ACCExpr *next)
+static inline void dumpExpr(std::string tag, ACCExpr *next)
 {
     bool hadWhile = next != nullptr;
     while (next) {
@@ -177,81 +177,42 @@ static TokenValue get1Token(void)
     exit(-1);
 }
 
-static ACCExpr *get1Tokene(ACCExpr *prev)
+static ACCExpr *str2tree(ModuleIR *IR, std::string arg);
+static ACCExpr *get1Tokene(ModuleIR *IR, ACCExpr *prev, std::string terminator)
 {
+    ACCExpr *retptr = nullptr;
     TokenValue tok = get1Token();
-    if (tok.type == TOK_EOF)
-        return nullptr;
-    ACCExpr *etok, *ret = allocExpr(tok.value), *plist = nullptr, *retptr = ret;
-    if (prev) {
-        if (isIdChar(prev->value[0]) && ret->value == "[") {
-            prev->operands.push_back(ret);
-            retptr = prev;
+    if (tok.type != TOK_EOF && tok.value != terminator) {
+        ACCExpr *ret = allocExpr(tok.value);
+        retptr = ret;
+        if (prev) {
+            if (isIdChar(prev->value[0]) && ret->value == "[") {
+                prev->operands.push_back(ret);
+                retptr = prev;
+            }
+            else
+                prev->next = ret;
         }
-        else
-            prev->next = ret;
-    }
-    if (ret->value == "[" || ret->value == "(" || ret->value == "{") {
-        while ((etok = get1Tokene(plist)) && etok->value != treePost(ret).substr(1)) {
-            if (!plist)
-                ret->param = etok;
-            plist = etok;
+        if (ret->value == "[" || ret->value == "(" || ret->value == "{") {
+            ACCExpr *plist = ret;
+            while ((plist = get1Tokene(IR, plist, treePost(ret).substr(1))))
+                ;
+            ret->param = ret->next;
+            ret->next = nullptr;
         }
-        if (plist)
-            plist->next = nullptr;
     }
-    return retptr;
-}
-
-static ACCExpr *str2tree(std::string arg)
-{
-    lexString = arg;
-    lexTotal = lexString.length();
-    lexIndex = 0;
-    lexChar = lexString[lexIndex++];
-    ACCExpr *tok = get1Tokene(nullptr);
-    ACCExpr *prev = tok;
-    if (tok)
-        while ((prev = get1Tokene(prev)))
-            ;
-    if (tok && tok->value == "(" && !tok->next)
-{
-printf("[%s:%d] REPLACEEEEEEE '%s' -> '%s'\n", __FUNCTION__, __LINE__, tree2str(tok).c_str(), tree2str(tok->param).c_str());
-        return tok->param;
-}
-    return tok;
-}
-
-std::string scanExpression(const char *val)
-{
-    const char *startp = val;
-    int level = 0;
-    while (*val == ' ')
-        val++;
-    while (*val && ((*val != ' ' && *val != ':' && *val != ',') || level != 0)) {
-        if (*val == '(')
-            level++;
-        else if (*val == ')')
-            level--;
-        val++;
-    }
-    return std::string(startp, val);
-}
-
-static void expandExpression(ModuleIR *IR, ACCExpr *expr)
-{
-    if (isIdChar(expr->value[0]) && expr->operands.size()) {
+    if (prev && isIdChar(prev->value[0]) && prev->operands.size() && retptr != prev) {
         int size = -1;
-        std::string subscript, post, fieldName = expr->value;
-        ACCExpr *sub = expr->operands.front();
-printf("[%s:%d] ZZZZZZ %p ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n", __FUNCTION__, __LINE__, sub);
+        std::string subscript, post, fieldName = prev->value;
+        ACCExpr *sub = prev->operands.front();
         subscript = tree2str(sub->param);
         sub->operands.clear();
-        expr->operands.pop_front();
-        ACCExpr *next = expr->next;
+        prev->operands.pop_front();
+        ACCExpr *next = prev->next;
         if (next && isIdChar(next->value[0])) {
             post = next->value;
-            expr->next = next->next;
+            prev->next = next->next;
+            retptr = prev;
         }
         for (auto item: IR->fields)
             if (item.fldName == fieldName) {
@@ -259,41 +220,60 @@ printf("[%s:%d] ZZZZZZ %p ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
                 break;
             }
 printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), subscript.c_str(), post.c_str());
-        expr->value = fieldName + subscript + post;
+        prev->value = fieldName + subscript + post;
         if (!isdigit(subscript[0])) {
             std::string ret = " ( ";
             for (int i = 0; i < size - 1; i++)
                 ret += " ( " + subscript + " == " + autostr(i) + " ) ? "
                     + fieldName + autostr(i) + post + " : ";
             ret += fieldName + autostr(size - 1) + post + " ) ";
-            ACCExpr *next = expr->next, *newTree = str2tree(ret);
-            expr->value = newTree->value;
-            expr->param = newTree->param;
-            expr->next = newTree->next;
-            while(newTree->next)
-                newTree = newTree->next;
-            newTree->next = next;
+            ACCExpr *next = prev->next, *newTree = str2tree(IR, ret);
+            prev->value = newTree->value;
+            prev->param = newTree->param;
+            prev->next = newTree->next;
+            retptr = prev;
+            while(retptr->next)
+                retptr = retptr->next;
+            retptr->next = next;
+            while(retptr->next)
+                retptr = retptr->next;
+printf("[%s:%d] afterexpr retpvalue %s ; %s retptr %p retnext %p\n", __FUNCTION__, __LINE__, retptr->value.c_str(), tree2str(prev).c_str(), retptr, retptr->next);
         }
-printf("[%s:%d] afterexpr %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
     }
-    for (auto item: expr->operands)
-        expandExpression(IR, item);
-    if (expr->param)
-        expandExpression(IR, expr->param);
-    if (expr->next)
-        expandExpression(IR, expr->next);
+    return retptr;
+}
+
+static ACCExpr *str2tree(ModuleIR *IR, std::string arg)
+{
+    lexString = arg;
+    lexTotal = lexString.length();
+    lexIndex = 0;
+    lexChar = lexString[lexIndex++];
+    ACCExpr *tok = get1Tokene(IR, nullptr, "");
+    ACCExpr *prev = tok;
+    while ((prev = get1Tokene(IR, prev, "")))
+        ;
+    if (tok && tok->value == "(" && !tok->next)
+        tok = tok->param;
+    return tok;
 }
 
 static ACCExpr *getExpression(ModuleIR *IR)
 {
-    std::string scanexp = scanExpression(bufp);
-    bufp += scanexp.length();
+    const char *startp = bufp;
+    int level = 0;
     while (*bufp == ' ')
         bufp++;
-    ACCExpr *expr = str2tree(scanexp);
-    if (expr)
-        expandExpression(IR, expr);
-    return expr;
+    while (*bufp && ((*bufp != ' ' && *bufp != ':' && *bufp != ',') || level != 0)) {
+        if (*bufp == '(')
+            level++;
+        else if (*bufp == ')')
+            level--;
+        bufp++;
+    }
+    while (*bufp == ' ')
+        bufp++;
+    return str2tree(IR, std::string(startp, bufp - startp));
 }
 static std::map<std::string, ModuleIR *> mapIndex;
 static ModuleIR *lookupIR(std::string ind)
@@ -331,17 +311,18 @@ static uint64_t convertType(std::string arg)
     exit(-1);
 }
 
-static void walkRead (MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
+static ACCExpr *walkRead (MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
 {
-    if (isIdChar(expr->value[0]))
-        if (!expr->next || expr->next->value != "{")
-             MI->meta[MetaRead][expr->value].insert(tree2str(cond));
-    for (auto item: expr->operands)
-        walkRead(MI, item, cond);
-    if (expr->param)
+    if (expr) {
+        if (isIdChar(expr->value[0]))
+            if (!expr->next || expr->next->value != "{")
+                MI->meta[MetaRead][expr->value].insert(tree2str(cond));
+        for (auto item: expr->operands)
+            walkRead(MI, item, cond);
         walkRead(MI, expr->param, cond);
-    if (expr->next)
         walkRead(MI, expr->next, cond);
+    }
+    return expr;
 }
 
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
@@ -403,13 +384,6 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 if (checkItem("/Rule"))
                     MI->rule = true;
                 std::string methodName = getToken();
-                auto insertRead = [&](ACCExpr *exprp, ACCExpr *cond) -> ACCExpr * {
-                    if (!exprp)
-                        return nullptr;
-                    walkRead(MI, exprp, cond);
-                    expandExpression(IR, exprp);
-                    return exprp;
-                };
                 if (checkItem("(")) {
                     bool first = true;
                     while (!checkItem(")")) {
@@ -420,25 +394,24 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                         first = false;
                     }
                 }
-                bool foundParen = checkItem("{");
+                bool foundOpenBrace = checkItem("{");
                 bool foundIf = false;
-                if (!foundParen) {
+                if (!foundOpenBrace) {
                     foundIf = checkItem("if");
                     if (!foundIf)
                         MI->type = getToken();
                 }
                 if (checkItem("="))
-                    MI->guard = insertRead(getExpression(IR), nullptr);
+                    MI->guard = walkRead(MI, getExpression(IR), nullptr);
                 IR->method[methodName] = MI;
-                if (foundIf || (!foundParen && checkItem("if"))) {
-                    std::string rdyName = getRdyName(methodName);
+                if (foundIf || (!foundOpenBrace && checkItem("if"))) {
                     MethodInfo *MIRdy = new MethodInfo{nullptr};
                     MIRdy->rule = MI->rule;
                     MIRdy->type = "INTEGER_1";
                     MIRdy->guard = getExpression(IR);
-                    IR->method[rdyName] = MIRdy;
+                    IR->method[getRdyName(methodName)] = MIRdy;
                 }
-                if (foundParen || checkItem("{")) {
+                if (foundOpenBrace || checkItem("{")) {
                     while (readLine() && !checkItem("}")) {
                         if (checkItem("ALLOCA")) {
                             std::string type = getToken();
@@ -446,27 +419,27 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             MI->alloca[name] = type;
                         }
                         else if (checkItem("STORE")) {
-                            ACCExpr *cond = insertRead(getExpression(IR), nullptr);
+                            ACCExpr *cond = walkRead(MI, getExpression(IR), nullptr);
                             ParseCheck(checkItem(":"), "':' missing");
                             ACCExpr *dest = getExpression(IR);
                             ParseCheck(checkItem("="), "store = missing");
-                            ACCExpr *expr = insertRead(str2tree(bufp), cond);
+                            ACCExpr *expr = walkRead(MI, str2tree(IR, bufp), cond);
                             MI->storeList.push_back(StoreListElement{dest, expr, cond});
                         }
                         else if (checkItem("LET")) {
                             std::string type = getToken();
-                            ACCExpr *cond = insertRead(getExpression(IR), nullptr);
+                            ACCExpr *cond = walkRead(MI, getExpression(IR), nullptr);
                             ParseCheck(checkItem(":"), "':' missing");
                             ACCExpr *dest = getExpression(IR);
                             ParseCheck(checkItem("="), "store = missing");
-                            ACCExpr *expr = insertRead(str2tree(bufp), cond);
+                            ACCExpr *expr = walkRead(MI, str2tree(IR, bufp), cond);
                             MI->letList.push_back(LetListElement{dest, expr, cond, type});
                         }
                         else if (checkItem("CALL")) {
                             bool isAction = checkItem("/Action");
-                            ACCExpr *cond = insertRead(getExpression(IR), nullptr);
+                            ACCExpr *cond = walkRead(MI, getExpression(IR), nullptr);
                             ParseCheck(checkItem(":"), "':' missing");
-                            ACCExpr *expr = insertRead(str2tree(bufp), cond);
+                            ACCExpr *expr = walkRead(MI, str2tree(IR, bufp), cond);
                             MI->callList.push_back(CallListElement{expr, cond, isAction});
                             std::string ee = tree2str(expr);
                             MI->meta[MetaInvoke][trimStr(ee.substr(0,ee.find("{")))].insert(tree2str(cond));
@@ -489,7 +462,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                 MethodInfo *MIRdy = new MethodInfo{nullptr};
                 MIRdy->rule = MI->rule;
                 MIRdy->type = "INTEGER_1";
-                MIRdy->guard = str2tree("1");
+                MIRdy->guard = str2tree(IR, "1");
                 IR->method[rdyName] = MIRdy;
             }
         }
