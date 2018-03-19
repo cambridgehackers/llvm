@@ -183,23 +183,22 @@ static ACCExpr *get1Tokene(ModuleIR *IR, ACCExpr *prev, std::string terminator)
     ACCExpr *retptr = nullptr;
     TokenValue tok = get1Token();
     if (tok.type != TOK_EOF && tok.value != terminator) {
-        ACCExpr *ret = allocExpr(tok.value);
+        ACCExpr *ret = allocExpr(tok.value), *plist = ret;
         retptr = ret;
         if (prev) {
             if (isIdChar(prev->value[0]) && ret->value == "[") {
                 prev->operands.push_back(ret);
                 retptr = prev;
             }
+            else if (terminator != "" && !prev->param
+             && (prev->value == "[" || prev->value == "(" || prev->value == "{"))
+                prev->param = ret; // the first item in a recursed list
             else
                 prev->next = ret;
         }
-        if (ret->value == "[" || ret->value == "(" || ret->value == "{") {
-            ACCExpr *plist = ret;
+        if (ret->value == "[" || ret->value == "(" || ret->value == "{")
             while ((plist = get1Tokene(IR, plist, treePost(ret).substr(1))))
                 ;
-            ret->param = ret->next;
-            ret->next = nullptr;
-        }
     }
     if (prev && isIdChar(prev->value[0]) && prev->operands.size() && retptr != prev) {
         int size = -1;
@@ -458,16 +457,14 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
             for (auto item: IR->method) {
                 std::string methodName = item.first;
                 MethodInfo *MI = item.second;
-                if (endswith(methodName, "__RDY"))
-                    continue;
                 std::string rdyName = getRdyName(methodName);
-                if (IR->method[rdyName])
-                    continue;
-                MethodInfo *MIRdy = new MethodInfo{nullptr};
-                MIRdy->rule = MI->rule;
-                MIRdy->type = "INTEGER_1";
-                MIRdy->guard = str2tree(IR, "1");
-                IR->method[rdyName] = MIRdy;
+                if (!endswith(methodName, "__RDY") && !IR->method[rdyName]) {
+                    MethodInfo *MIRdy = new MethodInfo{nullptr};
+                    MIRdy->rule = MI->rule;
+                    MIRdy->type = "INTEGER_1";
+                    MIRdy->guard = str2tree(IR, "1");
+                    IR->method[rdyName] = MIRdy;
+                }
             }
         }
     }
