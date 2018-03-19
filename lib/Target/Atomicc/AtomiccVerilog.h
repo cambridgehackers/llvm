@@ -462,8 +462,9 @@ static std::string encapExpr(std::string arg)
         temp = "(" + temp + ")";
     return temp;
 }
-static std::string invertExpr(std::string arg)
+static std::string invertExpr(ACCExpr *expr)
 {
+    std::string arg = tree2str(expr);
     if (endswith(arg, " ^ 1"))
         return arg.substr(0, arg.length()-4);
     int indparen = arg.find("(");
@@ -477,16 +478,16 @@ static std::string invertExpr(std::string arg)
 void promoteGuards(ModuleIR *IR)
 {
     for (auto FI : IR->method) {
-        std::string methodName = FI.first, rdyName = getRdyName(methodName);
+        std::string methodName = FI.first;
+        MethodInfo *MI = FI.second;
         if (endswith(methodName, "__RDY"))
             continue;
-        MethodInfo *MI = FI.second;
-        MethodInfo *MIRdy = IR->method[rdyName];
+        MethodInfo *MIRdy = IR->method[getRdyName(methodName)];
         assert(MIRdy);
         for (auto info: MI->callList) {
             std::string tempCond = getRdyName(info.value->value);
             if (info.cond)
-                tempCond += " | " + invertExpr(tree2str(info.cond));
+                tempCond += " | " + invertExpr(info.cond);
             if (tree2str(MIRdy->guard) == "1")
                 MIRdy->guard = str2tree(IR, tempCond);
             else
