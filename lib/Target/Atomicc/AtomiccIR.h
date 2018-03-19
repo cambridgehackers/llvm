@@ -50,6 +50,10 @@ static bool inline endswith(std::string str, std::string suffix)
     int skipl = str.length() - suffix.length();
     return skipl >= 0 && str.substr(skipl) == suffix;
 }
+static bool inline startswith(std::string str, std::string suffix)
+{
+    return str.substr(0, suffix.length()) == suffix;
+}
 
 static std::string trimStr(const std::string& str)
 {

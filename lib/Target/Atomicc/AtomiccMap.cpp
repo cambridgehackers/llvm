@@ -128,7 +128,6 @@ static void myReplaceAllUsesWith(Value *Old, Value *New)
 static void inlineReferences(Module *Mod, const StructType *STy, uint64_t Idx, Type *newType)
 {
     for (auto FB = Mod->begin(), FE = Mod->end(); FB != FE; ++FB) {
-        if (FB->getName().substr(0, 21) != "unused_block_function")
         for (auto BB = FB->begin(), BE = FB->end(); BB != BE; ++BB)
             for (auto II = BB->begin(), IE = BB->end(); II != IE; ) {
                 BasicBlock::iterator PI = std::next(BasicBlock::iterator(II));

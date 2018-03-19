@@ -112,7 +112,7 @@ std::string fieldName(const StructType *STy, uint64_t ind)
 
 bool isInterface(const StructType *STy)
 {
-    return STy && getStructName(STy).substr(0, 12) == "l_ainterface";
+    return STy && startswith(getStructName(STy), "l_ainterface");
 }
 
 bool isActionMethod(const Function *func)
@@ -164,7 +164,7 @@ ClassMethodTable *getClass(const StructType *STy)
                     ret = ret.substr(0,idx);
                 idx = ret.find(':');
                 std::string typeName = ret.substr(idx+1);
-                if (typeName.substr(0,2) == "l_")
+                if (startswith(typeName, "l_"))
                     typeName = CBEMangle(typeName);
                 IR->unionList.push_back(UnionItem{ret.substr(0, idx), typeName});
                 last_subs = subs;
@@ -244,7 +244,7 @@ std::string getStructName(const StructType *STy)
     getClass(STy);
     if (!STy->isLiteral() && !STy->getName().empty()) {
         std::string temp = STy->getName().str();
-        if (temp.substr(0,7) == "emodule")
+        if (startswith(temp, "emodule"))
             temp = temp.substr(1);
         return CBEMangle("l_" + temp);
     }
@@ -991,7 +991,7 @@ static std::string processMethod(std::string methodName, const Function *func,
 
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
-    bool isModule = table->STy->getName().substr(0, 6) == "module";
+    bool isModule = startswith(table->STy->getName(), "module");
     fprintf(OStr, "%sMODULE %s {\n", isModule ? "" : "E", getStructName(table->STy).c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());

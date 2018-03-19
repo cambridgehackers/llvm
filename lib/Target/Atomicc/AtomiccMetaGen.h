@@ -31,8 +31,8 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
                 fldName += autostr(dimIndex++);
             if (item.isPtr)
                 metaList.push_back("//METAEXTERNAL; " + fldName + "; " + lookupIR(item.type)->name + ";");
-            else if (lookupIR(item.type)->name.substr(0,12) != "l_struct_OC_"
-                 && lookupIR(item.type)->name.substr(0,12) != "l_ainterface")
+            else if (!startswith(lookupIR(item.type)->name, "l_struct_OC_")
+                 && !startswith(lookupIR(item.type)->name, "l_ainterface"))
                 metaList.push_back("//METAINTERNAL; " + fldName + "; " + lookupIR(item.type)->name + ";");
         } while(--vecCount > 0);
     }

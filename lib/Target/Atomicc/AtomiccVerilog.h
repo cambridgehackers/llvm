@@ -252,7 +252,7 @@ static std::map<std::string, std::string> wireList; // name -> type
     iterField(IR, CBAct {
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
-            if (itemIR->name.substr(0,12) == "l_struct_OC_")
+            if (startswith(itemIR->name, "l_struct_OC_"))
                 expandStruct(IR, fldName, item.type, regList);
             else
                 generateModuleSignature(itemIR, fldName + MODULE_SEPARATOR, modLine, wireList);
