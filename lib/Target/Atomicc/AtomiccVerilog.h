@@ -14,8 +14,9 @@
 
 typedef struct {
     std::string value;
+    std::string type;
     bool        moduleStart;
-    bool        out;
+    int         out;
 } ModData;
 typedef struct {
     ACCExpr *cond;
@@ -25,10 +26,12 @@ typedef struct {
     std::string name;
     std::string type;
     bool        alias;
+    uint64_t    offset;
 } FieldItem;
 
 static std::list<FieldItem> fieldList;
 static std::map<std::string, bool> inList, outList;
+static std::map<std::string, std::string> typeList;
 static std::map<std::string, ACCExpr *> assignList;
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
@@ -96,70 +99,52 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
 static void generateModuleSignature(ModuleIR *IR, std::string instance, std::list<ModData> &modParam,
     std::map<std::string, std::string> &wireList)
 {
-    std::string prefix[2] = {"input ", "output "};
-    std::string inpClk = "input ";
-    auto checkWire = [&](std::string wparam, std::string atype, int dir) -> void {
-        std::string ret = prefix[1 - dir] + wparam;
+    auto checkWire = [&](std::string name, std::string type, int dir) -> void {
         if (instance != "")
-            wireList[ret] = atype;
-        else if (atype != "") // !action
-            ret = prefix[dir] + sizeProcess(atype) + wparam;
-        modParam.push_back(ModData{ret, false, true});
+            wireList[name] = type;
+        if (dir)
+            outList[name] = true;
+        else
+            inList[name] = true;
+        if (type == "")
+            type = "void";
+        typeList[name] = type;
+        modParam.push_back(ModData{name, type, false, dir});
     };
 //printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
+    modParam.push_back(ModData{IR->name + ((instance != "") ? " " + instance.substr(0, instance.length()-1):""), "", true, 0});
     for (auto item : IR->interfaces)
         for (auto FI: lookupIR(item.type)->method) {
             MethodInfo *MI = FI.second;
             std::string name = instance + item.fldName + MODULE_SEPARATOR + FI.first;
             bool out = (instance != "") ^ item.isPtr;
-            auto setItem = [&](std::string extra, bool oo) {
-                if (oo)
-                    outList[extra] = true;
-                else
-                    inList[extra] = true;
-            };
-            if (!MI->rule || instance == "") {
-                // if !instance, !action -> out
-                setItem(name, out == (MI->type == ""));
-                for (auto item: MI->params)
-                    setItem(name.substr(0, name.length()-5) + MODULE_SEPARATOR + item.name, out);
-            }
-        }
-    modParam.push_back(ModData{IR->name + " " + ((instance != "") ? instance.substr(0, instance.length()-1) + " ":""), true, false});
-    if (instance != "") {
-        prefix[0] = instance;
-        prefix[1] = instance;
-        inpClk = "";
-    }
-    modParam.push_back(ModData{inpClk + "CLK", false, false});
-    modParam.push_back(ModData{inpClk + "nRST", false, false});
-    for (auto item : IR->interfaces)
-        for (auto FI: lookupIR(item.type)->method) {
-            std::string methodName = item.fldName + MODULE_SEPARATOR + FI.first;
-            MethodInfo *MI = FI.second;
-            checkWire(methodName, MI->type, 1 - item.isPtr);
+            checkWire(name, MI->type, out ^ (MI->type != ""));
             for (auto pitem: MI->params)
-                checkWire(methodName.substr(0, methodName.length()-5) + MODULE_SEPARATOR + pitem.name, pitem.type, item.isPtr);
+                checkWire(name.substr(0, name.length()-5) + MODULE_SEPARATOR + pitem.name, pitem.type, out);
         }
 }
 
-static void getFieldList(std::string name, std::string type, bool alias = false, bool init = true)
+static void getFieldList(std::string name, std::string type, uint64_t offset = 0, bool alias = false, bool init = true)
 {
     if (init)
         fieldList.clear();
     if (ModuleIR *IR = lookupIR(type)) {
         if (IR->unionList.size() > 0) {
             for (auto item: IR->unionList)
-                getFieldList(name + MODULE_SEPARATOR + item.name, item.type, true, false);
-            for (auto item: IR->fields)
-                fieldList.push_back(FieldItem{name, item.type, false}); // aggregate data
+                getFieldList(name + MODULE_SEPARATOR + item.name, item.type, offset, true, false);
+            for (auto item: IR->fields) {
+                fieldList.push_back(FieldItem{name, item.type, false, offset}); // aggregate data
+                offset += convertType(item.type);
+            }
         }
         else
-            for (auto item: IR->fields)
-                getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type, alias, false);
+            for (auto item: IR->fields) {
+                getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type, offset, alias, false);
+                offset += convertType(item.type);
+            }
     }
     else
-        fieldList.push_back(FieldItem{name, type, alias});
+        fieldList.push_back(FieldItem{name, type, alias, offset});
 }
 
 static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
@@ -169,9 +154,14 @@ static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
     std::string itemList;
     for (auto fitem : fieldList) {
         declList[fitem.name] = fitem.type;
-        if (!fitem.alias)
+        if (fitem.alias) {
+            setAssign(fitem.name, allocExpr(fldName + "[" + autostr(fitem.offset) + ":" + autostr(fitem.offset + convertType(fitem.type)) + "]"));
+            typeList[fitem.name] = fitem.type;
+        }
+        else
             itemList += " , " + fitem.name;
     }
+    if (fieldList.size() > 1)
     setAssign(fldName, str2tree(IR, "{" + itemList.substr(2) + " }"));
 }
 
@@ -194,6 +184,7 @@ static std::string walkTree (ACCExpr *expr, bool *changed)
     if (isIdChar(ret[0])) {
         if (ACCExpr *temp = assignList[ret]) {
             refList[ret] = false;
+printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2str(temp).c_str());
             ret = walkTree(temp, changed);
             if (changed)
                 *changed = true;
@@ -227,6 +218,7 @@ static std::map<std::string, std::string> wireList; // name -> type
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
 
     assignList.clear();
+    typeList.clear();
     inList.clear();
     outList.clear();
     wireList.clear();
@@ -239,11 +231,15 @@ static std::map<std::string, std::string> wireList; // name -> type
     // Generate module header
     std::string sep = "module ";
     for (auto mitem: modLine) {
-        fprintf(OStr, "%s", (sep + mitem.value).c_str());
+        static const char *dirStr[] = {"input", "output"};
+        fprintf(OStr, "%s", sep.c_str());
         if (mitem.moduleStart)
-            sep = "(\n    ";
-        else
-            sep = ",\n    ";
+            fprintf(OStr, "%s (\n    input CLK,\n    input nRST", mitem.value.c_str());
+        else {
+            fprintf(OStr, "%s %s%s", dirStr[mitem.out], sizeProcess(mitem.type).c_str(), mitem.value.c_str());
+            //expandStruct(IR, mitem.value, mitem.type, wireList);
+        }
+        sep = ",\n    ";
     }
     fprintf(OStr, ");\n");
     modLine.clear();
@@ -282,14 +278,24 @@ static std::map<std::string, std::string> wireList; // name -> type
         std::string methodName = FI.first;
         MethodInfo *MI = FI.second;
         setAssign(methodName, MI->guard);  // collect the text of the return value into a single 'assign'
-        if (MI->rule)
+        if (MI->rule) {
             refList[methodName] = true;
+            std::string type = MI->type;
+            if (type == "")
+                type = "void";
+            typeList[methodName] = type;
+        }
         for (auto item: MI->alloca)
             expandStruct(IR, item.first, item.second, wireList);
         for (auto info: MI->letList) {
             getFieldList("", info.type);
-            for (auto fitem : fieldList)
-                muxValueList[tree2str(info.dest) + fitem.name].push_back(MuxValueEntry{info.cond, str2tree(IR, cleanTrim(tree2str(info.value)) + fitem.name)});
+            for (auto fitem : fieldList) {
+                std::string dest = tree2str(info.dest) + fitem.name;
+                std::string src = cleanTrim(tree2str(info.value)) + fitem.name;
+                typeList[dest] = fitem.type;
+                typeList[src] = fitem.type;
+                muxValueList[dest].push_back(MuxValueEntry{info.cond, str2tree(IR, src)});
+            }
         }
         for (auto info: MI->callList) {
             if (!info.isAction)
@@ -362,19 +368,27 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
             bool treeChanged = false;
             std::string newItem = walkTree(item.second, &treeChanged);
             if (treeChanged) {
-//printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.c_str(), newItem.c_str());
+printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_str(), tree2str(item.second).c_str(), newItem.c_str());
                 assignList[item.first] = str2tree(IR, newItem);
             }
         }
 
     // process assignList replacements, mark referenced items
     std::list<ModData> modNew;
-    for (auto mitem: modLine)
-        modNew.push_back(ModData{walkTree(str2tree(IR, mitem.value), nullptr), mitem.moduleStart, mitem.out});
+    for (auto mitem: modLine) {
+        std::string val = mitem.value;
+        if (!mitem.moduleStart) {
+            //expandStruct(IR, mitem.value, mitem.type, wireList);
+            val = walkTree(str2tree(IR, mitem.value), nullptr);
+        }
+        modNew.push_back(ModData{val, mitem.type, mitem.moduleStart, mitem.out});
+    }
     std::list<std::string> alwaysLines;
+    bool hasAlways = false;
     for (auto FI : IR->method) {
         bool alwaysSeen = false;
         for (auto info: FI.second->storeList) {
+            hasAlways = true;
             if (!alwaysSeen)
                 alwaysLines.push_back("if (" + FI.first + ") begin");
             alwaysSeen = true;
@@ -390,20 +404,32 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
     for (auto aitem: assignList)
         if (aitem.second && refList[aitem.first])
             walkRef(aitem.second);
+#if 1
     for (auto aitem: assignList)
         if (aitem.second)
             printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), tree2str(aitem.second).c_str());
+#endif
+    for (auto item: refList)
+        if (item.second
+         && regList.find(item.first) == regList.end()
+         && typeList.find(item.first) == typeList.end()
+         && wireList.find(item.first) == wireList.end()) {
+printf("[%s:%d] reference to '%s', but could not locate RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR \n", __FUNCTION__, __LINE__, item.first.c_str());
+            //exit(-1);
+        }
 
     // generate local state element declarations and wires
-    for (auto item: regList)
+    for (auto item: regList) {
+        hasAlways = true;
         fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
+    }
     for (auto item: wireList)
         if (refList[item.first] && item.second != "")
             fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
     std::string endStr;
     for (auto item: modNew) {
         if (item.moduleStart) {
-            fprintf(OStr, "%s (", (endStr + "    " + item.value).c_str());
+            fprintf(OStr, "%s (\n        CLK,\n        nRST,", (endStr + "    " + item.value).c_str());
             sep = "";
         }
         else {
@@ -413,6 +439,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
         endStr = ");\n";
     }
     fprintf(OStr, "%s", endStr.c_str());
+
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
@@ -431,7 +458,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
             fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), tree2str(item.second).c_str());
         }
     // generate clocked updates to state elements
-    if (regList.size() > 0 || alwaysLines.size() > 0) {
+    if (hasAlways) {
         fprintf(OStr, "\n    always @( posedge CLK) begin\n      if (!nRST) begin\n");
         for (auto item: regList)
             fprintf(OStr, "        %s <= 0;\n", item.first.c_str());

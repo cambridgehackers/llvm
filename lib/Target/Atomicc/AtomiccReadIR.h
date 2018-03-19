@@ -291,7 +291,7 @@ static ModuleIR *lookupIR(std::string ind)
 }
 static uint64_t convertType(std::string arg)
 {
-    if (arg == "")
+    if (arg == "" || arg == "void")
         return 0;
     const char *bp = arg.c_str();
     auto checkT = [&] (const char *val) -> bool {
