@@ -268,13 +268,13 @@ static std::map<std::string, std::string> wireList; // name -> type
                         sstr = IC.source + MODULE_SEPARATOR + FI.first;
 //printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outList[tstr], sstr.c_str(), outList[sstr]);
             if (outList[sstr])
-                setAssign(sstr, str2tree(IR, tstr));
+                setAssign(sstr, allocExpr(tstr));
             else
-                setAssign(tstr, str2tree(IR, sstr));
+                setAssign(tstr, allocExpr(sstr));
             tstr = tstr.substr(0, tstr.length()-5) + MODULE_SEPARATOR;
             sstr = sstr.substr(0, sstr.length()-5) + MODULE_SEPARATOR;
             for (auto info: FI.second->params)
-                setAssign(sstr + info.name, str2tree(IR, tstr + info.name));
+                setAssign(sstr + info.name, allocExpr(tstr + info.name));
         }
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
@@ -295,8 +295,10 @@ static std::map<std::string, std::string> wireList; // name -> type
             if (!info.isAction)
                 continue;
             ACCExpr *tempCond = str2tree(IR, methodName);
-            if (info.cond)
-                tempCond = str2tree(IR, methodName + " & " + tree2str(info.cond));
+            if (info.cond) {
+                appendExpr(tempCond, allocExpr("&"));
+                appendExpr(tempCond, info.cond);
+            }
             std::string calledName = info.value->value;
 printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             if (!info.value->next || info.value->next->value != "{") {

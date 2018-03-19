@@ -124,6 +124,16 @@ static ACCExpr *allocExpr(std::string value)
     return ret;
 }
 
+static ACCExpr *appendExpr(ACCExpr *prev, ACCExpr *next)
+{
+    while(prev->next)      // Skip to end of head list
+        prev = prev->next;
+    prev->next = next;     // Add on list to be appended
+    while(prev->next)      // Skip to the end of total list
+        prev = prev->next;
+    return prev;           // Return pointer to last element in final list
+}
+
 static TokenValue get1Token(void)
 {
     std::string lexToken;
@@ -230,12 +240,7 @@ printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE_
             prev->value = newTree->value;
             prev->param = newTree->param;
             prev->next = newTree->next;
-            retptr = prev;
-            while(retptr->next)
-                retptr = retptr->next;
-            retptr->next = next;
-            while(retptr->next)
-                retptr = retptr->next;
+            retptr = appendExpr(prev, next);
 printf("[%s:%d] afterexpr retpvalue %s ; %s retptr %p retnext %p\n", __FUNCTION__, __LINE__, retptr->value.c_str(), tree2str(prev).c_str(), retptr, retptr->next);
         }
     }
