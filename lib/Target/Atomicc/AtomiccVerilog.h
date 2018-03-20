@@ -146,10 +146,12 @@ static void getFieldList(std::string name, std::string type, uint64_t offset = 0
 }
 
 static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
-     std::map<std::string, std::string> &declList, int out)
+     std::map<std::string, std::string> &declList, int out, bool force)
 {
-    getFieldList(fldName, type);
     std::string itemList;
+    getFieldList(fldName, type);
+    if (!force && fieldList.size() > 1)
+        return;
     for (auto fitem : fieldList) {
         declList[fitem.name] = fitem.type;
         uint64_t offset = fitem.offset;
@@ -163,7 +165,7 @@ static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
         else
             setAssign(fitem.name, allocExpr(fldName + "[" + autostr(offset) + ":" + autostr(upper) + "]"));
     }
-    if (out && fieldList.size() > 1)
+    if (out)
     setAssign(fldName, str2tree(IR, "{" + itemList.substr(2) + " }"));
 }
 
@@ -239,7 +241,7 @@ static std::map<std::string, std::string> wireList; // name -> type
             fprintf(OStr, "%s (\n    input CLK,\n    input nRST", mitem.value.c_str());
         else {
             fprintf(OStr, "%s %s%s", dirStr[mitem.out], sizeProcess(mitem.type).c_str(), mitem.value.c_str());
-            //expandStruct(IR, mitem.value, mitem.type, wireList, mitem.out);
+            //expandStruct(IR, mitem.value, mitem.type, wireList, mitem.out, false);
         }
         sep = ",\n    ";
     }
@@ -251,7 +253,7 @@ static std::map<std::string, std::string> wireList; // name -> type
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
             if (startswith(itemIR->name, "l_struct_OC_"))
-                expandStruct(IR, fldName, item.type, regList, 1);
+                expandStruct(IR, fldName, item.type, regList, 1, true);
             else
                 generateModuleSignature(itemIR, fldName + MODULE_SEPARATOR, modLine, wireList);
             }
@@ -288,7 +290,7 @@ static std::map<std::string, std::string> wireList; // name -> type
             typeList[methodName] = type;
         }
         for (auto item: MI->alloca)
-            expandStruct(IR, item.first, item.second, wireList, 1);
+            expandStruct(IR, item.first, item.second, wireList, 1, true);
         for (auto info: MI->letList) {
             getFieldList("", info.type);
             for (auto fitem : fieldList) {
@@ -381,7 +383,7 @@ printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_
         std::string val = mitem.value;
         if (!mitem.moduleStart) {
             wireList[mitem.value] = mitem.type;
-            //expandStruct(IR, mitem.value, mitem.type, wireList, mitem.out);
+            //expandStruct(IR, mitem.value, mitem.type, wireList, mitem.out, false);
             val = walkTree(str2tree(IR, mitem.value), nullptr);
         }
         modNew.push_back(ModData{val, mitem.type, mitem.moduleStart, mitem.out});
