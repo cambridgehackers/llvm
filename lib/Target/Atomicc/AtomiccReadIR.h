@@ -17,6 +17,12 @@ static char *bufp;
 static int lineNumber = 0;
 static FILE *OStrGlobal;
 
+static std::string lexString;
+static int lexTotal;
+static int lexIndex;
+static char lexChar;
+static bool lexProcessSubscripts;
+
 static bool checkItem(const char *val)
 {
      while (*bufp == ' ')
@@ -68,7 +74,7 @@ bool isIdChar(char ch)
 static std::string treePost(ACCExpr *arg)
 {
     std::string ret;
-    if (arg->value == "[")
+    if (arg->value == "[" && lexProcessSubscripts)
         return " ]";
     else if (arg->value == "(")
         return " )";
@@ -107,11 +113,6 @@ static inline void dumpExpr(std::string tag, ACCExpr *next)
     if (hadWhile)
         printf("EEEEEEEEnd %s\n", tag.c_str());
 }
-
-static std::string lexString;
-static int lexTotal;
-static int lexIndex;
-static char lexChar;
 
 static ACCExpr *allocExpr(std::string value)
 {
@@ -196,17 +197,17 @@ static ACCExpr *get1Tokene(ModuleIR *IR, ACCExpr *prev, std::string terminator)
         ACCExpr *ret = allocExpr(tok.value), *plist = ret;
         retptr = ret;
         if (prev) {
-            if (isIdChar(prev->value[0]) && ret->value == "[") {
+            if (isIdChar(prev->value[0]) && ret->value == "[" && lexProcessSubscripts) {
                 prev->operands.push_back(ret);
                 retptr = prev;
             }
             else if (terminator != "" && !prev->param
-             && (prev->value == "[" || prev->value == "(" || prev->value == "{"))
+             && ((prev->value == "[" && lexProcessSubscripts) || prev->value == "(" || prev->value == "{"))
                 prev->param = ret; // the first item in a recursed list
             else
                 prev->next = ret;
         }
-        if (ret->value == "[" || ret->value == "(" || ret->value == "{")
+        if ((ret->value == "[" && lexProcessSubscripts) || ret->value == "(" || ret->value == "{")
             while ((plist = get1Tokene(IR, plist, treePost(ret).substr(1))))
                 ;
     }
@@ -332,6 +333,7 @@ static ACCExpr *walkRead (MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
 void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
 {
     OStrGlobal = OStr;
+    lexProcessSubscripts = true;
     while (readLine()) {
         bool ext = checkItem("EMODULE");
         ParseCheck(ext || checkItem("MODULE"), "Module header missing");
@@ -475,4 +477,5 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
     }
     for (auto irItem : irSeq)
          promoteGuards(irItem);
+    lexProcessSubscripts = false;
 }

@@ -122,14 +122,14 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
         }
 }
 
-static void getFieldList(std::string name, std::string type, uint64_t offset = 0, bool alias = false, bool init = true)
+static void getFieldList(std::string name, std::string type, bool force = true, uint64_t offset = 0, bool alias = false, bool init = true)
 {
     if (init)
         fieldList.clear();
     if (ModuleIR *IR = lookupIR(type)) {
         if (IR->unionList.size() > 0) {
             for (auto item: IR->unionList)
-                getFieldList(name + MODULE_SEPARATOR + item.name, item.type, offset, true, false);
+                getFieldList(name + MODULE_SEPARATOR + item.name, item.type, true, offset, true, false);
             for (auto item: IR->fields) {
                 fieldList.push_back(FieldItem{name, item.type, false, offset}); // aggregate data
                 offset += convertType(item.type);
@@ -137,11 +137,11 @@ static void getFieldList(std::string name, std::string type, uint64_t offset = 0
         }
         else
             for (auto item: IR->fields) {
-                getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type, offset, alias, false);
+                getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type, true, offset, alias, false);
                 offset += convertType(item.type);
             }
     }
-    else
+    else if (force)
         fieldList.push_back(FieldItem{name, type, alias, offset});
 }
 
@@ -149,9 +149,7 @@ static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
      std::map<std::string, std::string> &declList, int out, bool force)
 {
     std::string itemList;
-    getFieldList(fldName, type);
-    if (!force && fieldList.size() > 1)
-        return;
+    getFieldList(fldName, type, force);
     for (auto fitem : fieldList) {
         declList[fitem.name] = fitem.type;
         uint64_t offset = fitem.offset;
@@ -165,7 +163,7 @@ static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
         else
             setAssign(fitem.name, allocExpr(fldName + "[" + autostr(offset) + ":" + autostr(upper) + "]"));
     }
-    if (out)
+    if (out && itemList.length() > 2)
     setAssign(fldName, str2tree(IR, "{" + itemList.substr(2) + " }"));
 }
 
@@ -292,7 +290,7 @@ static std::map<std::string, std::string> wireList; // name -> type
         for (auto item: MI->alloca)
             expandStruct(IR, item.first, item.second, wireList, 1, true);
         for (auto info: MI->letList) {
-            getFieldList("", info.type);
+            getFieldList("", info.type, true);
             for (auto fitem : fieldList) {
                 std::string dest = tree2str(info.dest) + fitem.name;
                 std::string src = cleanTrim(tree2str(info.value)) + fitem.name;
