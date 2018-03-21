@@ -42,7 +42,7 @@ std::string cleanTrim(std::string arg)
     return trimStr(cleanupValue(arg));
 }
 
-static void setAssign(std::string target, ACCExpr *value)
+static void setAssign(std::string target, ACCExpr *value, std::string type)
 {
 //printf("[%s:%d] start [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
     assignList[target] = value;
@@ -126,16 +126,16 @@ static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
         uint64_t offset = fitem.offset;
         uint64_t upper = offset + convertType(fitem.type) - 1;
         if (fitem.alias) {
-            setAssign(fitem.name, allocExpr(fldName + "[" + autostr(offset) + ":" + autostr(upper) + "]"));
+            setAssign(fitem.name, allocExpr(fldName + "[" + autostr(offset) + ":" + autostr(upper) + "]"), fitem.type);
             typeList[fitem.name] = fitem.type;
         }
         else if (out)
             itemList += " , " + fitem.name;
         else
-            setAssign(fitem.name, allocExpr(fldName + "[" + autostr(offset) + ":" + autostr(upper) + "]"));
+            setAssign(fitem.name, allocExpr(fldName + "[" + autostr(offset) + ":" + autostr(upper) + "]"), fitem.type);
     }
     if (itemList.length() > 2)
-    setAssign(fldName, str2tree(IR, "{" + itemList.substr(2) + " }"));
+    setAssign(fldName, str2tree(IR, "{" + itemList.substr(2) + " }"), type);
 }
 
 static std::map<std::string, bool> refList;
@@ -271,20 +271,20 @@ static std::map<std::string, std::string> wireList; // name -> type
                         sstr = IC.source + MODULE_SEPARATOR + FI.first;
 //printf("[%s:%d] IFCCC %s/%d %s/%d\n", __FUNCTION__, __LINE__, tstr.c_str(), outList[tstr], sstr.c_str(), outList[sstr]);
             if (outList[sstr])
-                setAssign(sstr, allocExpr(tstr));
+                setAssign(sstr, allocExpr(tstr), FI.second->type);
             else
-                setAssign(tstr, allocExpr(sstr));
+                setAssign(tstr, allocExpr(sstr), FI.second->type);
             tstr = tstr.substr(0, tstr.length()-5) + MODULE_SEPARATOR;
             sstr = sstr.substr(0, sstr.length()-5) + MODULE_SEPARATOR;
             for (auto info: FI.second->params)
-                setAssign(sstr + info.name, allocExpr(tstr + info.name));
+                setAssign(sstr + info.name, allocExpr(tstr + info.name), info.type);
         }
     // generate wires for internal methods RDY/ENA.  Collect state element assignments
     // from each method
     for (auto FI : IR->method) {
         std::string methodName = FI.first;
         MethodInfo *MI = FI.second;
-        setAssign(methodName, MI->guard);  // collect the text of the return value into a single 'assign'
+        setAssign(methodName, MI->guard, MI->type);  // collect the text of the return value into a single 'assign'
         if (MI->rule) {
             refList[methodName] = true;
             std::string type = MI->type;
@@ -347,6 +347,7 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
                 if (param)
                     param = param->next;
                 muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(IR, scanexp)});
+                typeList[pname + AI->name] = AI->type;
                 AI++;
             }
             if (param) {
@@ -356,7 +357,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
         }
     }
     for (auto item: enableList)
-        setAssign(item.first, str2tree(IR, item.second.substr(4)) /* remove leading '||'*/);
+        setAssign(item.first, str2tree(IR, item.second.substr(4)) /* remove leading '||'*/, "INTEGER_1");
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
     for (auto item: muxValueList) {
@@ -367,7 +368,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
             prevCond = tree2str(element.cond);
             prevValue = tree2str(element.value);
         }
-        setAssign(item.first, str2tree(IR, temp + prevValue));
+        setAssign(item.first, str2tree(IR, temp + prevValue), typeList[item.first]);
     }
     // recursively process all replacements internal to the list of 'setAssign' items
     for (auto item: assignList)
