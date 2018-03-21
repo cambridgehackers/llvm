@@ -93,35 +93,6 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
     return NULL;
 }
 
-/*
- * Generate verilog module header for class definition or reference
- */
-static void generateModuleSignature(ModuleIR *IR, std::string instance, std::list<ModData> &modParam,
-    std::map<std::string, std::string> &wireList)
-{
-    auto checkWire = [&](std::string name, std::string type, int dir) -> void {
-        if (dir)
-            outList[name] = true;
-        else
-            inList[name] = true;
-        if (type == "")
-            type = "void";
-        typeList[name] = type;
-        modParam.push_back(ModData{name, type, false, dir});
-    };
-//printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
-    modParam.push_back(ModData{IR->name + ((instance != "") ? " " + instance.substr(0, instance.length()-1):""), "", true, 0});
-    for (auto item : IR->interfaces)
-        for (auto FI: lookupIR(item.type)->method) {
-            MethodInfo *MI = FI.second;
-            std::string name = instance + item.fldName + MODULE_SEPARATOR + FI.first;
-            bool out = (instance != "") ^ item.isPtr;
-            checkWire(name, MI->type, out ^ (MI->type != ""));
-            for (auto pitem: MI->params)
-                checkWire(name.substr(0, name.length()-5) + MODULE_SEPARATOR + pitem.name, pitem.type, out);
-        }
-}
-
 static void getFieldList(std::string name, std::string type, bool force = true, uint64_t offset = 0, bool alias = false, bool init = true)
 {
     if (init)
@@ -163,7 +134,7 @@ static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
         else
             setAssign(fitem.name, allocExpr(fldName + "[" + autostr(offset) + ":" + autostr(upper) + "]"));
     }
-    if (out && itemList.length() > 2)
+    if (itemList.length() > 2)
     setAssign(fldName, str2tree(IR, "{" + itemList.substr(2) + " }"));
 }
 
@@ -204,6 +175,35 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
     if (expr->next)
         ret += " " + walkTree(expr->next, changed);
     return ret;
+}
+
+/*
+ * Generate verilog module header for class definition or reference
+ */
+static void generateModuleSignature(ModuleIR *IR, std::string instance, std::list<ModData> &modParam,
+    std::map<std::string, std::string> &wireList)
+{
+    auto checkWire = [&](std::string name, std::string type, int dir) -> void {
+        if (dir)
+            outList[name] = true;
+        else
+            inList[name] = true;
+        if (type == "")
+            type = "void";
+        typeList[name] = type;
+        modParam.push_back(ModData{name, type, false, dir});
+    };
+//printf("[%s:%d] name %s instance %s\n", __FUNCTION__, __LINE__, IR->name.c_str(), instance.c_str());
+    modParam.push_back(ModData{IR->name + ((instance != "") ? " " + instance.substr(0, instance.length()-1):""), "", true, 0});
+    for (auto item : IR->interfaces)
+        for (auto FI: lookupIR(item.type)->method) {
+            MethodInfo *MI = FI.second;
+            std::string name = instance + item.fldName + MODULE_SEPARATOR + FI.first;
+            bool out = (instance != "") ^ item.isPtr;
+            checkWire(name, MI->type, out ^ (MI->type != ""));
+            for (auto pitem: MI->params)
+                checkWire(name.substr(0, name.length()-5) + MODULE_SEPARATOR + pitem.name, pitem.type, out);
+        }
 }
 
 /*
@@ -259,6 +259,11 @@ static std::map<std::string, std::string> wireList; // name -> type
                 regList[fldName] = item.type;
           return nullptr;
           });
+    for (auto mitem: modLine)
+        if (!mitem.moduleStart) {
+            wireList[mitem.value] = mitem.type;
+            //expandStruct(IR, mitem.value, mitem.type, wireList, 0/*mitem.out*/, false);
+        }
 
     for (auto IC : IR->interfaceConnect)
         for (auto FI : lookupIR(IC.type)->method) {
@@ -379,11 +384,8 @@ printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_
     std::list<ModData> modNew;
     for (auto mitem: modLine) {
         std::string val = mitem.value;
-        if (!mitem.moduleStart) {
-            wireList[mitem.value] = mitem.type;
-            //expandStruct(IR, mitem.value, mitem.type, wireList, mitem.out, false);
+        if (!mitem.moduleStart)
             val = walkTree(str2tree(IR, mitem.value), nullptr);
-        }
         modNew.push_back(ModData{val, mitem.type, mitem.moduleStart, mitem.out});
     }
     std::list<std::string> alwaysLines;
@@ -427,7 +429,7 @@ printf("[%s:%d] reference to '%s', but could not locate RRRRRRRRRRRRRRRRRRRRRRRR
         fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
     }
     for (auto item: wireList)
-        if (refList[item.first] && item.second != "")
+        if (refList[item.first])
             fprintf(OStr, "    wire %s;\n", (sizeProcess(item.second) + item.first).c_str());
     std::string endStr;
     for (auto item: modNew) {
