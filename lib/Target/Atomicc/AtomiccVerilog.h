@@ -19,8 +19,8 @@ typedef struct {
     int         out;
 } ModData;
 typedef struct {
-    ACCExpr *cond;
-    ACCExpr *value;
+    ACCExpr    *cond;
+    ACCExpr    *value;
 } MuxValueEntry;
 typedef struct {
     std::string name;
@@ -28,11 +28,18 @@ typedef struct {
     bool        alias;
     uint64_t    offset;
 } FieldItem;
+typedef struct {
+    ACCExpr    *value;
+    std::string type;
+} AssignItem;
 
 static std::list<FieldItem> fieldList;
 static std::map<std::string, bool> inList, outList;
 static std::map<std::string, std::string> typeList;
-static std::map<std::string, ACCExpr *> assignList;
+static std::map<std::string, AssignItem> assignList;
+static std::map<std::string, bool> refList;
+static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
+static std::map<std::string, std::string> wireList; // name -> type
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 #define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
@@ -45,7 +52,7 @@ std::string cleanTrim(std::string arg)
 static void setAssign(std::string target, ACCExpr *value, std::string type)
 {
 //printf("[%s:%d] start [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
-    assignList[target] = value;
+    assignList[target] = AssignItem{value, type};
 }
 
 static std::string sizeProcess(std::string type)
@@ -123,6 +130,7 @@ static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
     getFieldList(fldName, type, force);
     for (auto fitem : fieldList) {
         declList[fitem.name] = fitem.type;
+printf("[%s:%d] set %s = %s\n", __FUNCTION__, __LINE__, fitem.name.c_str(), fitem.type.c_str());
         uint64_t offset = fitem.offset;
         uint64_t upper = offset + convertType(fitem.type) - 1;
         if (fitem.alias) {
@@ -138,7 +146,6 @@ static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
     setAssign(fldName, str2tree(IR, "{" + itemList.substr(2) + " }"), type);
 }
 
-static std::map<std::string, bool> refList;
 static void walkRef (ACCExpr *expr)
 {
     std::string item = expr->value;
@@ -155,7 +162,7 @@ static std::string walkTree (ACCExpr *expr, bool *changed)
 {
     std::string ret = expr->value;
     if (isIdChar(ret[0])) {
-        if (ACCExpr *temp = assignList[ret]) {
+        if (ACCExpr *temp = assignList[ret].value) {
             refList[ret] = false;
 printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2str(temp).c_str());
             ret = walkTree(temp, changed);
@@ -177,6 +184,26 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
     return ret;
 }
 
+std::string findType(std::string name)
+{
+    ACCExpr *expr = str2tree(nullptr, name);
+    if (expr->value == "(" && expr->next) {
+        expr = expr->next;
+        if (expr->value == "?" && expr->next)
+            expr = expr->next;
+    }
+    if (regList.find(expr->value) != regList.end())
+        return regList[expr->value];
+    else if (typeList.find(expr->value) != typeList.end())
+        return typeList[expr->value];
+    else if (wireList.find(expr->value) != wireList.end())
+        return wireList[expr->value];
+    else if (assignList.find(expr->value) != assignList.end())
+        return assignList[expr->value].type;
+printf("[%s:%d] reference to '%s', but could not locate RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR \n", __FUNCTION__, __LINE__, name.c_str());
+    //exit(-1);
+    return "";
+}
 /*
  * Generate verilog module header for class definition or reference
  */
@@ -212,8 +239,6 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
 void generateModuleDef(ModuleIR *IR, FILE *OStr)
 {
 static std::list<ModData> modLine;
-static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
-static std::map<std::string, std::string> wireList; // name -> type
     std::map<std::string, std::string> enableList;
     refList.clear();
     // 'Mux' together parameter settings from all invocations of a method from this class
@@ -251,7 +276,10 @@ static std::map<std::string, std::string> wireList; // name -> type
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
             if (startswith(itemIR->name, "l_struct_OC_"))
+{
+printf("[%s:%d] BBBBBBBBBBBBBBBBBBBBBBBBBBBBB %s type %s\n", __FUNCTION__, __LINE__, fldName.c_str(), item.type.c_str());
                 expandStruct(IR, fldName, item.type, regList, 1, true);
+}
             else
                 generateModuleSignature(itemIR, fldName + MODULE_SEPARATOR, modLine, wireList);
             }
@@ -372,12 +400,12 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
     }
     // recursively process all replacements internal to the list of 'setAssign' items
     for (auto item: assignList)
-        if (item.second) {
+        if (item.second.value) {
             bool treeChanged = false;
-            std::string newItem = walkTree(item.second, &treeChanged);
+            std::string newItem = walkTree(item.second.value, &treeChanged);
             if (treeChanged) {
-printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_str(), tree2str(item.second).c_str(), newItem.c_str());
-                assignList[item.first] = str2tree(IR, newItem);
+printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_str(), tree2str(item.second.value).c_str(), newItem.c_str());
+                assignList[item.first].value = str2tree(IR, newItem);
             }
         }
 
@@ -394,6 +422,12 @@ printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_
     for (auto FI : IR->method) {
         bool alwaysSeen = false;
         for (auto info: FI.second->storeList) {
+std::string dest = tree2str(info.dest);
+std::string destType = findType(dest);
+if (destType == "") {
+printf("[%s:%d] typenotfound\n", __FUNCTION__, __LINE__);
+exit(-1);
+}
             hasAlways = true;
             if (!alwaysSeen)
                 alwaysLines.push_back("if (" + FI.first + ") begin");
@@ -408,20 +442,16 @@ printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_
 
     // Now extend 'was referenced' from assignList items actually referenced
     for (auto aitem: assignList)
-        if (aitem.second && refList[aitem.first])
-            walkRef(aitem.second);
+        if (aitem.second.value && refList[aitem.first])
+            walkRef(aitem.second.value);
 #if 1
     for (auto aitem: assignList)
-        if (aitem.second)
-            printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), tree2str(aitem.second).c_str());
+        if (aitem.second.value)
+            printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), tree2str(aitem.second.value).c_str());
 #endif
     for (auto item: refList)
-        if (item.second
-         && regList.find(item.first) == regList.end()
-         && typeList.find(item.first) == typeList.end()
-         && wireList.find(item.first) == wireList.end()) {
-printf("[%s:%d] reference to '%s', but could not locate RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR \n", __FUNCTION__, __LINE__, item.first.c_str());
-            //exit(-1);
+        if (item.second) {
+         std::string type = findType(item.first);
         }
 
     // generate local state element declarations and wires
@@ -449,19 +479,19 @@ printf("[%s:%d] reference to '%s', but could not locate RRRRRRRRRRRRRRRRRRRRRRRR
     // generate 'assign' items
     for (auto item: outList)
         if (item.second) {
-            if (!assignList[item.first])
+            if (!assignList[item.first].value)
                 fprintf(OStr, "    // assign %s = MISSING_ASSIGNMENT_FOR_OUTPUT_VALUE;\n", item.first.c_str());
             else if (refList[item.first])
-                fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), tree2str(assignList[item.first]).c_str());
+                fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), tree2str(assignList[item.first].value).c_str());
             refList[item.first] = false;
         }
     bool seen = false;
     for (auto item: assignList)
-        if (item.second && refList[item.first]) {
+        if (item.second.value && refList[item.first]) {
             if (!seen)
                 fprintf(OStr, "    // Extra assigments, not to output wires\n");
             seen = true;
-            fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), tree2str(item.second).c_str());
+            fprintf(OStr, "    assign %s = %s;\n", item.first.c_str(), tree2str(item.second.value).c_str());
         }
     // generate clocked updates to state elements
     if (hasAlways) {
