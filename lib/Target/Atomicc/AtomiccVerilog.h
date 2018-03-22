@@ -153,8 +153,6 @@ static void walkRef (ACCExpr *expr)
         refList[item] = true;
     for (auto item: expr->operands)
         walkRef(item);
-    if (expr->param)
-        walkRef(expr->param);
     if (expr->next)
         walkRef(expr->next);
 }
@@ -176,8 +174,6 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
     }
     for (auto item: expr->operands)
         ret += " " + walkTree(item, changed);
-    if (expr->param)
-        ret += " " + walkTree(expr->param, changed);
     ret += treePost(expr);
     if (expr->next)
         ret += " " + walkTree(expr->next, changed);
@@ -357,7 +353,7 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             auto AI = CI->params.begin();
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             int argCount = CI->params.size();
-            ACCExpr *param = info.value->next->param;
+            ACCExpr *param = info.value->next->operands.front();
             while(param && argCount-- > 0) {
                 std::string scanexp, sep;
                 while(param && param->value != ",") {
@@ -365,8 +361,6 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
                         scanexp += sep + param->value;
                         for (auto item: param->operands)
                             scanexp += " " + tree2str(item);
-                        if (param->param)
-                            scanexp += " " + tree2str(param->param);
                         scanexp += treePost(param);
                         sep = " ";
                     }

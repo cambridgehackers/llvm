@@ -91,8 +91,6 @@ static std::string tree2str(ACCExpr *arg)
     ret += arg->value;
     for (auto item: arg->operands)
         ret += " " + tree2str(item);
-    if (arg->param)
-        ret += " " + tree2str(arg->param);
     ret += treePost(arg);
     if (arg->next)
         ret += " " + tree2str(arg->next);
@@ -103,11 +101,9 @@ static inline void dumpExpr(std::string tag, ACCExpr *next)
 {
     bool hadWhile = next != nullptr;
     while (next) {
-        printf("[%s:%d] %s value %s next %p param %p\n", __FUNCTION__, __LINE__, tag.c_str(), next->value.c_str(), next->next, next->param);
+        printf("[%s:%d] %s value %s next %p\n", __FUNCTION__, __LINE__, tag.c_str(), next->value.c_str(), next->next);
         for (auto item: next->operands)
             printf("[%s:%d] operand %s\n", __FUNCTION__, __LINE__, tree2str(item).c_str());
-        if (next->param)
-            dumpExpr(tag + "__PARAM", next->param);
         next = next->next;
     }
     if (hadWhile)
@@ -121,7 +117,6 @@ static ACCExpr *allocExpr(std::string value)
     ret->value = value;
     ret->operands.clear();
     ret->next = nullptr;
-    ret->param = nullptr;
     return ret;
 }
 
@@ -201,9 +196,9 @@ static ACCExpr *get1Tokene(ModuleIR *IR, ACCExpr *prev, std::string terminator)
                 prev->operands.push_back(ret);
                 retptr = prev;
             }
-            else if (terminator != "" && !prev->param
+            else if (terminator != "" && !prev->operands.size()
              && ((prev->value == "[" && lexProcessSubscripts) || prev->value == "(" || prev->value == "{"))
-                prev->param = ret; // the first item in a recursed list
+                prev->operands.push_back(ret); // the first item in a recursed list
             else
                 prev->next = ret;
         }
@@ -215,7 +210,7 @@ static ACCExpr *get1Tokene(ModuleIR *IR, ACCExpr *prev, std::string terminator)
         int size = -1;
         std::string subscript, post, fieldName = prev->value;
         ACCExpr *sub = prev->operands.front();
-        subscript = tree2str(sub->param);
+        subscript = tree2str(sub->operands.front());
         sub->operands.clear();
         prev->operands.pop_front();
         ACCExpr *next = prev->next;
@@ -239,8 +234,10 @@ printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE_
             ret += fieldName + autostr(size - 1) + post + " ) ";
             ACCExpr *next = prev->next, *newTree = str2tree(IR, ret);
             prev->value = newTree->value;
-            prev->param = newTree->param;
             prev->next = newTree->next;
+            prev->operands.clear();
+            if (newTree->operands.size())
+                prev->operands.push_back(newTree->operands.front());
             retptr = appendExpr(prev, next);
 printf("[%s:%d] afterexpr retpvalue %s ; %s retptr %p retnext %p\n", __FUNCTION__, __LINE__, retptr->value.c_str(), tree2str(prev).c_str(), retptr, retptr->next);
         }
@@ -259,7 +256,7 @@ static ACCExpr *str2tree(ModuleIR *IR, std::string arg)
     while ((prev = get1Tokene(IR, prev, "")))
         ;
     if (tok && tok->value == "(" && !tok->next)
-        tok = tok->param;
+        tok = tok->operands.front();
     return tok;
 }
 
@@ -324,7 +321,6 @@ static ACCExpr *walkRead (MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
                 MI->meta[MetaRead][expr->value].insert(tree2str(cond));
         for (auto item: expr->operands)
             walkRead(MI, item, cond);
-        walkRead(MI, expr->param, cond);
         walkRead(MI, expr->next, cond);
     }
     return expr;

@@ -84,7 +84,6 @@ typedef struct {
 typedef struct ACCExpr {
     std::string op;
     std::list<ACCExpr *>operands;
-    ACCExpr *param;
     ACCExpr *next;
     std::string value;
 } ACCExpr;
