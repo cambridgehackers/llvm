@@ -143,7 +143,7 @@ printf("[%s:%d] set %s = %s\n", __FUNCTION__, __LINE__, fitem.name.c_str(), fite
             setAssign(fitem.name, allocExpr(fldName + "[" + autostr(offset) + ":" + autostr(upper) + "]"), fitem.type);
     }
     if (itemList.length() > 2)
-    setAssign(fldName, str2tree(IR, "{" + itemList.substr(2) + " }"), type);
+    setAssign(fldName, str2tree("{" + itemList.substr(2) + " }"), type);
 }
 
 static void walkRef (ACCExpr *expr)
@@ -182,7 +182,7 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
 
 std::string findType(std::string name)
 {
-    ACCExpr *expr = str2tree(nullptr, name);
+    ACCExpr *expr = str2tree(name);
     if (expr->value == "(" && expr->next) {
         expr = expr->next;
         if (expr->value == "?" && expr->next)
@@ -325,13 +325,13 @@ printf("[%s:%d] BBBBBBBBBBBBBBBBBBBBBBBBBBBBB %s type %s\n", __FUNCTION__, __LIN
                 std::string src = cleanTrim(tree2str(info.value)) + fitem.name;
                 typeList[dest] = fitem.type;
                 typeList[src] = fitem.type;
-                muxValueList[dest].push_back(MuxValueEntry{info.cond, str2tree(IR, src)});
+                muxValueList[dest].push_back(MuxValueEntry{info.cond, str2tree(src)});
             }
         }
         for (auto info: MI->callList) {
             if (!info.isAction)
                 continue;
-            ACCExpr *tempCond = str2tree(IR, methodName);
+            ACCExpr *tempCond = str2tree(methodName);
             if (info.cond) {
                 appendExpr(tempCond, allocExpr("&"));
                 appendExpr(tempCond, info.cond);
@@ -368,7 +368,7 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
                 }
                 if (param)
                     param = param->next;
-                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(IR, scanexp)});
+                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
                 typeList[pname + AI->name] = AI->type;
                 AI++;
             }
@@ -379,7 +379,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
         }
     }
     for (auto item: enableList)
-        setAssign(item.first, str2tree(IR, item.second.substr(4)) /* remove leading '||'*/, "INTEGER_1");
+        setAssign(item.first, str2tree(item.second.substr(4)) /* remove leading '||'*/, "INTEGER_1");
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
     for (auto item: muxValueList) {
@@ -390,7 +390,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
             prevCond = tree2str(element.cond);
             prevValue = tree2str(element.value);
         }
-        setAssign(item.first, str2tree(IR, temp + prevValue), typeList[item.first]);
+        setAssign(item.first, str2tree(temp + prevValue), typeList[item.first]);
     }
     // recursively process all replacements internal to the list of 'setAssign' items
     for (auto item: assignList)
@@ -399,7 +399,7 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
             std::string newItem = walkTree(item.second.value, &treeChanged);
             if (treeChanged) {
 printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_str(), tree2str(item.second.value).c_str(), newItem.c_str());
-                assignList[item.first].value = str2tree(IR, newItem);
+                assignList[item.first].value = str2tree(newItem);
             }
         }
 
@@ -408,7 +408,7 @@ printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_
     for (auto mitem: modLine) {
         std::string val = mitem.value;
         if (!mitem.moduleStart)
-            val = walkTree(str2tree(IR, mitem.value), nullptr);
+            val = walkTree(str2tree(mitem.value), nullptr);
         modNew.push_back(ModData{val, mitem.type, mitem.moduleStart, mitem.out});
     }
     std::list<std::string> alwaysLines;
@@ -548,9 +548,9 @@ void promoteGuards(ModuleIR *IR)
             if (info.cond)
                 tempCond += " | " + invertExpr(info.cond);
             if (tree2str(MIRdy->guard) == "1")
-                MIRdy->guard = str2tree(IR, tempCond);
+                MIRdy->guard = str2tree(tempCond);
             else
-                MIRdy->guard = str2tree(IR, encapExpr(tree2str(MIRdy->guard)) + " & " + encapExpr(tempCond));
+                MIRdy->guard = str2tree(encapExpr(tree2str(MIRdy->guard)) + " & " + encapExpr(tempCond));
         }
     }
 }
