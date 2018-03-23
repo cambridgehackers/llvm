@@ -129,7 +129,7 @@ static ACCExpr *appendExpr(ACCExpr *prev, ACCExpr *next)
     return prev;           // Return pointer to last element in final list
 }
 
-static TokenValue get1Token(void)
+static ACCExpr *get1Token(ACCExpr *prev, std::string terminator)
 {
     std::string lexToken;
     auto getNext = [&] (void) -> void {
@@ -137,73 +137,52 @@ static TokenValue get1Token(void)
         lexChar = lexString[lexIndex++];
     };
 
-    while (lexChar == ' ' || lexChar == '\t') {
+    while (lexChar == ' ' || lexChar == '\t')
         lexChar = lexString[lexIndex++];
-    }
     if(lexIndex > lexTotal || lexChar == 0)
-        return TokenValue{TOK_EOF, ""};
-    if (isIdChar(lexChar)) {
+        return nullptr;
+    if (isIdChar(lexChar))
         do {
             getNext();
         } while (isIdChar(lexChar) || isdigit(lexChar));
-//printf("[%s:%d] lexToken %s\n", __FUNCTION__, __LINE__, lexToken.c_str());
-        return TokenValue{TOK_ID, lexToken};
-    }
-    else if (isdigit(lexChar)) {
+    else if (isdigit(lexChar))
         do {
             getNext();
         } while (isdigit(lexChar) || lexChar == '.');
-        return TokenValue{TOK_NUMBER, lexToken};
-    }
-    else if (lexChar == '+' || lexChar == '-' || lexChar == '*' || lexChar == '&' || lexChar == '|') {
+    else if (lexChar == '+' || lexChar == '-' || lexChar == '*' || lexChar == '&' || lexChar == '|')
         do {
             getNext();
         } while (lexChar == lexToken[0]);
-        return TokenValue{TOK_ARITHOP, lexToken};
-    }
-    else if (lexChar == '=' || lexChar == '<' || lexChar == '>' || lexChar == '!') {
+    else if (lexChar == '=' || lexChar == '<' || lexChar == '>' || lexChar == '!')
         do {
             getNext();
         } while (lexChar == '=' || lexChar == '<' || lexChar == '>');
-        return TokenValue{TOK_RELOP, lexToken};
-    }
-    else if (lexChar == '{') {
-        getNext();
-        return TokenValue{TOK_LBRACE, lexToken};
-    }
-    else if (lexChar == '/' || lexChar == '%'
+    else if (lexChar == '/' || lexChar == '%' || lexChar == '{'
         || lexChar == '}' || lexChar == '(' || lexChar == ')' || lexChar == '^'
         || lexChar == '[' || lexChar == ']'
-        || lexChar == ',' || lexChar == '?' || lexChar == ':' || lexChar == ';') {
+        || lexChar == ',' || lexChar == '?' || lexChar == ':' || lexChar == ';')
         getNext();
-        return TokenValue{TOK_MISCOP, lexToken};
+    else {
+        printf("[%s:%d] lexString '%s' unknown lexChar %c %x\n", __FUNCTION__, __LINE__, lexString.c_str(), lexChar, lexChar);
+        exit(-1);
     }
-    printf("[%s:%d] lexString '%s' unknown lexChar %c %x\n", __FUNCTION__, __LINE__, lexString.c_str(), lexChar, lexChar);
-    exit(-1);
-}
-
-static ACCExpr *get1Tokene(ACCExpr *prev, std::string terminator)
-{
-    ACCExpr *retptr = nullptr;
-    TokenValue tok = get1Token();
-    if (tok.type != TOK_EOF && tok.value != terminator) {
-        ACCExpr *ret = allocExpr(tok.value), *plist = ret;
-        retptr = ret;
-        if (prev) {
-            if (isIdChar(prev->value[0]) && ret->value == "[") {
-                prev->operands.push_back(ret);
-                retptr = prev;
-            }
-            else if (terminator != "" && !prev->operands.size()
-             && (prev->value == "[" || prev->value == "(" || prev->value == "{"))
-                prev->operands.push_back(ret); // the first item in a recursed list
-            else
-                prev->next = ret;
+    if (lexToken == terminator)
+        return nullptr;
+    ACCExpr *ret = allocExpr(lexToken), *plist = ret, *retptr = ret;
+    if (prev) {
+        if (isIdChar(prev->value[0]) && ret->value == "[") {
+            prev->operands.push_back(ret);
+            retptr = prev;
         }
-        if (ret->value == "[" || ret->value == "(" || ret->value == "{")
-            while ((plist = get1Tokene(plist, treePost(ret).substr(1))))
-                ;
+        else if (terminator != "" && !prev->operands.size()
+         && (prev->value == "[" || prev->value == "(" || prev->value == "{"))
+            prev->operands.push_back(ret); // the first item in a recursed list
+        else
+            prev->next = ret;
     }
+    if (ret->value == "[" || ret->value == "(" || ret->value == "{")
+        while ((plist = get1Token(plist, treePost(ret).substr(1))))
+            ;
     return retptr;
 }
 
@@ -213,16 +192,16 @@ static ACCExpr *str2tree(std::string arg)
     lexTotal = lexString.length();
     lexIndex = 0;
     lexChar = lexString[lexIndex++];
-    ACCExpr *tok = get1Tokene(nullptr, "");
+    ACCExpr *tok = get1Token(nullptr, "");
     ACCExpr *prev = tok;
-    while ((prev = get1Tokene(prev, "")))
+    while ((prev = get1Token(prev, "")))
         ;
     if (tok && tok->value == "(" && !tok->next)
         tok = tok->operands.front();
     return tok;
 }
 
-static ACCExpr *getExpression(ModuleIR *IR)
+static ACCExpr *getExpression(void)
 {
     const char *startp = bufp;
     int level = 0;
@@ -401,13 +380,13 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                         MI->type = getToken();
                 }
                 if (checkItem("="))
-                    MI->guard = walkRead(IR, MI, getExpression(IR), nullptr);
+                    MI->guard = walkRead(IR, MI, getExpression(), nullptr);
                 IR->method[methodName] = MI;
                 if (foundIf || (!foundOpenBrace && checkItem("if"))) {
                     MethodInfo *MIRdy = new MethodInfo{nullptr};
                     MIRdy->rule = MI->rule;
                     MIRdy->type = "INTEGER_1";
-                    MIRdy->guard = walkRead(IR, nullptr, getExpression(IR), nullptr);
+                    MIRdy->guard = walkRead(IR, nullptr, getExpression(), nullptr);
                     IR->method[getRdyName(methodName)] = MIRdy;
                 }
                 if (foundOpenBrace || checkItem("{")) {
@@ -418,25 +397,25 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             MI->alloca[name] = type;
                         }
                         else if (checkItem("STORE")) {
-                            ACCExpr *cond = walkRead(IR, MI, getExpression(IR), nullptr);
+                            ACCExpr *cond = walkRead(IR, MI, getExpression(), nullptr);
                             ParseCheck(checkItem(":"), "':' missing");
-                            ACCExpr *dest = walkRead(IR, nullptr, getExpression(IR), nullptr);
+                            ACCExpr *dest = walkRead(IR, nullptr, getExpression(), nullptr);
                             ParseCheck(checkItem("="), "store = missing");
                             ACCExpr *expr = walkRead(IR, MI, str2tree(bufp), cond);
                             MI->storeList.push_back(StoreListElement{dest, expr, cond});
                         }
                         else if (checkItem("LET")) {
                             std::string type = getToken();
-                            ACCExpr *cond = walkRead(IR, MI, getExpression(IR), nullptr);
+                            ACCExpr *cond = walkRead(IR, MI, getExpression(), nullptr);
                             ParseCheck(checkItem(":"), "':' missing");
-                            ACCExpr *dest = walkRead(IR, nullptr, getExpression(IR), nullptr);
+                            ACCExpr *dest = walkRead(IR, nullptr, getExpression(), nullptr);
                             ParseCheck(checkItem("="), "store = missing");
                             ACCExpr *expr = walkRead(IR, MI, str2tree(bufp), cond);
                             MI->letList.push_back(LetListElement{dest, expr, cond, type});
                         }
                         else if (checkItem("CALL")) {
                             bool isAction = checkItem("/Action");
-                            ACCExpr *cond = walkRead(IR, MI, getExpression(IR), nullptr);
+                            ACCExpr *cond = walkRead(IR, MI, getExpression(), nullptr);
                             ParseCheck(checkItem(":"), "':' missing");
                             ACCExpr *expr = walkRead(IR, MI, str2tree(bufp), cond);
                             MI->callList.push_back(CallListElement{expr, cond, isAction});
