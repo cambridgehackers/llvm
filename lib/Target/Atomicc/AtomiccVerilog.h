@@ -33,13 +33,9 @@ typedef struct {
     std::string type;
 } AssignItem;
 
-static std::list<FieldItem> fieldList;
-static std::map<std::string, bool> inList, outList;
-static std::map<std::string, std::string> typeList;
+static std::map<std::string, bool> inList, outList, refList;
 static std::map<std::string, AssignItem> assignList;
-static std::map<std::string, bool> refList;
-static std::map<std::string, std::string> regList; // why 'static' ?????!!!!!!
-static std::map<std::string, std::string> wireList; // name -> type
+static std::map<std::string, std::string> typeList, regList, wireList; // name -> type
 
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 #define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
@@ -53,6 +49,42 @@ static void setAssign(std::string target, ACCExpr *value, std::string type)
 {
 //printf("[%s:%d] start [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
     assignList[target] = AssignItem{value, type};
+}
+
+static ModuleIR *lookupIR(std::string ind)
+{
+    ind = trimStr(ind);
+    if (ind == "")
+        return nullptr;
+    ModuleIR *ret = mapIndex[ind];
+    //ParseCheck(ret != NULL, "lookupIR = " + ind + " not found");
+    return ret;
+}
+
+static uint64_t convertType(std::string arg)
+{
+    if (arg == "" || arg == "void")
+        return 0;
+    const char *bp = arg.c_str();
+    auto checkT = [&] (const char *val) -> bool {
+        int len = strlen(val);
+        bool ret = !strncmp(bp, val, len);
+        if (ret)
+            bp += len;
+        return ret;
+    };
+    if (checkT("INTEGER_"))
+        return atoi(bp);
+    if (checkT("ARRAY_"))
+        return convertType(bp);
+    if (auto IR = lookupIR(bp)) {
+        uint64_t total = 0;
+        for (auto item: IR->fields)
+            total += convertType(item.type);
+        return total;
+    }
+    printf("[%s:%d] convertType FAILED '%s'\n", __FUNCTION__, __LINE__, bp);
+    exit(-1);
 }
 
 static std::string sizeProcess(std::string type)
@@ -100,14 +132,14 @@ static MethodInfo *lookupQualName(ModuleIR *searchIR, std::string searchStr)
     return NULL;
 }
 
-static void getFieldList(std::string name, std::string type, bool force = true, uint64_t offset = 0, bool alias = false, bool init = true)
+static void getFieldList(std::list<FieldItem> &fieldList, std::string name, std::string type, bool force = true, uint64_t offset = 0, bool alias = false, bool init = true)
 {
     if (init)
         fieldList.clear();
     if (ModuleIR *IR = lookupIR(type)) {
         if (IR->unionList.size() > 0) {
             for (auto item: IR->unionList)
-                getFieldList(name + MODULE_SEPARATOR + item.name, item.type, true, offset, true, false);
+                getFieldList(fieldList, name + MODULE_SEPARATOR + item.name, item.type, true, offset, true, false);
             for (auto item: IR->fields) {
                 fieldList.push_back(FieldItem{name, item.type, false, offset}); // aggregate data
                 offset += convertType(item.type);
@@ -115,7 +147,7 @@ static void getFieldList(std::string name, std::string type, bool force = true, 
         }
         else
             for (auto item: IR->fields) {
-                getFieldList(name + MODULE_SEPARATOR + item.fldName, item.type, true, offset, alias, false);
+                getFieldList(fieldList, name + MODULE_SEPARATOR + item.fldName, item.type, true, offset, alias, false);
                 offset += convertType(item.type);
             }
     }
@@ -127,7 +159,8 @@ static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
      std::map<std::string, std::string> &declList, int out, bool force)
 {
     std::string itemList;
-    getFieldList(fldName, type, force);
+    std::list<FieldItem> fieldList;
+    getFieldList(fieldList, fldName, type, force);
     for (auto fitem : fieldList) {
         declList[fitem.name] = fitem.type;
 printf("[%s:%d] set %s = %s\n", __FUNCTION__, __LINE__, fitem.name.c_str(), fitem.type.c_str());
@@ -319,7 +352,8 @@ printf("[%s:%d] BBBBBBBBBBBBBBBBBBBBBBBBBBBBB %s type %s\n", __FUNCTION__, __LIN
         for (auto item: MI->alloca)
             expandStruct(IR, item.first, item.second, wireList, 1, true);
         for (auto info: MI->letList) {
-            getFieldList("", info.type, true);
+            std::list<FieldItem> fieldList;
+            getFieldList(fieldList, "", info.type, true);
             for (auto fitem : fieldList) {
                 std::string dest = tree2str(info.dest) + fitem.name;
                 std::string src = cleanTrim(tree2str(info.value)) + fitem.name;
@@ -383,11 +417,12 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
     for (auto item: muxValueList) {
-        std::string temp, prevCond, prevValue;
+        ACCExpr *prevCond = nullptr;
+        std::string temp, prevValue;
         for (auto element: item.second) {
-            if (prevCond != "")
-                temp += prevCond + " ? " + prevValue + " : ";
-            prevCond = tree2str(element.cond);
+            if (prevCond)
+                temp += tree2str(prevCond) + " ? " + prevValue + " : ";
+            prevCond = element.cond;
             prevValue = tree2str(element.value);
         }
         setAssign(item.first, str2tree(temp + prevValue), typeList[item.first]);
@@ -451,7 +486,7 @@ exit(-1);
     // generate local state element declarations and wires
     for (auto item: regList) {
         hasAlways = true;
-        fprintf(OStr, "    reg%s;\n", (sizeProcess(item.second) + " " + item.first).c_str());
+        fprintf(OStr, "    reg %s;\n", (sizeProcess(item.second) + item.first).c_str());
     }
     for (auto item: wireList)
         if (refList[item.first])

@@ -21,6 +21,7 @@ static std::string lexString;
 static int lexTotal;
 static int lexIndex;
 static char lexChar;
+static std::map<std::string, ModuleIR *> mapIndex;
 
 static bool checkItem(const char *val)
 {
@@ -63,11 +64,6 @@ static std::string getToken()
     while (*bufp == ' ')
         bufp++;
     return ret;
-}
-
-bool isIdChar(char ch)
-{
-    return isalpha(ch) || ch == '_' || ch == '$';
 }
 
 static std::string treePost(ACCExpr *arg)
@@ -129,6 +125,16 @@ static ACCExpr *appendExpr(ACCExpr *prev, ACCExpr *next)
     return prev;           // Return pointer to last element in final list
 }
 
+bool isIdChar(char ch)
+{
+    return isalpha(ch) || ch == '_' || ch == '$';
+}
+
+bool isParenChar(char ch)
+{
+    return ch == '[' || ch == '(' || ch == '{';
+}
+
 static ACCExpr *get1Token(ACCExpr *prev, std::string terminator)
 {
     std::string lexToken;
@@ -157,9 +163,8 @@ static ACCExpr *get1Token(ACCExpr *prev, std::string terminator)
         do {
             getNext();
         } while (lexChar == '=' || lexChar == '<' || lexChar == '>');
-    else if (lexChar == '/' || lexChar == '%' || lexChar == '{'
-        || lexChar == '}' || lexChar == '(' || lexChar == ')' || lexChar == '^'
-        || lexChar == '[' || lexChar == ']'
+    else if (isParenChar(lexChar) || lexChar == '/' || lexChar == '%'
+        || lexChar == ']' || lexChar == '}' || lexChar == ')' || lexChar == '^'
         || lexChar == ',' || lexChar == '?' || lexChar == ':' || lexChar == ';')
         getNext();
     else {
@@ -174,13 +179,12 @@ static ACCExpr *get1Token(ACCExpr *prev, std::string terminator)
             prev->operands.push_back(ret);
             retptr = prev;
         }
-        else if (terminator != "" && !prev->operands.size()
-         && (prev->value == "[" || prev->value == "(" || prev->value == "{"))
+        else if (terminator != "" && !prev->operands.size() && isParenChar(prev->value[0]))
             prev->operands.push_back(ret); // the first item in a recursed list
         else
             prev->next = ret;
     }
-    if (ret->value == "[" || ret->value == "(" || ret->value == "{")
+    if (isParenChar(ret->value[0]))
         while ((plist = get1Token(plist, treePost(ret).substr(1))))
             ;
     return retptr;
@@ -192,8 +196,7 @@ static ACCExpr *str2tree(std::string arg)
     lexTotal = lexString.length();
     lexIndex = 0;
     lexChar = lexString[lexIndex++];
-    ACCExpr *tok = get1Token(nullptr, "");
-    ACCExpr *prev = tok;
+    ACCExpr *tok = get1Token(nullptr, ""), *prev = tok;
     while ((prev = get1Token(prev, "")))
         ;
     if (tok && tok->value == "(" && !tok->next)
@@ -218,87 +221,51 @@ static ACCExpr *getExpression(void)
         bufp++;
     return str2tree(std::string(startp, bufp - startp));
 }
-static std::map<std::string, ModuleIR *> mapIndex;
-static ModuleIR *lookupIR(std::string ind)
-{
-    ind = trimStr(ind);
-    if (ind == "")
-        return nullptr;
-    ModuleIR *ret = mapIndex[ind];
-    //ParseCheck(ret != NULL, "lookupIR = " + ind + " not found");
-    return ret;
-}
-static uint64_t convertType(std::string arg)
-{
-    if (arg == "" || arg == "void")
-        return 0;
-    const char *bp = arg.c_str();
-    auto checkT = [&] (const char *val) -> bool {
-        int len = strlen(val);
-        bool ret = !strncmp(bp, val, len);
-        if (ret)
-            bp += len;
-        return ret;
-    };
-    if (checkT("INTEGER_"))
-        return atoi(bp);
-    if (checkT("ARRAY_"))
-        return convertType(bp);
-    if (auto IR = lookupIR(bp)) {
-        uint64_t total = 0;
-        for (auto item: IR->fields)
-            total += convertType(item.type);
-        return total;
-    }
-    printf("[%s:%d] convertType FAILED '%s'\n", __FUNCTION__, __LINE__, bp);
-    exit(-1);
-}
 
 static ACCExpr *walkRead (ModuleIR *IR, MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
 {
     if (expr) {
-        if (isIdChar(expr->value[0])) {
-    if (expr->operands.size()) {
-        int size = -1;
-        std::string post, fieldName = expr->value;
-        ACCExpr *sub = expr->operands.front();
-        expr->operands.pop_front();
-        std::string subscript = tree2str(sub->operands.front());
-        sub->operands.clear();
-        ACCExpr *next = expr->next;
-        if (next && isIdChar(next->value[0])) {
-            post = next->value;
-            expr->next = next->next;
-        }
-        for (auto item: IR->fields)
-            if (item.fldName == fieldName) {
-                size = item.vecCount;
-                break;
-            }
-printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), subscript.c_str(), post.c_str());
-        expr->value = fieldName + subscript + post;
-        if (!isdigit(subscript[0])) {
-            std::string ret = " ( ";
-            for (int i = 0; i < size - 1; i++)
-                ret += " ( " + subscript + " == " + autostr(i) + " ) ? "
-                    + fieldName + autostr(i) + post + " : ";
-            ret += fieldName + autostr(size - 1) + post + " ) ";
-            ACCExpr *next = expr->next, *newTree = str2tree(ret);
-            expr->value = newTree->value;
-            expr->next = newTree->next;
-            expr->operands.clear();
-            if (newTree->operands.size())
-                expr->operands.push_back(newTree->operands.front());
-            appendExpr(expr, next);
-        }
-    }
+        std::string fieldName = expr->value;
+        if (isIdChar(fieldName[0])) {
             if (MI && (!expr->next || expr->next->value != "{"))
-                MI->meta[MetaRead][expr->value].insert(tree2str(cond));
+                MI->meta[MetaRead][fieldName].insert(tree2str(cond));
+            int size = -1;
+            if (expr->operands.size()) {
+                ACCExpr *sub = expr->operands.front();
+                expr->operands.pop_front();
+                std::string post, subscript = tree2str(sub->operands.front());
+                sub->operands.clear();
+                ACCExpr *next = expr->next;
+                if (next && isIdChar(next->value[0])) {
+                    post = next->value;
+                    next = next->next;
+                    expr->next = next;
+                }
+                for (auto item: IR->fields)
+                    if (item.fldName == fieldName) {
+                        size = item.vecCount;
+                        break;
+                    }
+printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), subscript.c_str(), post.c_str());
+                expr->value = fieldName + subscript + post;   // replace field name
+                if (!isdigit(subscript[0])) {
+                    std::string ret;
+                    for (int i = 0; i < size - 1; i++)
+                        ret += " ( " + subscript + " == " + autostr(i) + " ) ? "
+                            + fieldName + autostr(i) + post + " : ";
+                    ACCExpr *newTree = str2tree("(" + ret + fieldName + autostr(size - 1) + post + ")");
+                    expr->value = newTree->value;
+                    expr->next = newTree->next;
+                    expr->operands.clear();
+                    if (newTree->operands.size())
+                        expr->operands.push_back(newTree->operands.front());
+                    appendExpr(expr, next);
+                }
+            }
         }
         for (auto item: expr->operands)
             walkRead(IR, MI, item, cond);
-        if (expr->next)
-            walkRead(IR, MI, expr->next, cond);
+        walkRead(IR, MI, expr->next, cond);
     }
     return expr;
 }
