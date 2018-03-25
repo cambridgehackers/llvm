@@ -350,65 +350,37 @@ int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_ty
  */
 static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep_type_iterator E)
 {
-    std::string cbuffer;
-    const ConstantDataArray *CPA;
-    int64_t Total = 0;
     VectorType *LastIndexIsVector = 0;
-    const Constant *FirstOp = dyn_cast<Constant>(I.getOperand());
-    bool expose = isAddressExposed(Ptr);
-    std::string referstr = printOperand(Ptr);
-
-    Total = getGEPOffset(&LastIndexIsVector, I, E);
+    int64_t Total = getGEPOffset(&LastIndexIsVector, I, E);
     ERRORIF(LastIndexIsVector);
+    std::string cbuffer = printOperand(Ptr);
     if (trace_gep)
-        printf("[%s:%d] referstr %s Total %ld\n", __FUNCTION__, __LINE__, referstr.c_str(), (unsigned long)Total);
+        printf("[%s:%d] cbuffer %s Total %ld\n", __FUNCTION__, __LINE__, cbuffer.c_str(), (unsigned long)Total);
     if (Total == -1) {
-        printf("[%s:%d] non-constant offset referstr %s Total %ld\n", __FUNCTION__, __LINE__, referstr.c_str(), (unsigned long)Total);
+        printf("[%s:%d] non-constant offset cbuffer %s Total %ld\n", __FUNCTION__, __LINE__, cbuffer.c_str(), (unsigned long)Total);
     }
-    if (I == E)
-        return referstr;
-    if (FirstOp && FirstOp->isNullValue()) {
-        ++I;  // Skip the zero index.
-        if (I == E) { // off the end of parameters
-            // HACK HACK HACK HACK for 'fifo0'
-            printf("[%s:%d] expose %d referstr %s\n", __FUNCTION__, __LINE__, expose, referstr.c_str());
-            referstr += "[0]";
-        }
-    }
+    if (I != E)
+    if (const Constant *FirstOp = dyn_cast<Constant>(I.getOperand()))
+    if (FirstOp->isNullValue() && std::next(I) != E)
+        ++I;  // Skip the zero index if there are more items. (????)
     for (; I != E; ++I) {
         if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
-            std::string fname = fieldName(STy, foffset);
+            std::string fname = MODULE_SEPARATOR + fieldName(STy, foffset);
             if (trace_gep)
-                printf("[%s:%d] expose %d referstr %s cbuffer %s STy %s fname %s foffset %d\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset);
-            if (!expose && referstr[0] == '&') {
-                expose = true;
-                referstr = referstr.substr(1);
+                printf("[%s:%d] cbuffer %s STy %s fname %s foffset %d\n", __FUNCTION__, __LINE__, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset);
+            if (cbuffer == "this") {
+                cbuffer = "";
+                fname = fname.substr(1);
             }
-            if (expose)
-                referstr += MODULE_SEPARATOR;
-            else if (referstr == "this")
-                referstr = "";
-            else {
-                if (referstr == "this")
-                    referstr = "thisp";
-                else if (referstr.find(" ") != std::string::npos) {
-                    // HACK: spaces mean "has expression inside"
-                    referstr = "(" + referstr + ")";
-                }
-                referstr += MODULE_SEPARATOR;
-            }
-            cbuffer += referstr + fname;
+            cbuffer += fname;
         }
         else {
-            Type *Ty = I.getIndexedType();
             if (trace_gep)
-                printf("[%s:%d] expose %d referstr %s cbuffer %s array %d vector %d\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), Ty->isArrayTy(), Ty->isVectorTy());
-            cbuffer += referstr + "[" + printOperand(I.getOperand()) + "]";
+                printf("[%s:%d] cbuffer %s\n", __FUNCTION__, __LINE__, cbuffer.c_str());
+            cbuffer += "[" + printOperand(I.getOperand()) + "]";
         }
-        referstr = "";
     }
-    cbuffer += referstr;
     if (trace_gep || Total == -1)
         printf("%s: return '%s'\n", __FUNCTION__, cbuffer.c_str());
     return cbuffer;
