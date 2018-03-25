@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include <stdio.h>
+#include "../../lib/Target/Atomicc/AtomiccExpr.h"
 #include "../../lib/Target/Atomicc/AtomiccReadIR.h"
 #include "../../lib/Target/Atomicc/AtomiccVerilog.h"
 #include "../../lib/Target/Atomicc/AtomiccMetaGen.h"
