@@ -55,25 +55,6 @@ static bool inline startswith(std::string str, std::string suffix)
     return str.substr(0, suffix.length()) == suffix;
 }
 
-static std::string trimStr(const std::string& str)
-{
-    size_t first = str.find_first_not_of(' ');
-    if (std::string::npos == first)
-        return "";
-    size_t last = str.find_last_not_of(' ');
-    return str.substr(first, (last - first + 1));
-}
-
-static std::string inline cleanupValue(std::string arg)
-{
-    int ind;
-    while((ind = arg.find("{}")) > 0)
-        arg = arg.substr(0, ind) + arg.substr(ind+2); // remove '{}'
-    while((ind = arg.find("{ }")) > 0)
-        arg = arg.substr(0, ind) + arg.substr(ind+3); // remove '{ }'
-    return trimStr(arg);
-}
-
 enum TokType {TOK_NONE, TOK_ID, TOK_NUMBER, TOK_ARITHOP, TOK_RELOP, TOK_LBRACE, TOK_MISCOP,
     TOK_EOF};
 typedef struct {

@@ -40,11 +40,6 @@ static std::map<std::string, std::string> typeList, regList, wireList; // name -
 typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 #define CBAct ^ ModuleIR * (FieldElement &item, std::string fldName)
 
-std::string cleanTrim(std::string arg)
-{
-    return trimStr(cleanupValue(arg));
-}
-
 static void setAssign(std::string target, ACCExpr *value, std::string type)
 {
 //printf("[%s:%d] start [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
@@ -53,7 +48,6 @@ static void setAssign(std::string target, ACCExpr *value, std::string type)
 
 static ModuleIR *lookupIR(std::string ind)
 {
-    ind = trimStr(ind);
     if (ind == "")
         return nullptr;
     ModuleIR *ret = mapIndex[ind];
@@ -356,7 +350,7 @@ printf("[%s:%d] BBBBBBBBBBBBBBBBBBBBBBBBBBBBB %s type %s\n", __FUNCTION__, __LIN
             getFieldList(fieldList, "", info.type, true);
             for (auto fitem : fieldList) {
                 std::string dest = tree2str(info.dest) + fitem.name;
-                std::string src = cleanTrim(tree2str(info.value)) + fitem.name;
+                std::string src = tree2str(info.value) + fitem.name;
                 typeList[dest] = fitem.type;
                 typeList[src] = fitem.type;
                 muxValueList[dest].push_back(MuxValueEntry{info.cond, str2tree(src)});

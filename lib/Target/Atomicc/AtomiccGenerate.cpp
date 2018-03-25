@@ -925,7 +925,7 @@ static std::string processMethod(std::string methodName, const Function *func,
     }
     for (auto item: allocaList)
         malines.push_back("ALLOCA " + typeName(item.second) + " " + item.first);
-    return cleanupValue(retGuard);
+    return retGuard;
 }
 
 static void processClass(ClassMethodTable *table, FILE *OStr)
