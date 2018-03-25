@@ -419,28 +419,14 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
             Type *Ty = I.getIndexedType();
             if (trace_gep)
                 printf("[%s:%d] expose %d referstr %s cbuffer %s array %d vector %d\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), Ty->isArrayTy(), Ty->isVectorTy());
-            if (Ty->isArrayTy()) {
-                if (referstr[0] == '&')
-                    referstr = referstr.substr(1);
-                cbuffer += referstr;
-                cbuffer += "[" + printOperand(I.getOperand()) + "]";
-                //cbuffer += printOperand(I.getOperand());
-            }
-            else if (!Ty->isVectorTy()) {
-                if (referstr[0] == '&')
-                    referstr = referstr.substr(1);
-                cbuffer += referstr;
-                cbuffer += "[" + printOperand(I.getOperand()) + "]";
-                //// HACK HACK HACK HACK: we append the offset for ivector.  lpm and precision tests have an i8* here.
-                //if (Ty !=  Type::getInt8PtrTy(globalMod->getContext()))
-                    //cbuffer += printOperand(I.getOperand());
-            }
-            else {
-                cbuffer += referstr;
+            cbuffer += referstr;
+            if (Ty->isVectorTy()) {
                 if (!isa<Constant>(I.getOperand()) || !cast<Constant>(I.getOperand())->isNullValue())
                     cbuffer += ")+(" + printOperand(I.getOperand());
                 cbuffer += "))";
             }
+            else
+                cbuffer += "[" + printOperand(I.getOperand()) + "]";
         }
         referstr = "";
     }
@@ -472,7 +458,7 @@ std::string getMethodName(const Function *func)
 /*
  * Generate a string for a function/method call
  */
-static std::string printCall(const Instruction *I)
+static std::string printCall(const Instruction *I, bool useParams = false)
 {
     const CallInst *ICL = dyn_cast<CallInst>(I);
     const Function *func = ICL->getCalledFunction();
@@ -503,12 +489,17 @@ printf("[%s:%d]\n", __FUNCTION__, __LINE__);
         sep = ",";
     }
     else
-        vout = pcalledFunction + MODULE_SEPARATOR + fname + "{";
-    for (; AI != AE; ++AI) { // first param processed as pcalledFunction
-        vout += sep + printOperand(*AI);
-        sep = ",";
+        vout = pcalledFunction + MODULE_SEPARATOR + fname;
+    if (useParams || calledName == "printf") {
+        if (calledName != "printf")
+            vout += "{";
+        for (; AI != AE; ++AI) { // first param processed as pcalledFunction
+            vout += sep + printOperand(*AI);
+            sep = ",";
+        }
+        vout += "}";
     }
-    return vout + "}";
+    return vout;
 }
 
 std::string parenOperand(const Value *Operand)
@@ -951,8 +942,6 @@ static std::string processMethod(std::string methodName, const Function *func,
                 std::string value = printOperand(SI->getOperand(0));
                 findAlloca(dyn_cast<Instruction>(SI->getPointerOperand()));
                 std::string dest = printOperand(SI->getPointerOperand());
-                //if (dest[0] == '&')
-                    //dest = dest.substr(1);
                 std::string alloc = "STORE ";
                 if (isAlloca(SI->getPointerOperand()))
                     alloc = "LET " + typeName(cast<PointerType>(
@@ -978,7 +967,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 std::string temp = isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ";
                 if (tempCond != "")
                     temp += "(" + tempCond + ")";
-                mlines.push_back("CALL" + temp + ":" + printCall(II));
+                mlines.push_back("CALL" + temp + ":" + printCall(II, true));
                 break;
                 }
             }
