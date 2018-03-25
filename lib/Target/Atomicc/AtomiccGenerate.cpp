@@ -372,30 +372,15 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
         if (I == E) { // off the end of parameters
             // HACK HACK HACK HACK for 'fifo0'
             printf("[%s:%d] expose %d referstr %s\n", __FUNCTION__, __LINE__, expose, referstr.c_str());
-            referstr += "0";
-        } else
-        if (I != E && (I.getIndexedType())->isArrayTy())
-            if (const ConstantInt *CI = dyn_cast<ConstantInt>(I.getOperand())) {
-                uint64_t val = CI->getZExtValue();
-                if (const GlobalVariable *globalVar = dyn_cast<GlobalVariable>(Ptr))
-                if (globalVar && !globalVar->getInitializer()->isNullValue()
-                 && (CPA = dyn_cast<ConstantDataArray>(globalVar->getInitializer()))) {
-                    ERRORIF(val || !CPA->isString());
-                    referstr = printString(CPA->getAsString());
-                }
-                if (val)
-                    referstr += '+' + utostr(val);
-                if (trace_gep)
-                    printf("[%s:%d] expose %d referstr %s\n", __FUNCTION__, __LINE__, expose, referstr.c_str());
-                ++I;     // we processed this index
-            }
+            referstr += "[0]";
+        }
     }
     for (; I != E; ++I) {
         if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
             std::string fname = fieldName(STy, foffset);
             if (trace_gep)
-                printf("[%s:%d] expose %d referstr %s cbuffer %s STy %s fname %s\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str());
+                printf("[%s:%d] expose %d referstr %s cbuffer %s STy %s fname %s foffset %d\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset);
             if (!expose && referstr[0] == '&') {
                 expose = true;
                 referstr = referstr.substr(1);
@@ -419,14 +404,7 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
             Type *Ty = I.getIndexedType();
             if (trace_gep)
                 printf("[%s:%d] expose %d referstr %s cbuffer %s array %d vector %d\n", __FUNCTION__, __LINE__, expose, referstr.c_str(), cbuffer.c_str(), Ty->isArrayTy(), Ty->isVectorTy());
-            cbuffer += referstr;
-            if (Ty->isVectorTy()) {
-                if (!isa<Constant>(I.getOperand()) || !cast<Constant>(I.getOperand())->isNullValue())
-                    cbuffer += ")+(" + printOperand(I.getOperand());
-                cbuffer += "))";
-            }
-            else
-                cbuffer += "[" + printOperand(I.getOperand()) + "]";
+            cbuffer += referstr + "[" + printOperand(I.getOperand()) + "]";
         }
         referstr = "";
     }
