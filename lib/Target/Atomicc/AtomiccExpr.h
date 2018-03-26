@@ -13,8 +13,7 @@
 #include "AtomiccIR.h"
 
 static std::string lexString;
-static int lexTotal;
-static int lexIndex;
+static unsigned lexIndex;
 static char lexChar;
 
 bool isIdChar(char ch)
@@ -29,14 +28,13 @@ bool isParenChar(char ch)
 
 static std::string treePost(ACCExpr *arg)
 {
-    std::string ret;
     if (arg->value == "[")
         return " ]";
     else if (arg->value == "(")
         return " )";
     else if (arg->value == "{")
         return " }";
-    return ret;
+    return "";
 }
 
 static std::string tree2str(ACCExpr *arg)
@@ -86,7 +84,35 @@ static ACCExpr *appendExpr(ACCExpr *prev, ACCExpr *next)
     return prev;           // Return pointer to last element in final list
 }
 
-static ACCExpr *get1Token(ACCExpr *prev, std::string terminator)
+static ACCExpr *get1Token(void);
+static ACCExpr *getExprList(ACCExpr *head)
+{
+    if (head) {
+        std::string terminator = treePost(head);
+        if (terminator.length() > 0)
+            terminator = terminator.substr(1);
+        ACCExpr *plist = head;
+        while (1) {
+            ACCExpr *tok = get1Token();
+            if (!tok || tok->value == terminator)
+                break;
+            if (isIdChar(plist->value[0]) && tok->value == "[") {
+                plist->operands.push_back(tok);
+                continue;
+            }
+            if (terminator != "" && !plist->operands.size() && isParenChar(plist->value[0]))
+                plist->operands.push_back(tok); // the first item in a recursed list
+            else
+                plist->next = tok;
+            plist = tok;
+        }
+        if (head && head->value == "(" && !head->next)
+            head = head->operands.front();
+    }
+    return head;
+}
+
+static ACCExpr *get1Token(void)
 {
     std::string lexToken;
     auto getNext = [&] (void) -> void {
@@ -96,7 +122,7 @@ static ACCExpr *get1Token(ACCExpr *prev, std::string terminator)
 
     while (lexChar == ' ' || lexChar == '\t')
         lexChar = lexString[lexIndex++];
-    if(lexIndex > lexTotal || lexChar == 0)
+    if(lexIndex > lexString.length() || lexChar == 0)
         return nullptr;
     if (isIdChar(lexChar))
         do {
@@ -122,35 +148,16 @@ static ACCExpr *get1Token(ACCExpr *prev, std::string terminator)
         printf("[%s:%d] lexString '%s' unknown lexChar %c %x\n", __FUNCTION__, __LINE__, lexString.c_str(), lexChar, lexChar);
         exit(-1);
     }
-    if (lexToken == terminator)
-        return nullptr;
-    ACCExpr *ret = allocExpr(lexToken), *plist = ret, *retptr = ret;
-    if (prev) {
-        if (isIdChar(prev->value[0]) && ret->value == "[") {
-            prev->operands.push_back(ret);
-            retptr = prev;
-        }
-        else if (terminator != "" && !prev->operands.size() && isParenChar(prev->value[0]))
-            prev->operands.push_back(ret); // the first item in a recursed list
-        else
-            prev->next = ret;
-    }
+    ACCExpr *ret = allocExpr(lexToken);
     if (isParenChar(ret->value[0]))
-        while ((plist = get1Token(plist, treePost(ret).substr(1))))
-            ;
-    return retptr;
+        getExprList(ret);
+    return ret;
 }
 
 static ACCExpr *str2tree(std::string arg)
 {
     lexString = arg;
-    lexTotal = lexString.length();
     lexIndex = 0;
     lexChar = lexString[lexIndex++];
-    ACCExpr *tok = get1Token(nullptr, ""), *prev = tok;
-    while ((prev = get1Token(prev, "")))
-        ;
-    if (tok && tok->value == "(" && !tok->next)
-        tok = tok->operands.front();
-    return tok;
+    return getExprList(get1Token());
 }
