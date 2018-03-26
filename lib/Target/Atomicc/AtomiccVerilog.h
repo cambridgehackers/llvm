@@ -448,7 +448,7 @@ printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_
 std::string dest = tree2str(info.dest);
 std::string destType = findType(dest);
 if (destType == "") {
-printf("[%s:%d] typenotfound\n", __FUNCTION__, __LINE__);
+printf("[%s:%d] typenotfound %s\n", __FUNCTION__, __LINE__, dest.c_str());
 exit(-1);
 }
             hasAlways = true;
@@ -542,14 +542,6 @@ std::string getRdyName(std::string basename)
     return rdyName;
 }
 
-static std::string encapExpr(std::string arg)
-{
-    std::string temp = arg;
-    int ind = temp.find(" ");
-    if (ind != -1)
-        temp = "(" + temp + ")";
-    return temp;
-}
 static std::string invertExpr(ACCExpr *expr)
 {
     std::string arg = tree2str(expr);
@@ -558,8 +550,8 @@ static std::string invertExpr(ACCExpr *expr)
     int indparen = arg.find("(");
     int indeq = arg.find("==");
     if (indparen == -1 && indeq > 0)
-        return encapExpr(arg.substr(0, indeq) + "!=" + arg.substr(indeq + 2));
-    return encapExpr(encapExpr(arg) + " ^ 1");
+        return "(" + arg.substr(0, indeq) + "!=" + arg.substr(indeq + 2) + ")";
+    return "((" + arg + ") ^ 1)";
 }
 
 // lift guards from called method interfaces
@@ -579,7 +571,7 @@ void promoteGuards(ModuleIR *IR)
             if (tree2str(MIRdy->guard) == "1")
                 MIRdy->guard = str2tree(tempCond);
             else
-                MIRdy->guard = str2tree(encapExpr(tree2str(MIRdy->guard)) + " & " + encapExpr(tempCond));
+                MIRdy->guard = str2tree("(" + tree2str(MIRdy->guard) + ") & (" + tempCond + ")");
         }
     }
 }

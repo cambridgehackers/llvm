@@ -106,8 +106,11 @@ static ACCExpr *getExprList(ACCExpr *head)
                 plist->next = tok;
             plist = tok;
         }
-        if (head && head->value == "(" && !head->next)
+        if (head->value == "(" && head->operands.size() && !head->operands.front()->next) {
+            ACCExpr *next = head->next;
             head = head->operands.front();
+            head->next = next;
+        }
     }
     return head;
 }
@@ -150,7 +153,7 @@ static ACCExpr *get1Token(void)
     }
     ACCExpr *ret = allocExpr(lexToken);
     if (isParenChar(ret->value[0]))
-        getExprList(ret);
+        return getExprList(ret);
     return ret;
 }
 
@@ -159,5 +162,8 @@ static ACCExpr *str2tree(std::string arg)
     lexString = arg;
     lexIndex = 0;
     lexChar = lexString[lexIndex++];
-    return getExprList(get1Token());
+    ACCExpr *head = getExprList(get1Token());
+    if (head && head->value == "(" && !head->next && head->operands.size())
+        head = head->operands.front();
+    return head;
 }
