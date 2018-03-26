@@ -696,8 +696,7 @@ std::string printOperand(const Value *Operand)
 static void processBlockConditions(const Function *currentFunction)
 {
     for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
-        for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE;) {
-            const auto INEXT = std::next(IIb);
+        for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE; IIb++) {
             const Instruction *II = &*IIb;
             switch (II->getOpcode()) {
             case Instruction::Br: {
@@ -721,7 +720,6 @@ static void processBlockConditions(const Function *currentFunction)
                 }
             case Instruction::Switch: {
                 const SwitchInst* SI = cast<SwitchInst>(II);
-                const Value *switchIndex = SI->getCondition();
                 //BasicBlock *defaultBB = SI->getDefaultDest();
                 for (auto CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
                     const BasicBlock *caseBB = CI->getCaseSuccessor();
@@ -729,14 +727,11 @@ static void processBlockConditions(const Function *currentFunction)
                     printf("[%s:%d] [%lld] = %s\n", __FUNCTION__, __LINE__, val, caseBB?caseBB->getName().str().c_str():"NONE");
                     if (getCondStr(caseBB) == "") // 'true' condition
                         setCondition(caseBB, false,
-                             "(" + parenOperand(switchIndex) + " == " + autostr(val) + ")", &*BBI);
+                             "(" + parenOperand(SI->getCondition()) + " == " + autostr(val) + ")", &*BBI);
                 }
-                //printf("[%s:%d] after switch\n", __FUNCTION__, __LINE__);
-                //II->getParent()->getParent()->dump();
                 break;
                 }
             }
-            IIb = INEXT;
         }
     }
 }
@@ -811,7 +806,7 @@ static std::string processMethod(std::string methodName, const Function *func,
     std::string retGuard, valsep;
     for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
         std::string tempCond = getCondStr(&*BI);
-        for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
+        for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE; IIb++) {
             const Instruction *II = &*IIb;
             switch(II->getOpcode()) {
             case Instruction::Store: {
