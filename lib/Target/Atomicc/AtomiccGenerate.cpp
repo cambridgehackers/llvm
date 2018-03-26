@@ -80,14 +80,6 @@ const char *intmapLookup(INTMAP_TYPE *map, int value)
     return "unknown";
 }
 
-static const AllocaInst *isDirectAlloca(const Value *V)
-{
-    const AllocaInst *AA = dyn_cast<AllocaInst>(V);
-    if (!AA || AA->isArrayAllocation()
-     || AA->getParent() != &AA->getParent()->getParent()->getEntryBlock())
-        return 0;
-    return AA;
-}
 static bool isAlloca(const Value *arg)
 {
     if (const GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
@@ -96,10 +88,6 @@ static bool isAlloca(const Value *arg)
     if (source->getOpcode() == Instruction::Alloca)
             return true;
     return false;
-}
-static bool isAddressExposed(const Value *V)
-{
-    return isa<GlobalVariable>(V) || isDirectAlloca(V);
 }
 /*
  * Return the name of the 'ind'th field of a StructType.
@@ -454,16 +442,7 @@ printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 
 std::string parenOperand(const Value *Operand)
 {
-    std::string temp = printOperand(Operand);
-    int indent = 0;
-    for (auto ch: temp)
-        if (ch == '{')
-            indent++;
-        else if (ch == '}')
-            indent--;
-        else if (indent == 0 && !isalnum(ch) && ch != '$' && ch != '_')
-            return "(" + temp + ")";
-    return temp;
+    return "(" + printOperand(Operand) + ")";
 }
 
 static void setCondition(BasicBlock *bb, bool invert, Value *val, BasicBlock *from)
@@ -530,7 +509,7 @@ static Value *getACondition(BasicBlock *bb, bool invert)
 static std::string getCondStr(BasicBlock *bb)
 {
     if (Value *cond = getACondition(bb, false))
-        return printOperand(cond);
+        return parenOperand(cond);
     return "";
 }
 
@@ -620,9 +599,9 @@ std::string printOperand(const Value *Operand)
         case Instruction::And: case Instruction::Or: case Instruction::Xor:
             assert(!I->getType()->isPointerTy());
             if (BinaryOperator::isNeg(I))
-                vout += "-(" + printOperand(BinaryOperator::getNegArgument(cast<BinaryOperator>(I))) + ")";
+                vout += "-" + parenOperand(BinaryOperator::getNegArgument(cast<BinaryOperator>(I)));
             else if (BinaryOperator::isFNeg(I))
-                vout += "-(" + printOperand(BinaryOperator::getFNegArgument(cast<BinaryOperator>(I))) + ")";
+                vout += "-" + parenOperand(BinaryOperator::getFNegArgument(cast<BinaryOperator>(I)));
             else if (I->getOpcode() == Instruction::FRem) {
                 if (I->getType() == Type::getFloatTy(I->getContext()))
                     vout += "fmodf(";
@@ -696,7 +675,7 @@ std::string printOperand(const Value *Operand)
                 if (cStr != "" && (opIndex != Eop - 1 || getACondition(inBlock, true) != prevCond))
                     vout += cStr + " ? ";
                 prevCond = getACondition(inBlock, false);
-                vout += printOperand(PN->getIncomingValue(opIndex));
+                vout += parenOperand(PN->getIncomingValue(opIndex));
                 if (opIndex != Eop - 1)
                     vout += ":";
             }
@@ -896,10 +875,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 if (isAlloca(SI->getPointerOperand()))
                     alloc = "LET " + typeName(cast<PointerType>(
                       SI->getPointerOperand()->getType())->getElementType()) + " ";
-                std::string temp;
-                if (tempCond != "")
-                    temp = "(" + tempCond + ")";
-                mlines.push_back(alloc + temp + ":" + dest + " = " + value);
+                mlines.push_back(alloc + tempCond + ":" + dest + " = " + value);
                 break;
                 }
             case Instruction::Ret:
@@ -909,14 +885,12 @@ static std::string processMethod(std::string methodName, const Function *func,
                 if (tempCond != "")
                     retGuard += tempCond + " ? ";
                 valsep = " : ";
-                retGuard += printOperand(II->getOperand(0));
+                retGuard += parenOperand(II->getOperand(0));
                 break;
             case Instruction::Call: { // can have value
                 if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
                     break;
-                std::string temp = isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ";
-                if (tempCond != "")
-                    temp += "(" + tempCond + ")";
+                std::string temp = (isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ") + tempCond;
                 mlines.push_back("CALL" + temp + ":" + printCall(II, true));
                 break;
                 }
