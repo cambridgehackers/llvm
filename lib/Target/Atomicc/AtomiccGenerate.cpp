@@ -10,13 +10,10 @@
 // This file implements zzz
 //
 //===----------------------------------------------------------------------===//
-#include <stdio.h>
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/ExecutionEngine/GenericValue.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
-#include "llvm/IR/IRBuilder.h"
 
 using namespace llvm;
 
@@ -59,10 +56,9 @@ static INTMAP_TYPE opcodeMap[] = {
     {Instruction::Shl, "<<"}, {Instruction::LShr, ">>"}, {Instruction::AShr, " >> "}, {}};
 typedef struct {
     bool invert;
-    Value *cond;
-    BasicBlock *from;
+    std::string cond;
+    const BasicBlock *from;
 } BlockCondItem;
-static std::map<const BasicBlock *, std::list<BlockCondItem *>> blockCondition;
 
 /*
  * Utility functions
@@ -412,8 +408,6 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         exit(-1);
     }
     std::string pcalledFunction = printOperand(*AI++); // skips 'this' param
-    if (pcalledFunction[0] == '&')
-        pcalledFunction = pcalledFunction.substr(1);
     if (trace_call || fname == "")
         printf("CALL: CALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (fname == "") {
@@ -445,72 +439,38 @@ std::string parenOperand(const Value *Operand)
     return "(" + printOperand(Operand) + ")";
 }
 
-static void setCondition(BasicBlock *bb, bool invert, Value *val, BasicBlock *from)
+static std::map<const BasicBlock *, std::list<BlockCondItem>> blockCondition;
+static void setCondition(const BasicBlock *bb, bool invert, std::string val, const BasicBlock *from)
 {
     // each element in list is a valid path to get to the target BasicBlock.
     // therefore the 'execute guard' for the BB is the 'OR' of all elements in the list.
-    blockCondition[bb].push_back(new BlockCondItem{invert, val, from});
+    blockCondition[bb].push_back(BlockCondItem{invert, val, from});
 }
-static Value *makeBinop(BasicBlock *bb, BinaryOperator::BinaryOps Opc, Value *LHS, Value *RHS)
+static std::string getCondStr(const BasicBlock *bb)
 {
-    Instruction *TI = bb->getTerminator();
-    if (!TI) {
-        printf("[%s:%d] terminator not found!!\n", __FUNCTION__, __LINE__);
-        bb->dump();
-        exit(-1);
-    }
-    IRBuilder<> builder(bb);
-    builder.SetInsertPoint(TI);
-    if (Instruction *ins = dyn_cast<Instruction>(LHS))
-    if (ins->getParent() != bb) {
-        prepareReplace(NULL, NULL);
-        LHS = cloneTree(ins, TI);
-    }
-    if (!RHS)
-        RHS = builder.getInt1(1);
-    else if (Instruction *ins = dyn_cast<Instruction>(RHS))
-        if (ins->getParent() != bb) {
-            prepareReplace(NULL, NULL);
-            RHS = cloneTree(ins, TI);
-        }
-    return BinaryOperator::Create(Opc, LHS, RHS, "insertedCond", TI);
-}
-static Value *makeInvert(BasicBlock *bb, Value *aval)
-{
-    return makeBinop(bb, Instruction::Xor, aval, NULL);
-}
-static Value *getACondition(BasicBlock *bb, bool invert)
-{
-    Value *exprTop = nullptr;
     if (blockCondition[bb].size() == 1) {
-        BlockCondItem *BC = blockCondition[bb].front();
-        if (blockCondition[BC->from].size() == 0) {
-            if (BC->invert == invert)
-                return BC->cond;
-            return makeInvert(bb, BC->cond);
+        BlockCondItem &BC = blockCondition[bb].front();
+        if (!blockCondition[BC.from].size()) {
+            if (!BC.invert)
+                return BC.cond;
+            return "(" + BC.cond + " ^ 1)";
         }
     }
+    std::string exprTop;
     for (auto item: blockCondition[bb]) {
-        Value *thisTerm = item->cond;
-        if (item->invert)
+        std::string thisTerm = item.cond;
+        if (item.invert)
             // Since we are 'AND'ing conditions together, remove inversions
-            thisTerm = makeInvert(bb, thisTerm);
-        if (Value *blockCond = getACondition(item->from, false))
+            thisTerm = "(" + thisTerm + "^ 1)";
+        std::string condStr = getCondStr(item.from);
+        if (condStr != "")
             // if BB where 'If' statement existed had a condition, 'AND' it in
-            thisTerm = makeBinop(bb, Instruction::And, thisTerm, blockCond);
-        if (exprTop)  // 'OR' together all paths of getting to this BB
-            thisTerm = makeBinop(bb, Instruction::Or, thisTerm, exprTop);
+            thisTerm = "(" + thisTerm + " & " + condStr + ")";
+        if (exprTop != "")  // 'OR' together all paths of getting to this BB
+            thisTerm = "(" + thisTerm + " | " + exprTop + ")";
         exprTop = thisTerm;
     }
-    if (invert && exprTop)
-        exprTop = makeInvert(bb, exprTop);
     return exprTop;
-}
-static std::string getCondStr(BasicBlock *bb)
-{
-    if (Value *cond = getACondition(bb, false))
-        return parenOperand(cond);
-    return "";
 }
 
 static std::string typeName(const Type *Ty)
@@ -668,13 +628,11 @@ std::string printOperand(const Value *Operand)
             }
         case Instruction::PHI: {
             const PHINode *PN = dyn_cast<PHINode>(I);
-            Value *prevCond = NULL;
             for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
                 std::string cStr = getCondStr(inBlock);
-                if (cStr != "" && (opIndex != Eop - 1 || getACondition(inBlock, true) != prevCond))
+                if (cStr != "")
                     vout += cStr + " ? ";
-                prevCond = getACondition(inBlock, false);
                 vout += parenOperand(PN->getIncomingValue(opIndex));
                 if (opIndex != Eop - 1)
                     vout += ":";
@@ -735,20 +693,20 @@ std::string printOperand(const Value *Operand)
     return cbuffer;
 }
 
-static void processBlockConditions(Function *currentFunction)
+static void processBlockConditions(const Function *currentFunction)
 {
     for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
         for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE;) {
-            auto INEXT = std::next(BasicBlock::iterator(IIb));
-            Instruction *II = &*IIb;
+            const auto INEXT = std::next(IIb);
+            const Instruction *II = &*IIb;
             switch (II->getOpcode()) {
             case Instruction::Br: {
                 // BUG BUG BUG -> combine the condition for the current block with the getConditions for this instruction
                 const BranchInst *BI = dyn_cast<BranchInst>(II);
                 if (BI && BI->isConditional()) {
                     //printf("[%s:%d] condition %s [%p, %p]\n", __FUNCTION__, __LINE__, printOperand(BI->getCondition()).c_str(), BI->getSuccessor(0), BI->getSuccessor(1));
-                    setCondition(BI->getSuccessor(0), false, BI->getCondition(), &*BBI); // 'true' condition
-                    setCondition(BI->getSuccessor(1), true, BI->getCondition(), &*BBI); // 'inverted' condition
+                    setCondition(BI->getSuccessor(0), false, parenOperand(BI->getCondition()), &*BBI); // 'true' condition
+                    setCondition(BI->getSuccessor(1), true, parenOperand(BI->getCondition()), &*BBI); // 'inverted' condition
                 }
                 else if (isa<IndirectBrInst>(II)) {
                     printf("[%s:%d] indirect\n", __FUNCTION__, __LINE__);
@@ -762,26 +720,16 @@ static void processBlockConditions(Function *currentFunction)
                 break;
                 }
             case Instruction::Switch: {
-                SwitchInst* SI = cast<SwitchInst>(II);
-                Value *switchIndex = SI->getCondition();
-                Type  *swType = switchIndex->getType();
+                const SwitchInst* SI = cast<SwitchInst>(II);
+                const Value *switchIndex = SI->getCondition();
                 //BasicBlock *defaultBB = SI->getDefaultDest();
-                for (SwitchInst::CaseIt CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
-                    BasicBlock *caseBB = CI->getCaseSuccessor();
+                for (auto CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
+                    const BasicBlock *caseBB = CI->getCaseSuccessor();
                     int64_t val = CI->getCaseValue()->getZExtValue();
                     printf("[%s:%d] [%lld] = %s\n", __FUNCTION__, __LINE__, val, caseBB?caseBB->getName().str().c_str():"NONE");
-                    if (getCondStr(caseBB) == "") { // 'true' condition
-                        IRBuilder<> cbuilder(caseBB);
-                        Instruction *TI = caseBB->getTerminator();
-                        Value *myIndex = switchIndex;
-                        if (Instruction *expr = dyn_cast<Instruction>(switchIndex)) {
-                            prepareClone(TI, II->getParent()->getParent());
-                            myIndex = cloneTree(expr, TI);
-                        }
-                        cbuilder.SetInsertPoint(TI);
-                        Value *cmp = cbuilder.CreateICmpEQ(myIndex, ConstantInt::get(swType, val));
-                        setCondition(caseBB, false, cmp, &*BBI);
-                    }
+                    if (getCondStr(caseBB) == "") // 'true' condition
+                        setCondition(caseBB, false,
+                             "(" + parenOperand(switchIndex) + " == " + autostr(val) + ")", &*BBI);
                 }
                 //printf("[%s:%d] after switch\n", __FUNCTION__, __LINE__);
                 //II->getParent()->getParent()->dump();
@@ -857,12 +805,12 @@ static std::string processMethod(std::string methodName, const Function *func,
     };
     globalMethodName = methodName;
     // Set up condition expressions for all BasicBlocks 
-    processBlockConditions(const_cast<Function *>(func));
+    processBlockConditions(func);
     NextAnonValueNumber = 0;
     /* Gather data for top level instructions in each basic block. */
     std::string retGuard, valsep;
     for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
-        std::string tempCond = getCondStr(const_cast<BasicBlock *>(&*BI));
+        std::string tempCond = getCondStr(&*BI);
         for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE;IIb++) {
             const Instruction *II = &*IIb;
             switch(II->getOpcode()) {
@@ -915,7 +863,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
     for (auto item: table->IR->unionList)
         fprintf(OStr, "    UNION %s %s\n", item.type.c_str(), item.name.c_str());
     if (table->IR->unionList.size())
-        fprintf(OStr, "    FIELD INTEGER_%d DATA\n", sizeType(table->STy));
+        fprintf(OStr, "    FIELD INTEGER_%ld DATA\n", (long)sizeType(table->STy));
     else
         processField(table, OStr);
     for (auto FI : table->method) {
