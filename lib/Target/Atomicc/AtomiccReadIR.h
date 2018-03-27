@@ -41,16 +41,18 @@ static ACCExpr *walkRead (ModuleIR *IR, MethodInfo *MI, ACCExpr *expr, ACCExpr *
     if (expr) {
         std::string fieldName = expr->value;
         if (isIdChar(fieldName[0])) {
-            if (MI && (!expr->next || expr->next->value != "{"))
+            if (MI && (!expr->operands.size() || expr->operands.front()->value != "{"))
                 MI->meta[MetaRead][fieldName].insert(tree2str(cond));
             int size = -1;
-            if (expr->operands.size()) {
+            if (expr->operands.size() && expr->operands.front()->value == "[") {
                 ACCExpr *sub = expr->operands.front();
                 expr->operands.pop_front();
                 std::string post, subscript = tree2str(sub->operands.front());
                 sub->operands.clear();
                 ACCExpr *next = expr->next;
                 if (next && isIdChar(next->value[0])) {
+                    if (next->operands.size() && next->operands.front()->value == "{")
+                        expr->operands.push_back(next->operands.front());
                     post = next->value;
                     next = next->next;
                     expr->next = next;
@@ -243,10 +245,11 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             ParseCheck(checkItem(":"), "':' missing");
                             ACCExpr *expr = walkRead(IR, MI, str2tree(bufp), cond);
                             MI->callList.push_back(CallListElement{expr, cond, isAction});
-                            if (isIdChar(expr->value[0]) && expr->next && expr->next->value == "{")
+                            if (isIdChar(expr->value[0]) && expr->operands.size() && expr->operands.front()->value == "{")
                                 MI->meta[MetaInvoke][expr->value].insert(tree2str(cond));
                             else {
                                 printf("[%s:%d] called method name not found %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
+dumpExpr("READCALL", expr);
                                 exit(-1);
                             }
                         }

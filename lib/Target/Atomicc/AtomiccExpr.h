@@ -16,12 +16,12 @@ static std::string lexString;
 static unsigned lexIndex;
 static char lexChar;
 
-bool isIdChar(char ch)
+static bool isIdChar(char ch)
 {
     return isalpha(ch) || ch == '_' || ch == '$';
 }
 
-bool isParenChar(char ch)
+static bool isParenChar(char ch)
 {
     return ch == '[' || ch == '(' || ch == '{';
 }
@@ -84,36 +84,7 @@ static ACCExpr *appendExpr(ACCExpr *prev, ACCExpr *next)
     return prev;           // Return pointer to last element in final list
 }
 
-static ACCExpr *get1Token(void);
-static ACCExpr *getExprList(ACCExpr *head)
-{
-    if (head) {
-        std::string terminator = treePost(head);
-        if (terminator.length() > 0)
-            terminator = terminator.substr(1);
-        ACCExpr *plist = head;
-        while (1) {
-            ACCExpr *tok = get1Token();
-            if (!tok || tok->value == terminator)
-                break;
-            if (isIdChar(plist->value[0]) && tok->value == "[") {
-                plist->operands.push_back(tok);
-                continue;
-            }
-            if (terminator != "" && !plist->operands.size() && isParenChar(plist->value[0]))
-                plist->operands.push_back(tok); // the first item in a recursed list
-            else
-                plist->next = tok;
-            plist = tok;
-        }
-        if (head->value == "(" && head->operands.size() && !head->operands.front()->next) {
-            ACCExpr *next = head->next;
-            head = head->operands.front();
-            head->next = next;
-        }
-    }
-    return head;
-}
+static ACCExpr *getExprList(ACCExpr *head);
 
 static ACCExpr *get1Token(void)
 {
@@ -155,6 +126,68 @@ static ACCExpr *get1Token(void)
     if (isParenChar(ret->value[0]))
         return getExprList(ret);
     return ret;
+}
+
+static bool checkOperand(std::string s)
+{
+    return isIdChar(s[0]) || isdigit(s[0]) || s == "(" || s == "{";
+}
+static bool checkOperator(std::string s)
+{
+    return s == "{" || s == "[" 
+      ||  s == "==" || s == "&" || s == "+" || s == "-" || s == "*" || s == "%" || s == "!="
+      || s == "?" || s == ":" || s == "^" || s == ","
+      || s == "|" || s == "||" || s == "<" || s == ">";
+}
+
+enum {ParseNone, ParseOperand, ParseOperator};
+static ACCExpr *getExprList(ACCExpr *head)
+{
+    if (head) {
+        std::string terminator = treePost(head);
+    int parseState = (terminator != "" && !head->operands.size()) ? ParseOperand : ParseOperator;
+        if (terminator.length() > 0)
+            terminator = terminator.substr(1);
+        ACCExpr *plist = head;
+        while (1) {
+            ACCExpr *tok = get1Token();
+            if (!tok || tok->value == terminator)
+                break;
+            switch (parseState) {
+            case ParseOperand:
+                if (checkOperand(tok->value)) {
+                    parseState = ParseOperator;
+                    break;
+                }
+                printf("[%s:%d] OPERAND CHECKFAILLLLLLLLLLLLLLL %s from %s\n", __FUNCTION__, __LINE__, tok->value.c_str(), lexString.c_str());
+                exit(-1);
+                break;
+            case ParseOperator:
+                if (checkOperator(tok->value)) {
+                    parseState = ParseOperand;
+                    break;
+                }
+                printf("[%s:%d] OPERATOR CHECKFAILLLLLLLLLLLLLLL %s from %s\n", __FUNCTION__, __LINE__, tok->value.c_str(), lexString.c_str());
+                exit(-1);
+                break;
+            }
+            if (isIdChar(plist->value[0]) && isParenChar(tok->value[0]))
+                plist->operands.push_back(tok);
+            else {
+                if (terminator != "" && !plist->operands.size() && isParenChar(plist->value[0]))
+                    plist->operands.push_back(tok); // the first item in a recursed list
+                else
+                    plist->next = tok;
+                plist = tok;
+            }
+        }
+        if (head->value == "(" && head->operands.size() && !head->operands.front()->next) {
+            ACCExpr *next = head->next;
+            head = head->operands.front();
+            head->next = next;
+        }
+    }
+    return head;
 }
 
 static ACCExpr *str2tree(std::string arg)

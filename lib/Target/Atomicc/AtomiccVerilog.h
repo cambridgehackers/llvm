@@ -366,7 +366,7 @@ printf("[%s:%d] BBBBBBBBBBBBBBBBBBBBBBBBBBBBB %s type %s\n", __FUNCTION__, __LIN
             }
             std::string calledName = info.value->value;
 printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
-            if (!info.value->next || info.value->next->value != "{") {
+            if (!info.value->operands.size() || info.value->operands.front()->value != "{") {
                 printf("[%s:%d] incorrectly formed call expression\n", __FUNCTION__, __LINE__);
                 exit(-1);
             }
@@ -381,7 +381,7 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             auto AI = CI->params.begin();
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             int argCount = CI->params.size();
-            ACCExpr *param = info.value->next->operands.front();
+            ACCExpr *param = info.value->operands.front()->operands.front();
             while(param && argCount-- > 0) {
                 std::string scanexp, sep;
                 while(param && param->value != ",") {
