@@ -42,7 +42,9 @@ typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 
 static void setAssign(std::string target, ACCExpr *value, std::string type)
 {
-//printf("[%s:%d] start [%s] = %s\n", __FUNCTION__, __LINE__, target.c_str(), value.c_str());
+#if 0
+if (value) printf("[%s:%d] start [%s] = %s type '%s'\n", __FUNCTION__, __LINE__, target.c_str(), tree2str(value).c_str(), type.c_str());
+#endif
     assignList[target] = AssignItem{value, type};
 }
 
@@ -189,7 +191,9 @@ static std::string walkTree (ACCExpr *expr, bool *changed)
     if (isIdChar(ret[0])) {
         if (ACCExpr *temp = assignList[ret].value) {
             refList[ret] = false;
+#if 0
 printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2str(temp).c_str());
+#endif
             ret = walkTree(temp, changed);
             if (changed)
                 *changed = true;
@@ -199,6 +203,17 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
         else if (!changed)
             refList[ret] = true;
     }
+    if (expr->infix) {
+        ret = "";
+        std::string sep, op = expr->value;
+        for (auto item: expr->operands) {
+            ret += sep + walkTree(item, changed);
+            sep = " " + op + " ";
+            if (op == "?")
+                op = ":";
+        }
+    }
+    else
     for (auto item: expr->operands)
         ret += " " + walkTree(item, changed);
     ret += treePost(expr);
@@ -215,6 +230,15 @@ std::string findType(std::string name)
         if (expr->value == "?" && expr->next)
             expr = expr->next;
     }
+    else if (expr->value == "?") {
+        int i = 0;
+        for (auto item: expr->operands)
+            if (i++ == 1) {
+                expr = item;
+                break;
+            }
+    }
+//printf("[%s:%d] name %s expr %s\n", __FUNCTION__, __LINE__, name.c_str(), expr->value.c_str());
     if (regList.find(expr->value) != regList.end())
         return regList[expr->value];
     else if (typeList.find(expr->value) != typeList.end())
@@ -382,6 +406,21 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             int argCount = CI->params.size();
             ACCExpr *param = info.value->operands.front()->operands.front();
+printf("[%s:%d] param '%s'\n", __FUNCTION__, __LINE__, tree2str(param).c_str());
+//dumpExpr("param", param);
+if (param && param->infix && param->value == ",") {
+for (auto item: param->operands) {
+            if(argCount-- > 0) {
+                std::string scanexp = tree2str(item);
+printf("[%s:%d] infmuxVL[%s] = cond '%s' tree '%s'\n", __FUNCTION__, __LINE__, (pname + AI->name).c_str(),
+tree2str(tempCond).c_str(), scanexp.c_str());
+                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
+                typeList[pname + AI->name] = AI->type;
+                AI++;
+            }
+}
+}
+else {
             while(param && argCount-- > 0) {
                 std::string scanexp, sep;
                 while(param && param->value != ",") {
@@ -396,6 +435,8 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
                 }
                 if (param)
                     param = param->next;
+printf("[%s:%d] muxVL[%s] = cond '%s' tree '%s'\n", __FUNCTION__, __LINE__, (pname + AI->name).c_str(),
+tree2str(tempCond).c_str(), scanexp.c_str());
                 muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
                 typeList[pname + AI->name] = AI->type;
                 AI++;
@@ -404,6 +445,7 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
 printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree2str(param).c_str(), tree2str(info.value).c_str());
                 exit(-1);
             }
+}
         }
     }
     for (auto item: enableList)
@@ -411,12 +453,12 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
     for (auto item: muxValueList) {
-        ACCExpr *prevCond = nullptr;
+        std::string prevCond;
         std::string temp, prevValue;
         for (auto element: item.second) {
-            if (prevCond)
-                temp += tree2str(prevCond) + " ? " + prevValue + " : ";
-            prevCond = element.cond;
+            if (prevCond != "")
+                temp += prevCond + " ? " + prevValue + " : ";
+            prevCond = tree2str(element.cond);
             prevValue = tree2str(element.value);
         }
         setAssign(item.first, str2tree(temp + prevValue), typeList[item.first]);
@@ -427,7 +469,9 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
             bool treeChanged = false;
             std::string newItem = walkTree(item.second.value, &treeChanged);
             if (treeChanged) {
+#if 0
 printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_str(), tree2str(item.second.value).c_str(), newItem.c_str());
+#endif
                 assignList[item.first].value = str2tree(newItem);
             }
         }
@@ -467,7 +511,7 @@ exit(-1);
     for (auto aitem: assignList)
         if (aitem.second.value && refList[aitem.first])
             walkRef(aitem.second.value);
-#if 1
+#if 0
     for (auto aitem: assignList)
         if (aitem.second.value)
             printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), tree2str(aitem.second.value).c_str());

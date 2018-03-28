@@ -57,6 +57,10 @@ static ACCExpr *walkRead (ModuleIR *IR, MethodInfo *MI, ACCExpr *expr, ACCExpr *
                     next = next->next;
                     expr->next = next;
                 }
+                else if (expr->operands.size() && isIdChar(expr->operands.front()->value[0])) {
+                    post = expr->operands.front()->value;
+                    expr->operands.pop_front();
+                }
                 for (auto item: IR->fields)
                     if (item.fldName == fieldName) {
                         size = item.vecCount;
@@ -70,12 +74,15 @@ printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE_
                         ret += " ( " + subscript + " == " + autostr(i) + " ) ? "
                             + fieldName + autostr(i) + post + " : ";
                     ACCExpr *newTree = str2tree("(" + ret + fieldName + autostr(size - 1) + post + ")");
+printf("[%s:%d] NEWTREEFORSUB %s\n", __FUNCTION__, __LINE__, tree2str(newTree).c_str());
                     expr->value = newTree->value;
                     expr->next = newTree->next;
+                    expr->infix = newTree->infix;
                     expr->operands.clear();
-                    if (newTree->operands.size())
-                        expr->operands.push_back(newTree->operands.front());
+                    for (auto item: newTree->operands)
+                        expr->operands.push_back(item);
                     appendExpr(expr, next);
+printf("[%s:%d] FINALLLLLL %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
                 }
             }
         }
