@@ -41,10 +41,15 @@ static std::string treePost(ACCExpr *arg)
     return "";
 }
 
+static bool checkOperand(std::string s)
+{
+    return isIdChar(s[0]) || isdigit(s[0]) || s == "(" || s == "{";
+}
+
 static inline void dumpExpr(std::string tag, ACCExpr *next)
 {
     while (next) {
-        printf("DE: %s %p %s in %d next %p\n", tag.c_str(), next, next->value.c_str(), next->infix, next->next);
+        printf("DE: %s %p %s next %p\n", tag.c_str(), next, next->value.c_str(), next->next);
         int i = 0;
         for (auto item: next->operands) {
             dumpExpr(tag + "_" + autostr(i), item);
@@ -59,19 +64,25 @@ static std::string tree2str(ACCExpr *arg)
     std::string ret;
     if (!arg)
         return "";
-    if (arg->infix) {
-        std::string sep, op = arg->value;
-        for (auto item: arg->operands) {
-            ret += sep + tree2str(item);
-            sep = " " + op + " ";
-            if (op == "?")
-                op = ":";
-        }
+    std::string sep, op = arg->value;
+    if (isParenChar(op[0])) {
+        ret += op + " ";
+        op = "";
     }
-    else {
-        ret += arg->value;
-        for (auto item: arg->operands)
-            ret += " " + tree2str(item);
+    if (!arg->operands.size())
+        ret += op;
+    for (auto item: arg->operands) {
+        ret += sep;
+        bool operand = checkOperand(item->value) && arg->operands.size() > 1;
+operand = true;
+        if (!operand)
+            ret += "( ";
+        ret += tree2str(item);
+        if (!operand)
+            ret += " )";
+        sep = " " + op + " ";
+        if (op == "?")
+            op = ":";
     }
     ret += treePost(arg);
     if (arg->next)
@@ -86,7 +97,6 @@ static ACCExpr *allocExpr(std::string value, ACCExpr *arg = nullptr)
     ret->value = value;
     ret->operands.clear();
     ret->next = nullptr;
-    ret->infix = false;
     if (arg)
         ret->operands.push_back(arg);
     return ret;
@@ -179,10 +189,6 @@ static ACCExpr *get1Token(void)
     return ret;
 }
 
-static bool checkOperand(std::string s)
-{
-    return isIdChar(s[0]) || isdigit(s[0]) || s == "(" || s == "{";
-}
 static bool checkOperator(std::string s)
 {
     return s == "==" || s == "&" || s == "+" || s == "-" || s == "*" || s == "%" || s == "!="
@@ -251,7 +257,6 @@ static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCu
                         }
                     }
                     TOP = tok;
-                    TOP->infix = true;
                 }
                 TOP->operands.push_back(currentOperand);
                 currentOperand = nullptr;

@@ -77,7 +77,6 @@ printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE_
 printf("[%s:%d] NEWTREEFORSUB %s\n", __FUNCTION__, __LINE__, tree2str(newTree).c_str());
                     expr->value = newTree->value;
                     expr->next = newTree->next;
-                    expr->infix = newTree->infix;
                     expr->operands.clear();
                     for (auto item: newTree->operands)
                         expr->operands.push_back(item);

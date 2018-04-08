@@ -64,7 +64,6 @@ typedef struct {
 
 typedef struct ACCExpr {
     std::string op;
-    bool        infix;
     std::list<ACCExpr *>operands;
     ACCExpr *next;
     std::string value;

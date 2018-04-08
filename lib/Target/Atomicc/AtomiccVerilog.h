@@ -32,6 +32,7 @@ typedef struct {
     ACCExpr    *value;
     std::string type;
 } AssignItem;
+static int trace_assign;//= 1;
 
 static std::map<std::string, bool> inList, outList, refList;
 static std::map<std::string, AssignItem> assignList;
@@ -42,9 +43,7 @@ typedef ModuleIR *(^CBFun)(FieldElement &item, std::string fldName);
 
 static void setAssign(std::string target, ACCExpr *value, std::string type)
 {
-#if 0
-if (value) printf("[%s:%d] start [%s] = %s type '%s'\n", __FUNCTION__, __LINE__, target.c_str(), tree2str(value).c_str(), type.c_str());
-#endif
+if (trace_assign && value) printf("[%s:%d] start [%s] = %s type '%s'\n", __FUNCTION__, __LINE__, target.c_str(), tree2str(value).c_str(), type.c_str());
     assignList[target] = AssignItem{value, type};
 }
 
@@ -189,11 +188,12 @@ static std::string walkTree (ACCExpr *expr, bool *changed)
 {
     std::string ret = expr->value;
     if (isIdChar(ret[0])) {
+if (trace_assign)
+printf("[%s:%d] check '%s' exprtree %p\n", __FUNCTION__, __LINE__, ret.c_str(), assignList[ret].value);
         if (ACCExpr *temp = assignList[ret].value) {
             refList[ret] = false;
-#if 0
+if (trace_assign)
 printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2str(temp).c_str());
-#endif
             ret = walkTree(temp, changed);
             if (changed)
                 *changed = true;
@@ -203,9 +203,15 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
         else if (!changed)
             refList[ret] = true;
     }
-    if (expr->infix) {
+    else {
         ret = "";
         std::string sep, op = expr->value;
+        if (isParenChar(op[0])) {
+            ret += op + " ";
+            op = "";
+        }
+        if (!expr->operands.size())
+            ret += op;
         for (auto item: expr->operands) {
             ret += sep + walkTree(item, changed);
             sep = " " + op + " ";
@@ -213,9 +219,6 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
                 op = ":";
         }
     }
-    else
-    for (auto item: expr->operands)
-        ret += " " + walkTree(item, changed);
     ret += treePost(expr);
     if (expr->next)
         ret += " " + walkTree(expr->next, changed);
@@ -408,7 +411,7 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             ACCExpr *param = info.value->operands.front()->operands.front();
 printf("[%s:%d] param '%s'\n", __FUNCTION__, __LINE__, tree2str(param).c_str());
 //dumpExpr("param", param);
-if (param && param->infix && param->value == ",") {
+if (param && param->value == ",") {
 for (auto item: param->operands) {
             if(argCount-- > 0) {
                 std::string scanexp = tree2str(item);
@@ -466,12 +469,13 @@ printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree
     // recursively process all replacements internal to the list of 'setAssign' items
     for (auto item: assignList)
         if (item.second.value) {
+if (trace_assign)
+printf("[%s:%d] checking [%s] = '%s'\n", __FUNCTION__, __LINE__, item.first.c_str(), tree2str(item.second.value).c_str());
             bool treeChanged = false;
             std::string newItem = walkTree(item.second.value, &treeChanged);
             if (treeChanged) {
-#if 0
+if (trace_assign)
 printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_str(), tree2str(item.second.value).c_str(), newItem.c_str());
-#endif
                 assignList[item.first].value = str2tree(newItem);
             }
         }
@@ -511,11 +515,10 @@ exit(-1);
     for (auto aitem: assignList)
         if (aitem.second.value && refList[aitem.first])
             walkRef(aitem.second.value);
-#if 0
+    if (trace_assign)
     for (auto aitem: assignList)
         if (aitem.second.value)
             printf("[%s:%d] ASSIGN %s = %s\n", __FUNCTION__, __LINE__, aitem.first.c_str(), tree2str(aitem.second.value).c_str());
-#endif
     for (auto item: refList)
         if (item.second) {
          std::string type = findType(item.first);
