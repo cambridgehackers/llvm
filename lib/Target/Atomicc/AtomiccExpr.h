@@ -18,7 +18,6 @@
 static std::string lexString;
 static unsigned lexIndex;
 static char lexChar;
-static int trace_expr;// = 1;
 static ACCExpr *repeatGet1Token;
 
 static bool isIdChar(char ch)
@@ -40,6 +39,19 @@ static std::string treePost(ACCExpr *arg)
     else if (arg->value == "{")
         return " }";
     return "";
+}
+
+static inline void dumpExpr(std::string tag, ACCExpr *next)
+{
+    while (next) {
+        printf("DE: %s %p %s in %d next %p\n", tag.c_str(), next, next->value.c_str(), next->infix, next->next);
+        int i = 0;
+        for (auto item: next->operands) {
+            dumpExpr(tag + "_" + autostr(i), item);
+            i++;
+        }
+        next = next->next;
+    }
 }
 
 static std::string tree2str(ACCExpr *arg)
@@ -65,19 +77,6 @@ static std::string tree2str(ACCExpr *arg)
     if (arg->next)
         ret += " " + tree2str(arg->next);
     return ret;
-}
-
-static inline void dumpExpr(std::string tag, ACCExpr *next)
-{
-    while (next) {
-        printf("DE: %s %p %s in %d next %p\n", tag.c_str(), next, next->value.c_str(), next->infix, next->next);
-        int i = 0;
-        for (auto item: next->operands) {
-            dumpExpr(tag + "_" + autostr(i), item);
-            i++;
-        }
-        next = next->next;
-    }
 }
 
 static ACCExpr *allocExpr(std::string value, ACCExpr *arg = nullptr)
@@ -133,7 +132,7 @@ static struct {
     return opPrec[ind].prec;
 }
 
-static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool parseState);
+static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCurrentToken);
 static ACCExpr *get1Token(void)
 {
     std::string lexToken;
@@ -175,7 +174,6 @@ static ACCExpr *get1Token(void)
         exit(-1);
     }
     ret = allocExpr(lexToken);
-//if (trace_expr) printf("[%s:%d] TOKEN: %p '%s'\n", __FUNCTION__, __LINE__, ret, lexToken.c_str());
     if (isParenChar(ret->value[0]))
         return getExprList(ret, treePost(ret).substr(1), false);
     return ret;
@@ -192,11 +190,8 @@ static bool checkOperator(std::string s)
       || s == "|" || s == "||" || s == "<" || s == ">";
 }
 
-static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool operandHack)
+static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCurrentToken)
 {
-static int indent;
-if (trace_expr) printf("[%s:%d] ENTRY indent %d head %p termin %s state %d string '%s'\n", __FUNCTION__, __LINE__, ++indent, head, terminator.c_str(), operandHack, lexIndex < lexString.length() ? lexString.substr(lexIndex).c_str(): "NOSTRING");
-if (trace_expr) dumpExpr("ENTRY", head);
     bool parseState = false;
     ACCExpr *currentOperand = nullptr;
     ACCExpr *tok;
@@ -206,14 +201,13 @@ if (trace_expr) dumpExpr("ENTRY", head);
     TOP = nullptr;
     if (head) {
         while ((tok = get1Token()) && tok->value != terminator) {
-if (trace_expr) printf("[%s:%d] hack %d state %d tok [%p] %s currentOperand %p TOP %p\n", __FUNCTION__, __LINE__, operandHack, parseState, tok, tree2str(tok).c_str(), currentOperand, TOP);
             if ((parseState = !parseState)) {    /* Operand */
                 ACCExpr *tnext = tok;
-                if (operandHack)
+                if (repeatCurrentToken)
                     tok = head;
                 else
                     tnext = get1Token();
-                operandHack = false;
+                repeatCurrentToken = false;
                 if (checkOperator(tok->value))
                     tok = allocExpr("(", tok);
                 else if (!checkOperand(tok->value)) {
@@ -234,11 +228,10 @@ if (trace_expr) printf("[%s:%d] hack %d state %d tok [%p] %s currentOperand %p T
                     printf("[%s:%d] OPERATOR CHECKFAILLLLLLLLLLLLLLL %s from %s\n", __FUNCTION__, __LINE__, R.c_str(), lexString.c_str());
                     exit(-1);
                 }
-                else if (((L == R && L != "?") || (L == "?" && R == ":"))) 
-{}
-//printf("[%s:%d] EQL %s R %s\n", __FUNCTION__, __LINE__, L.c_str(), R.c_str());
-else
-{
+                else if (((L == R && L != "?") || (L == "?" && R == ":"))) {
+                    //printf("[%s:%d] EQL %s R %s\n", __FUNCTION__, __LINE__, L.c_str(), R.c_str());
+                }
+                else {
                     if (TOP) {
                         int lprec = findPrec(L), rprec = findPrec(R);
                         if (lprec < rprec) {
@@ -287,7 +280,6 @@ else
             head->next = next;
         }
     }
-if (trace_expr) printf("[%s:%d] indent %d RRRRRRRRRRREEEEEEETTTTTTTTTTTTT %p %s\n", __FUNCTION__, __LINE__, indent--, head, tree2str(head).c_str());
     return head;
 }
 
