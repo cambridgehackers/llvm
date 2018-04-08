@@ -12,11 +12,6 @@
 //===----------------------------------------------------------------------===//
 #include "AtomiccIR.h"
 //#define NEWEXPR
-#ifdef NEWEXPR
-#define exprNew true
-#else
-#define exprNew false
-#endif
 
 #define MAX_EXPR_DEPTH 20
 
@@ -204,9 +199,6 @@ if (trace_expr) printf("[%s:%d] ENTRY indent %d head %p termin %s state %d strin
 if (trace_expr) dumpExpr("ENTRY", head);
     bool parseState = false;
     ACCExpr *currentOperand = nullptr;
-#ifndef NEWEXPR
-    ACCExpr *plist = head;
-#endif
     ACCExpr *tok;
     ACCExpr *exprStack[MAX_EXPR_DEPTH];
     int exprStackIndex = 0;
@@ -222,7 +214,7 @@ if (trace_expr) printf("[%s:%d] hack %d state %d tok [%p] %s currentOperand %p T
                 else
                     tnext = get1Token();
                 operandHack = false;
-                if (exprNew && checkOperator(tok->value))
+                if (checkOperator(tok->value))
                     tok = allocExpr("(", tok);
                 else if (!checkOperand(tok->value)) {
                     printf("[%s:%d] OPERAND CHECKFAILLLLLLLLLLLLLLL %s from %s\n", __FUNCTION__, __LINE__, tree2str(tok).c_str(), lexString.c_str());
@@ -238,17 +230,17 @@ if (trace_expr) printf("[%s:%d] hack %d state %d tok [%p] %s currentOperand %p T
             }
             else {                        /* Operator */
                 std::string L = TOP ? TOP->value : "", R = tok->value;
-                int lprec = findPrec(L), rprec = findPrec(R);
                 if (!checkOperator(R)) {
                     printf("[%s:%d] OPERATOR CHECKFAILLLLLLLLLLLLLLL %s from %s\n", __FUNCTION__, __LINE__, R.c_str(), lexString.c_str());
                     exit(-1);
                 }
-#ifdef NEWEXPR
                 else if (((L == R && L != "?") || (L == "?" && R == ":"))) 
-printf("[%s:%d] EQL %s R %s lprec %d rprec %d\n", __FUNCTION__, __LINE__, L.c_str(), R.c_str(), lprec, rprec);
+{}
+//printf("[%s:%d] EQL %s R %s\n", __FUNCTION__, __LINE__, L.c_str(), R.c_str());
 else
 {
                     if (TOP) {
+                        int lprec = findPrec(L), rprec = findPrec(R);
                         if (lprec < rprec) {
                             exprStackIndex++;
                             TOP = nullptr;
@@ -269,22 +261,9 @@ else
                     TOP->infix = true;
                 }
                 TOP->operands.push_back(currentOperand);
-#endif
                 currentOperand = nullptr;
             }
-#ifndef NEWEXPR
-            if (tok != head) {
-                if (terminator != "" && !head->operands.size())
-                    head->operands.push_back(tok); // the first item in a recursed list
-                else
-                    plist->next = tok;
-            }
-            plist = tok;
-#endif
         }
-#ifndef NEWEXPR
-        if (head->value == "(" && head->operands.size() && !head->operands.front()->next) {
-#else
         while (exprStackIndex != 0) {
             TOP->operands.push_back(currentOperand);
             currentOperand = TOP;
@@ -303,7 +282,6 @@ else
                 head = TOP;
         }
         if (head->value == "(" && head->operands.size() && head->operands.size() <= 1) {
-#endif
             ACCExpr *next = head->next;
             head = head->operands.front();
             head->next = next;
@@ -318,7 +296,6 @@ static ACCExpr *str2tree(std::string arg)
     lexString = arg;
     lexIndex = 0;
     lexChar = lexString[lexIndex++];
-if (trace_expr) printf("[%s:%d] STARTTTTTTTTTTTTTTTT %s\n", __FUNCTION__, __LINE__, lexString.c_str());
     ACCExpr *head = getExprList(get1Token(), "", true);
     if (head && head->value == "(" && !head->next && head->operands.size())
         head = head->operands.front();
