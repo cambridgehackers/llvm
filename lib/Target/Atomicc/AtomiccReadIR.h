@@ -36,13 +36,21 @@ static ACCExpr *getExpression(void)
     return str2tree(std::string(startp, bufp - startp));
 }
 
+static void addRead(MetaSet &list, ACCExpr *cond)
+{
+    if(isIdChar(cond->value[0]))
+        list.insert(cond->value);
+    for (auto item: cond->operands)
+        addRead(list, item);
+}
+
 static ACCExpr *walkRead (ModuleIR *IR, MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
 {
     if (expr) {
         std::string fieldName = expr->value;
         if (isIdChar(fieldName[0])) {
-            if (MI && (!expr->operands.size() || expr->operands.front()->value != "{"))
-                MI->meta[MetaRead][fieldName].insert(tree2str(cond));
+            if (MI && cond && (!expr->operands.size() || expr->operands.front()->value != "{"))
+                addRead(MI->meta[MetaRead][fieldName], cond);
             int size = -1;
             if (expr->operands.size() && expr->operands.front()->value == "[") {
                 ACCExpr *sub = expr->operands.front();

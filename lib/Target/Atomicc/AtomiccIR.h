@@ -75,7 +75,8 @@ typedef struct {
 
 enum {MetaNone, MetaRead, MetaInvoke, MetaMax};
 
-typedef std::map<std::string,std::set<std::string>> MetaRef;
+typedef std::set<std::string> MetaSet;
+typedef std::map<std::string,MetaSet> MetaRef;
 
 typedef struct {
     ACCExpr *dest;

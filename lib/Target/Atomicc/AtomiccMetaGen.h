@@ -68,7 +68,7 @@ void metaGenerate(ModuleIR *IR, FILE *OStr)
                     for (auto item: bm[MetaRead])
                         // if the current method reads a state element that
                         // is written by another method, add it to the 'before' list
-                        if (item.first == tree2str(inneritem.dest)) {
+                        if (item.first == inneritem.dest->value) {
 printf("[%s:%d] innermethodName %s before conflict '%s' innerunc %s methodName %s\n", __FUNCTION__, __LINE__, innermethodName.c_str(), item.first.c_str(), innerFI.first.c_str(), methodName.c_str());
                             metaBefore[innermethodName] = "; :";
                             break;
