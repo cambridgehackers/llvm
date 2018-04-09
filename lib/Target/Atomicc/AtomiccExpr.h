@@ -101,16 +101,6 @@ static ACCExpr *allocExpr(std::string value, ACCExpr *arg = nullptr)
     return ret;
 }
 
-static ACCExpr *appendExpr(ACCExpr *prev, ACCExpr *next)
-{
-    while(prev->next)      // Skip to end of head list
-        prev = prev->next;
-    prev->next = next;     // Add on list to be appended
-    while(prev->next)      // Skip to the end of total list
-        prev = prev->next;
-    return prev;           // Return pointer to last element in final list
-}
-
 static int findPrec(std::string s)
 {
 static struct {
@@ -231,10 +221,7 @@ static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCu
                     printf("[%s:%d] OPERATOR CHECKFAILLLLLLLLLLLLLLL %s from %s\n", __FUNCTION__, __LINE__, R.c_str(), lexString.c_str());
                     exit(-1);
                 }
-                else if (((L == R && L != "?") || (L == "?" && R == ":"))) {
-                    //printf("[%s:%d] EQL %s R %s\n", __FUNCTION__, __LINE__, L.c_str(), R.c_str());
-                }
-                else {
+                else if (!((L == R && L != "?") || (L == "?" && R == ":"))) {
                     if (TOP) {
                         int lprec = findPrec(L), rprec = findPrec(R);
                         if (lprec < rprec) {

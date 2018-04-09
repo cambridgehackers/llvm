@@ -394,8 +394,11 @@ printf("[%s:%d] BBBBBBBBBBBBBBBBBBBBBBBBBBBBB %s type %s\n", __FUNCTION__, __LIN
                 continue;
             ACCExpr *tempCond = str2tree(methodName);
             if (info.cond) {
-                appendExpr(tempCond, allocExpr("&"));
-                appendExpr(tempCond, info.cond);
+                ACCExpr *temp = info.cond;
+                if (temp->value != "&")
+                    temp = allocExpr("&", temp);
+                temp->operands.push_back(tempCond);
+                tempCond = temp;
             }
             std::string calledName = info.value->value;
 printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());

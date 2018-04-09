@@ -76,11 +76,10 @@ printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE_
                     ACCExpr *newTree = str2tree("(" + ret + fieldName + autostr(size - 1) + post + ")");
 printf("[%s:%d] NEWTREEFORSUB %s\n", __FUNCTION__, __LINE__, tree2str(newTree).c_str());
                     expr->value = newTree->value;
-                    expr->next = newTree->next;
+                    //expr->next = newTree->next;
                     expr->operands.clear();
                     for (auto item: newTree->operands)
                         expr->operands.push_back(item);
-                    appendExpr(expr, next);
 printf("[%s:%d] FINALLLLLL %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
                 }
             }
