@@ -30,7 +30,7 @@ static bool isParenChar(char ch)
     return ch == '[' || ch == '(' || ch == '{';
 }
 
-static std::string treePost(ACCExpr *arg)
+static std::string treePost(const ACCExpr *arg)
 {
     if (arg->value == "[")
         return " ]";
@@ -59,7 +59,7 @@ static inline void dumpExpr(std::string tag, ACCExpr *next)
     }
 }
 
-static std::string tree2str(ACCExpr *arg)
+static std::string tree2str(const ACCExpr *arg)
 {
     std::string ret;
     if (!arg)

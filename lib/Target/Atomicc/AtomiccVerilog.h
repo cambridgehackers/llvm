@@ -411,44 +411,23 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             ACCExpr *param = info.value->operands.front()->operands.front();
 printf("[%s:%d] param '%s'\n", __FUNCTION__, __LINE__, tree2str(param).c_str());
 //dumpExpr("param", param);
-if (param && param->value == ",") {
-for (auto item: param->operands) {
-            if(argCount-- > 0) {
-                std::string scanexp = tree2str(item);
+            auto setParam = [&] (const ACCExpr *item) -> void {
+                if(argCount-- > 0) {
+                    std::string scanexp = tree2str(item);
 printf("[%s:%d] infmuxVL[%s] = cond '%s' tree '%s'\n", __FUNCTION__, __LINE__, (pname + AI->name).c_str(),
 tree2str(tempCond).c_str(), scanexp.c_str());
-                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
-                typeList[pname + AI->name] = AI->type;
-                AI++;
-            }
-}
-}
-else {
-            while(param && argCount-- > 0) {
-                std::string scanexp, sep;
-                while(param && param->value != ",") {
-                    if (param->value != "{") {
-                        scanexp += sep + param->value;
-                        for (auto item: param->operands)
-                            scanexp += " " + tree2str(item);
-                        scanexp += treePost(param);
-                        sep = " ";
-                    }
-                    param = param->next;
+                    muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
+                    typeList[pname + AI->name] = AI->type;
+                    AI++;
                 }
-                if (param)
-                    param = param->next;
-printf("[%s:%d] muxVL[%s] = cond '%s' tree '%s'\n", __FUNCTION__, __LINE__, (pname + AI->name).c_str(),
-tree2str(tempCond).c_str(), scanexp.c_str());
-                muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
-                typeList[pname + AI->name] = AI->type;
-                AI++;
-            }
+            };
             if (param) {
-printf("[%s:%d] unused arguments '%s' from '%s'\n", __FUNCTION__, __LINE__, tree2str(param).c_str(), tree2str(info.value).c_str());
-                exit(-1);
+                if (param->value == ",")
+                    for (auto item: param->operands)
+                        setParam(item);
+                else
+                    setParam(param);
             }
-}
         }
     }
     for (auto item: enableList)
