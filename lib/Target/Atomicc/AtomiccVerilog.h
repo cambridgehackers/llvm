@@ -51,9 +51,7 @@ static ModuleIR *lookupIR(std::string ind)
 {
     if (ind == "")
         return nullptr;
-    ModuleIR *ret = mapIndex[ind];
-    //ParseCheck(ret != NULL, "lookupIR = " + ind + " not found");
-    return ret;
+    return mapIndex[ind];
 }
 
 static uint64_t convertType(std::string arg)
@@ -323,10 +321,7 @@ static std::list<ModData> modLine;
             ModuleIR *itemIR = lookupIR(item.type);
             if (itemIR && !item.isPtr) {
             if (startswith(itemIR->name, "l_struct_OC_"))
-{
-printf("[%s:%d] BBBBBBBBBBBBBBBBBBBBBBBBBBBBB %s type %s\n", __FUNCTION__, __LINE__, fldName.c_str(), item.type.c_str());
                 expandStruct(IR, fldName, item.type, regList, 1, true);
-}
             else
                 generateModuleSignature(itemIR, fldName + MODULE_SEPARATOR, modLine, wireList);
             }

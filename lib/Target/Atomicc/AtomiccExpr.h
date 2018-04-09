@@ -11,7 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 #include "AtomiccIR.h"
-//#define NEWEXPR
 
 #define MAX_EXPR_DEPTH 20
 
@@ -256,7 +255,7 @@ static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCu
             else
                 head = TOP;
         }
-        if (head->value == "(" && head->operands.size() && head->operands.size() <= 1)
+        if (head->value == "(" && head->operands.size() == 1)
             head = head->operands.front();
     }
     return head;
@@ -267,8 +266,5 @@ static ACCExpr *str2tree(std::string arg)
     lexString = arg;
     lexIndex = 0;
     lexChar = lexString[lexIndex++];
-    ACCExpr *head = getExprList(get1Token(), "", true);
-    if (head && head->value == "(" && head->operands.size())
-        head = head->operands.front();
-    return head;
+    return getExprList(get1Token(), "", true);
 }
