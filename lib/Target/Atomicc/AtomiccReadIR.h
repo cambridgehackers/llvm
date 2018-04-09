@@ -49,15 +49,7 @@ static ACCExpr *walkRead (ModuleIR *IR, MethodInfo *MI, ACCExpr *expr, ACCExpr *
                 expr->operands.pop_front();
                 std::string post, subscript = tree2str(sub->operands.front());
                 sub->operands.clear();
-                ACCExpr *next = expr->next;
-                if (next && isIdChar(next->value[0])) {
-                    if (next->operands.size() && next->operands.front()->value == "{")
-                        expr->operands.push_back(next->operands.front());
-                    post = next->value;
-                    next = next->next;
-                    expr->next = next;
-                }
-                else if (expr->operands.size() && isIdChar(expr->operands.front()->value[0])) {
+                if (expr->operands.size() && isIdChar(expr->operands.front()->value[0])) {
                     post = expr->operands.front()->value;
                     expr->operands.pop_front();
                 }
@@ -86,7 +78,6 @@ printf("[%s:%d] FINALLLLLL %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str()
         }
         for (auto item: expr->operands)
             walkRead(IR, MI, item, cond);
-        walkRead(IR, MI, expr->next, cond);
     }
     return expr;
 }

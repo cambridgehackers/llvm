@@ -181,8 +181,6 @@ static void walkRef (ACCExpr *expr)
         refList[item] = true;
     for (auto item: expr->operands)
         walkRef(item);
-    if (expr->next)
-        walkRef(expr->next);
 }
 static std::string walkTree (ACCExpr *expr, bool *changed)
 {
@@ -226,20 +224,13 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
         }
     }
     ret += treePost(expr);
-    if (expr->next)
-        ret += " " + walkTree(expr->next, changed);
     return ret;
 }
 
 std::string findType(std::string name)
 {
     ACCExpr *expr = str2tree(name);
-    if (expr->value == "(" && expr->next) {
-        expr = expr->next;
-        if (expr->value == "?" && expr->next)
-            expr = expr->next;
-    }
-    else if (expr->value == "?") {
+    if (expr->value == "?") {
         int i = 0;
         for (auto item: expr->operands)
             if (i++ == 1) {

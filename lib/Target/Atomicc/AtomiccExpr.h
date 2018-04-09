@@ -48,14 +48,11 @@ static bool checkOperand(std::string s)
 
 static inline void dumpExpr(std::string tag, ACCExpr *next)
 {
-    while (next) {
-        printf("DE: %s %p %s next %p\n", tag.c_str(), next, next->value.c_str(), next->next);
-        int i = 0;
-        for (auto item: next->operands) {
-            dumpExpr(tag + "_" + autostr(i), item);
-            i++;
-        }
-        next = next->next;
+    printf("DE: %s %p %s\n", tag.c_str(), next, next->value.c_str());
+    int i = 0;
+    for (auto item: next->operands) {
+        dumpExpr(tag + "_" + autostr(i), item);
+        i++;
     }
 }
 
@@ -84,18 +81,14 @@ static std::string tree2str(const ACCExpr *arg)
             op = ":";
     }
     ret += treePost(arg);
-    if (arg->next)
-        ret += " " + tree2str(arg->next);
     return ret;
 }
 
 static ACCExpr *allocExpr(std::string value, ACCExpr *arg = nullptr)
 {
     ACCExpr *ret = new ACCExpr;
-    ret->op = "";
     ret->value = value;
     ret->operands.clear();
-    ret->next = nullptr;
     if (arg)
         ret->operands.push_back(arg);
     return ret;
@@ -263,11 +256,8 @@ static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCu
             else
                 head = TOP;
         }
-        if (head->value == "(" && head->operands.size() && head->operands.size() <= 1) {
-            ACCExpr *next = head->next;
+        if (head->value == "(" && head->operands.size() && head->operands.size() <= 1)
             head = head->operands.front();
-            head->next = next;
-        }
     }
     return head;
 }
@@ -278,7 +268,7 @@ static ACCExpr *str2tree(std::string arg)
     lexIndex = 0;
     lexChar = lexString[lexIndex++];
     ACCExpr *head = getExprList(get1Token(), "", true);
-    if (head && head->value == "(" && !head->next && head->operands.size())
+    if (head && head->value == "(" && head->operands.size())
         head = head->operands.front();
     return head;
 }

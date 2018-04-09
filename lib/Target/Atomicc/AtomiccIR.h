@@ -63,9 +63,7 @@ typedef struct {
 } TokenValue;
 
 typedef struct ACCExpr {
-    std::string op;
     std::list<ACCExpr *>operands;
-    ACCExpr *next;
     std::string value;
 } ACCExpr;
 
