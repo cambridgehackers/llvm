@@ -69,7 +69,7 @@ static std::string tree2str(const ACCExpr *arg)
         ret += op;
     for (auto item: arg->operands) {
         ret += sep;
-        bool operand = checkOperand(item->value) || item->value == "," || item->value == "?";
+        bool operand = checkOperand(item->value) || item->value == "," || item->value == "?" || arg->operands.size() == 1;
         if (!operand)
             ret += "( ";
         ret += tree2str(item);

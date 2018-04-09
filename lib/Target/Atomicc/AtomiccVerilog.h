@@ -209,7 +209,7 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
         if (!expr->operands.size())
             ret += op;
         for (auto item: expr->operands) {
-            bool operand = checkOperand(item->value) || item->value == "," || item->value == "?";
+            bool operand = checkOperand(item->value) || item->value == "," || item->value == "?" || expr->operands.size() == 1;
             ret += sep;
             if (!operand)
                 ret += "( ";
@@ -284,7 +284,7 @@ static void generateModuleSignature(ModuleIR *IR, std::string instance, std::lis
 void generateModuleDef(ModuleIR *IR, FILE *OStr)
 {
 static std::list<ModData> modLine;
-    std::map<std::string, std::string> enableList;
+    std::map<std::string, ACCExpr *> enableList;
     refList.clear();
     // 'Mux' together parameter settings from all invocations of a method from this class
     std::map<std::string, std::list<MuxValueEntry>> muxValueList;
@@ -368,11 +368,11 @@ static std::list<ModData> modLine;
             std::list<FieldItem> fieldList;
             getFieldList(fieldList, "", info.type, true);
             for (auto fitem : fieldList) {
-                std::string dest = tree2str(info.dest) + fitem.name;
-                std::string src = tree2str(info.value) + fitem.name;
+                std::string dest = info.dest->value + fitem.name;
+                std::string src = info.value->value + fitem.name;
                 typeList[dest] = fitem.type;
                 typeList[src] = fitem.type;
-                muxValueList[dest].push_back(MuxValueEntry{info.cond, str2tree(src)});
+                muxValueList[dest].push_back(MuxValueEntry{info.cond, allocExpr(src)});
             }
         }
         for (auto info: MI->callList) {
@@ -393,8 +393,11 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
                 exit(-1);
             }
             // 'Or' together ENA lines from all invocations of a method from this class
-            if (info.isAction)
-                enableList[calledName] += " || " + tree2str(tempCond);
+            if (info.isAction) {
+                if (!enableList[calledName])
+                    enableList[calledName] = allocExpr("||");
+                enableList[calledName]->operands.push_back(tempCond);
+            }
             MethodInfo *CI = lookupQualName(IR, calledName);
             if (!CI) {
                 printf("[%s:%d] method %s not found\n", __FUNCTION__, __LINE__, calledName.c_str());
@@ -426,7 +429,7 @@ tree2str(tempCond).c_str(), scanexp.c_str());
         }
     }
     for (auto item: enableList)
-        setAssign(item.first, str2tree(item.second.substr(4)) /* remove leading '||'*/, "INTEGER_1");
+        setAssign(item.first, item.second, "INTEGER_1");
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
     for (auto item: muxValueList) {
