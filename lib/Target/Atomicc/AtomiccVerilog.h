@@ -213,7 +213,13 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
         if (!expr->operands.size())
             ret += op;
         for (auto item: expr->operands) {
-            ret += sep + walkTree(item, changed);
+            bool operand = checkOperand(item->value) || item->value == "," || item->value == "?";
+            ret += sep;
+            if (!operand)
+                ret += "( ";
+            ret += walkTree(item, changed);
+            if (!operand)
+                ret += " )";
             sep = " " + op + " ";
             if (op == "?")
                 op = ":";

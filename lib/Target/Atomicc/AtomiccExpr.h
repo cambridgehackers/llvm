@@ -73,8 +73,7 @@ static std::string tree2str(const ACCExpr *arg)
         ret += op;
     for (auto item: arg->operands) {
         ret += sep;
-        bool operand = checkOperand(item->value) && arg->operands.size() > 1;
-operand = true;
+        bool operand = checkOperand(item->value) || item->value == "," || item->value == "?";
         if (!operand)
             ret += "( ";
         ret += tree2str(item);
@@ -214,9 +213,7 @@ static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCu
                 else
                     tnext = get1Token();
                 repeatCurrentToken = false;
-                if (checkOperator(tok->value))
-                    tok = allocExpr("(", tok);
-                else if (!checkOperand(tok->value)) {
+                if (!checkOperand(tok->value) && !checkOperator(tok->value)) {
                     printf("[%s:%d] OPERAND CHECKFAILLLLLLLLLLLLLLL %s from %s\n", __FUNCTION__, __LINE__, tree2str(tok).c_str(), lexString.c_str());
                     exit(-1);
                 }
