@@ -172,6 +172,25 @@ printf("[%s:%d] set %s = %s\n", __FUNCTION__, __LINE__, fitem.name.c_str(), fite
         setAssign(fldName, allocExpr("{", itemList), type);
 }
 
+static void addRead(MetaSet &list, ACCExpr *cond)
+{
+    if(isIdChar(cond->value[0]))
+        list.insert(cond->value);
+    for (auto item: cond->operands)
+        addRead(list, item);
+}
+
+static void walkRead (MethodInfo *MI, ACCExpr *expr, ACCExpr *cond)
+{
+    if (!expr)
+        return;
+    for (auto item: expr->operands)
+        walkRead(MI, item, cond);
+    std::string fieldName = expr->value;
+    if (isIdChar(fieldName[0]) && cond && (!expr->operands.size() || expr->operands.front()->value != "{"))
+        addRead(MI->meta[MetaRead][fieldName], cond);
+}
+
 static void walkRef (ACCExpr *expr)
 {
     std::string item = expr->value;
@@ -345,6 +364,8 @@ static std::list<ModData> modLine;
     for (auto FI : IR->method) {
         std::string methodName = FI.first;
         MethodInfo *MI = FI.second;
+        if (!endswith(methodName, "__RDY"))
+            walkRead(MI, MI->guard, nullptr);
         setAssign(methodName, MI->guard, MI->type);  // collect the text of the return value into a single 'assign'
         if (MI->rule) {
             refList[methodName] = true;
@@ -356,6 +377,8 @@ static std::list<ModData> modLine;
         for (auto item: MI->alloca)
             expandStruct(IR, item.first, item.second, wireList, 1, true);
         for (auto info: MI->letList) {
+            walkRead(MI, info.cond, nullptr);
+            walkRead(MI, info.value, info.cond);
             std::list<FieldItem> fieldList;
             getFieldList(fieldList, "", info.type, true);
             for (auto fitem : fieldList) {
@@ -367,6 +390,8 @@ static std::list<ModData> modLine;
             }
         }
         for (auto info: MI->callList) {
+            walkRead(MI, info.cond, nullptr);
+            walkRead(MI, info.value, info.cond);
             if (!info.isAction)
                 continue;
             ACCExpr *tempCond = str2tree(methodName);
@@ -459,8 +484,11 @@ printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_
     std::list<std::string> alwaysLines;
     bool hasAlways = false;
     for (auto FI : IR->method) {
+        MethodInfo *MI = FI.second;
         bool alwaysSeen = false;
         for (auto info: FI.second->storeList) {
+            walkRead(MI, info.cond, nullptr);
+            walkRead(MI, info.value, info.cond);
     ACCExpr *expr = info.dest;
     if (expr->value == "?") {
         int i = 0;
@@ -590,5 +618,128 @@ void promoteGuards(ModuleIR *IR)
                 MIRdy->guard = allocExpr("&", MIRdy->guard);
             MIRdy->guard->operands.push_back(tempCond);
         }
+    }
+}
+
+static void walkSubscript (ModuleIR *IR, ACCExpr *expr)
+{
+    if (!expr)
+        return;
+    for (auto item: expr->operands)
+        walkSubscript(IR, item);
+    std::string fieldName = expr->value;
+    if (!isIdChar(fieldName[0]) || !expr->operands.size() || expr->operands.front()->value != "[")
+        return;
+    ACCExpr *subscript = expr->operands.front()->operands.front();
+    expr->operands.pop_front();
+    std::string post;
+    if (expr->operands.size() && isIdChar(expr->operands.front()->value[0])) {
+        post = expr->operands.front()->value;
+        expr->operands.pop_front();
+    }
+    int size = -1;
+    for (auto item: IR->fields)
+        if (item.fldName == fieldName) {
+            size = item.vecCount;
+            break;
+        }
+printf("[%s:%d] ARRAAA size %d '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), post.c_str());
+    assert (!isdigit(subscript->value[0]));
+    std::string lastElement = fieldName + autostr(size - 1) + post;
+    expr->value = lastElement; // if only 1 element
+    for (int i = 0; i < size - 1; i++) {
+        std::string ind = autostr(i);
+        expr->value = "?";
+        expr->operands.push_back(allocExpr("==", subscript, allocExpr(ind)));
+        expr->operands.push_back(allocExpr(fieldName + ind + post));
+        if (i == size - 2)
+            expr->operands.push_back(allocExpr(lastElement));
+        else {
+            ACCExpr *nitem = allocExpr("");
+            expr->operands.push_back(nitem);
+            expr = nitem;
+        }
+    }
+}
+static ACCExpr *findSubscript (ModuleIR *IR, ACCExpr *expr, int &size, ACCExpr **subscript, std::string &post)
+{
+    if (isIdChar(expr->value[0]) && expr->operands.size() && expr->operands.front()->value == "[") {
+        *subscript = expr->operands.front()->operands.front();
+        expr->operands.pop_front();
+        if (expr->operands.size() && isIdChar(expr->operands.front()->value[0])) {
+            post = expr->operands.front()->value;
+            expr->operands.pop_front();
+        }
+        for (auto item: IR->fields)
+            if (item.fldName == expr->value) {
+                size = item.vecCount;
+                break;
+            }
+        return expr;
+    }
+    for (auto item: expr->operands)
+        if (ACCExpr *ret = findSubscript(IR, item, size, subscript, post))
+            return ret;
+    return nullptr;
+}
+static ACCExpr *cloneReplaceTree (ACCExpr *expr, ACCExpr *target, int size, ACCExpr *subscript, std::string &post)
+{
+    for (auto item: expr->operands)
+        cloneReplaceTree(item, target, size, subscript, post);
+    if (expr != target)
+        return nullptr;
+    std::string fieldName = expr->value;
+    std::string lastElement = fieldName + autostr(size - 1) + post;
+    expr->value = lastElement; // if only 1 element
+    for (int i = 0; i < size - 1; i++) {
+        std::string ind = autostr(i);
+        expr->value = "?";
+        expr->operands.push_back(allocExpr("==", subscript, allocExpr(ind)));
+        expr->operands.push_back(allocExpr(fieldName + ind + post));
+        if (i == size - 2)
+            expr->operands.push_back(allocExpr(lastElement));
+        else {
+            ACCExpr *nitem = allocExpr("");
+            expr->operands.push_back(nitem);
+            expr = nitem;
+        }
+    }
+    return nullptr;
+}
+
+void generateModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStrVH, FILE *OStrV)
+{
+    for (auto IR : irSeq) {
+        for (auto item: IR->method) {
+            std::string methodName = item.first;
+            MethodInfo *MI = item.second;
+            std::string rdyName = getRdyName(methodName);
+            walkSubscript(IR, MI->guard);
+            for (auto item: MI->storeList) {
+                walkSubscript(IR, item.cond);
+                walkSubscript(IR, item.dest);
+                walkSubscript(IR, item.value);
+            }
+            for (auto item: MI->letList) {
+                walkSubscript(IR, item.cond);
+                walkSubscript(IR, item.dest);
+                walkSubscript(IR, item.value);
+            }
+            for (auto item: MI->callList)
+                walkSubscript(IR, item.cond);
+            for (auto item: MI->callList) {
+                int size = -1;
+                ACCExpr *subscript = nullptr;
+                std::string post;
+                ACCExpr *expr = findSubscript(IR, item.value, size, &subscript, post);
+                if (expr)
+                    cloneReplaceTree(item.value, expr, size, subscript, post);
+            }
+        }
+        promoteGuards(IR);
+        // now generate the verilog header file '.vh'
+        metaGenerate(IR, OStrVH);
+        // Only generate verilog for modules derived from Module
+        generateModuleDef(IR, OStrV);
     }
 }

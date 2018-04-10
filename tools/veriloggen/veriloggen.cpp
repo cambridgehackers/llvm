@@ -36,12 +36,7 @@ printf("[%s:%d] stem %s\n", __FUNCTION__, __LINE__, OutputDir.c_str());
     fprintf(OStrVH, "`ifndef __%s_VH__\n`define __%s_VH__\n\n", myName.c_str(), myName.c_str());
     std::list<ModuleIR *> irSeq;
     readModuleIR(irSeq, OStrIRread);
-    for (auto irItem : irSeq) {
-        // now generate the verilog header file '.vh'
-        metaGenerate(irItem, OStrVH);
-        // Only generate verilog for modules derived from Module
-        generateModuleDef(irItem, OStrV);
-    }
+    generateModuleIR(irSeq, OStrVH, OStrV);
     fprintf(OStrVH, "`endif\n");
     return 0;
 }
