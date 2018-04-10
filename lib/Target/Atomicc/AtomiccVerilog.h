@@ -227,24 +227,15 @@ printf("[%s:%d] changed %s -> %s\n", __FUNCTION__, __LINE__, ret.c_str(), tree2s
 
 std::string findType(std::string name)
 {
-    ACCExpr *expr = str2tree(name);
-    if (expr->value == "?") {
-        int i = 0;
-        for (auto item: expr->operands)
-            if (i++ == 1) {
-                expr = item;
-                break;
-            }
-    }
-//printf("[%s:%d] name %s expr %s\n", __FUNCTION__, __LINE__, name.c_str(), expr->value.c_str());
-    if (regList.find(expr->value) != regList.end())
-        return regList[expr->value];
-    else if (typeList.find(expr->value) != typeList.end())
-        return typeList[expr->value];
-    else if (wireList.find(expr->value) != wireList.end())
-        return wireList[expr->value];
-    else if (assignList.find(expr->value) != assignList.end())
-        return assignList[expr->value].type;
+//printf("[%s:%d] name %s\n", __FUNCTION__, __LINE__, name.c_str());
+    if (regList.find(name) != regList.end())
+        return regList[name];
+    else if (typeList.find(name) != typeList.end())
+        return typeList[name];
+    else if (wireList.find(name) != wireList.end())
+        return wireList[name];
+    else if (assignList.find(name) != assignList.end())
+        return assignList[name].type;
 printf("[%s:%d] reference to '%s', but could not locate RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR \n", __FUNCTION__, __LINE__, name.c_str());
     //exit(-1);
     return "";
@@ -470,10 +461,18 @@ printf("[%s:%d] change [%s] = %s -> %s\n", __FUNCTION__, __LINE__, item.first.c_
     for (auto FI : IR->method) {
         bool alwaysSeen = false;
         for (auto info: FI.second->storeList) {
-std::string dest = tree2str(info.dest);
-std::string destType = findType(dest);
+    ACCExpr *expr = info.dest;
+    if (expr->value == "?") {
+        int i = 0;
+        for (auto item: expr->operands)
+            if (i++ == 1) {
+                expr = item;
+                break;
+            }
+    }
+std::string destType = findType(expr->value);
 if (destType == "") {
-printf("[%s:%d] typenotfound %s\n", __FUNCTION__, __LINE__, dest.c_str());
+printf("[%s:%d] typenotfound %s\n", __FUNCTION__, __LINE__, tree2str(info.dest).c_str());
 exit(-1);
 }
             hasAlways = true;
