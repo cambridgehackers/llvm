@@ -69,17 +69,21 @@ static ACCExpr *walkRead (ModuleIR *IR, MethodInfo *MI, ACCExpr *expr, ACCExpr *
 printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), subscript.c_str(), post.c_str());
                 expr->value = fieldName + subscript + post;   // replace field name
                 if (!isdigit(subscript[0])) {
-                    std::string ret;
-                    for (int i = 0; i < size - 1; i++)
-                        ret += " ( " + subscript + " == " + autostr(i) + " ) ? "
-                            + fieldName + autostr(i) + post + " : ";
-                    ACCExpr *newTree = str2tree("(" + ret + fieldName + autostr(size - 1) + post + ")");
-printf("[%s:%d] NEWTREEFORSUB %s\n", __FUNCTION__, __LINE__, tree2str(newTree).c_str());
-                    expr->value = newTree->value;
-                    //expr->next = newTree->next;
-                    expr->operands.clear();
-                    for (auto item: newTree->operands)
-                        expr->operands.push_back(item);
+                    ACCExpr *cur = expr;
+                    cur->value = fieldName + autostr(size - 1) + post; // if only 1 element
+                    for (int i = 0; i < size - 1; i++) {
+                        std::string ind = autostr(i);
+                        cur->value = "?";
+                        cur->operands.push_back(allocExpr("==", allocExpr(subscript), allocExpr(ind)));
+                        cur->operands.push_back(allocExpr(fieldName + ind + post));
+                        if (i == size - 2)
+                            cur->operands.push_back(allocExpr(fieldName + autostr(size - 1) + post));
+                        else {
+                            ACCExpr *nitem = allocExpr("");
+                            cur->operands.push_back(nitem);
+                            cur = nitem;
+                        }
+                    }
 printf("[%s:%d] FINALLLLLL %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
                 }
             }

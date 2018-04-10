@@ -83,13 +83,15 @@ static std::string tree2str(const ACCExpr *arg)
     return ret;
 }
 
-static ACCExpr *allocExpr(std::string value, ACCExpr *arg = nullptr)
+static ACCExpr *allocExpr(std::string value, ACCExpr *argl = nullptr, ACCExpr *argr = nullptr)
 {
     ACCExpr *ret = new ACCExpr;
     ret->value = value;
     ret->operands.clear();
-    if (arg)
-        ret->operands.push_back(arg);
+    if (argl)
+        ret->operands.push_back(argl);
+    if (argr)
+        ret->operands.push_back(argr);
     return ret;
 }
 
