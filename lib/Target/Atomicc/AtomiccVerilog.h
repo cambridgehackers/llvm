@@ -151,7 +151,7 @@ static void getFieldList(std::list<FieldItem> &fieldList, std::string name, std:
 static void expandStruct(ModuleIR *IR, std::string fldName, std::string type,
      std::map<std::string, std::string> &declList, int out, bool force)
 {
-    std::string itemList;
+    ACCExpr *itemList = allocExpr(",");
     std::list<FieldItem> fieldList;
     getFieldList(fieldList, fldName, type, force);
     for (auto fitem : fieldList) {
@@ -164,12 +164,12 @@ printf("[%s:%d] set %s = %s\n", __FUNCTION__, __LINE__, fitem.name.c_str(), fite
             typeList[fitem.name] = fitem.type;
         }
         else if (out)
-            itemList += " , " + fitem.name;
+            itemList->operands.push_back(allocExpr(fitem.name));
         else
             setAssign(fitem.name, allocExpr(fldName + "[" + autostr(offset) + ":" + autostr(upper) + "]"), fitem.type);
     }
-    if (itemList.length() > 2)
-    setAssign(fldName, str2tree("{" + itemList.substr(2) + " }"), type);
+    if (itemList->operands.size())
+        setAssign(fldName, allocExpr("{", itemList), type);
 }
 
 static void walkRef (ACCExpr *expr)
