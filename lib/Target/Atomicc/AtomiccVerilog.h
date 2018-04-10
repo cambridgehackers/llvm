@@ -565,16 +565,16 @@ std::string getRdyName(std::string basename)
     return rdyName;
 }
 
-static std::string invertExpr(ACCExpr *expr)
+static ACCExpr *invertExpr(ACCExpr *expr)
 {
     std::string arg = tree2str(expr);
     if (endswith(arg, " ^ 1"))
-        return arg.substr(0, arg.length()-4);
+        return str2tree(arg.substr(0, arg.length()-4));
     int indparen = arg.find("(");
     int indeq = arg.find("==");
     if (indparen == -1 && indeq > 0)
-        return "(" + arg.substr(0, indeq) + "!=" + arg.substr(indeq + 2) + ")";
-    return "((" + arg + ") ^ 1)";
+        return str2tree("(" + arg.substr(0, indeq) + "!=" + arg.substr(indeq + 2) + ")");
+    return str2tree("((" + arg + ") ^ 1)");
 }
 
 // lift guards from called method interfaces
@@ -588,13 +588,13 @@ void promoteGuards(ModuleIR *IR)
         MethodInfo *MIRdy = IR->method[getRdyName(methodName)];
         assert(MIRdy);
         for (auto info: MI->callList) {
-            std::string tempCond = getRdyName(info.value->value);
+            ACCExpr *tempCond = allocExpr(getRdyName(info.value->value));
             if (info.cond)
-                tempCond += " | " + invertExpr(info.cond);
-            if (tree2str(MIRdy->guard) == "1")
-                MIRdy->guard = str2tree(tempCond);
+                tempCond = allocExpr("|", tempCond, invertExpr(info.cond));
+            if (MIRdy->guard->value == "1")
+                MIRdy->guard = tempCond;
             else
-                MIRdy->guard = str2tree("(" + tree2str(MIRdy->guard) + ") & (" + tempCond + ")");
+                MIRdy->guard = allocExpr("&", MIRdy->guard, tempCond);
         }
     }
 }
