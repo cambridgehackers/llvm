@@ -51,41 +51,38 @@ static ACCExpr *walkRead (ModuleIR *IR, MethodInfo *MI, ACCExpr *expr, ACCExpr *
         if (isIdChar(fieldName[0])) {
             if (MI && cond && (!expr->operands.size() || expr->operands.front()->value != "{"))
                 addRead(MI->meta[MetaRead][fieldName], cond);
-            int size = -1;
             if (expr->operands.size() && expr->operands.front()->value == "[") {
-                ACCExpr *sub = expr->operands.front();
+                ACCExpr *subscript = expr->operands.front()->operands.front();
                 expr->operands.pop_front();
-                std::string post, subscript = tree2str(sub->operands.front());
-                sub->operands.clear();
+                std::string post;
                 if (expr->operands.size() && isIdChar(expr->operands.front()->value[0])) {
                     post = expr->operands.front()->value;
                     expr->operands.pop_front();
                 }
+                int size = -1;
                 for (auto item: IR->fields)
                     if (item.fldName == fieldName) {
                         size = item.vecCount;
                         break;
                     }
-printf("[%s:%d] ARRAAA size %d '%s' sub '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), subscript.c_str(), post.c_str());
-                expr->value = fieldName + subscript + post;   // replace field name
-                if (!isdigit(subscript[0])) {
-                    ACCExpr *cur = expr;
-                    cur->value = fieldName + autostr(size - 1) + post; // if only 1 element
-                    for (int i = 0; i < size - 1; i++) {
-                        std::string ind = autostr(i);
-                        cur->value = "?";
-                        cur->operands.push_back(allocExpr("==", allocExpr(subscript), allocExpr(ind)));
-                        cur->operands.push_back(allocExpr(fieldName + ind + post));
-                        if (i == size - 2)
-                            cur->operands.push_back(allocExpr(fieldName + autostr(size - 1) + post));
-                        else {
-                            ACCExpr *nitem = allocExpr("");
-                            cur->operands.push_back(nitem);
-                            cur = nitem;
-                        }
+printf("[%s:%d] ARRAAA size %d '%s' post '%s'\n", __FUNCTION__, __LINE__, size, fieldName.c_str(), post.c_str());
+                assert (!isdigit(subscript->value[0]));
+                ACCExpr *cur = expr;
+                cur->value = fieldName + autostr(size - 1) + post; // if only 1 element
+                for (int i = 0; i < size - 1; i++) {
+                    std::string ind = autostr(i);
+                    cur->value = "?";
+                    cur->operands.push_back(allocExpr("==", subscript, allocExpr(ind)));
+                    cur->operands.push_back(allocExpr(fieldName + ind + post));
+                    if (i == size - 2)
+                        cur->operands.push_back(allocExpr(fieldName + autostr(size - 1) + post));
+                    else {
+                        ACCExpr *nitem = allocExpr("");
+                        cur->operands.push_back(nitem);
+                        cur = nitem;
                     }
-printf("[%s:%d] FINALLLLLL %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
                 }
+printf("[%s:%d] FINALLLLLL %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
             }
         }
         for (auto item: expr->operands)

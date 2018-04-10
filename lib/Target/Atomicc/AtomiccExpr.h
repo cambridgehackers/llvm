@@ -266,6 +266,19 @@ static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCu
                     tok->operands.push_back(tnext);
                     tnext = get1Token();
                 }
+                if (isIdChar(tok->value[0]) && tok->operands.size()
+                  && tok->operands.front()->value == "["
+                  && tok->operands.front()->operands.size()) {
+                    std::string sub = tok->operands.front()->operands.front()->value;
+                    if (isdigit(sub[0])) {
+                        tok->value += sub;
+                        tok->operands.pop_front();
+                        if (tok->operands.size() && isIdChar(tok->operands.front()->value[0])) {
+                            tok->value += tok->operands.front()->value;
+                            tok->operands.pop_front();
+                        }
+                    }
+                }
                 repeatGet1Token = tnext;
                 currentOperand = tok;
             }
