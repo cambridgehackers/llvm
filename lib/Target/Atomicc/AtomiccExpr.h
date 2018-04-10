@@ -179,6 +179,66 @@ static bool checkOperator(std::string s)
       || s == "|" || s == "||" || s == "<" || s == ">";
 }
 
+static ACCExpr *getRHS(ACCExpr *expr)
+{
+     int i = 0;
+     for (auto item: expr->operands)
+         if (i++ == 1)
+             return item;
+     return nullptr;
+}
+
+static ACCExpr *invertExpr(ACCExpr *expr)
+{
+    ACCExpr *lhs = expr->operands.front();
+    std::string v = expr->value;
+    if (v == "^" && getRHS(expr)->value == "1")
+        return lhs;
+    if (v == "==")
+        return allocExpr("!=", lhs, getRHS(expr));
+    if (v == "!=")
+        return allocExpr("==", lhs, getRHS(expr));
+    if (v == "&" || v == "|") {
+        ACCExpr *temp = allocExpr(v == "&" ? "|" : "&");
+        for (auto item: expr->operands)
+            temp->operands.push_back(invertExpr(item));
+        return temp;
+    }
+    return allocExpr("^", expr, allocExpr("1"));
+}
+
+static ACCExpr *cleanupExpr(ACCExpr *expr)
+{
+    if (!expr)
+        return expr;
+    ACCExpr *lhs = expr->operands.front();
+    std::string v = expr->value;
+    if (v == "^" && getRHS(expr)->value == "1")
+        return invertExpr(cleanupExpr(lhs));
+    ACCExpr *ret = allocExpr(expr->value);
+    for (auto item: expr->operands) {
+         ACCExpr *titem = cleanupExpr(item);
+         if (titem->value != ret->value || ret->value == "?")
+             ret->operands.push_back(titem);
+         else
+             for (auto oitem: titem->operands)
+                 ret->operands.push_back(oitem);
+    }
+    if (ret->value == "&") {
+        ACCExpr *nret = allocExpr(ret->value);
+        std::string checkName;
+        for (auto item: ret->operands) {
+             if (item->value == "==")
+                 checkName = item->operands.front()->value;
+             else if (item->value == "!=" && checkName == item->operands.front()->value)
+                 continue;
+             nret->operands.push_back(item);
+        }
+        ret = nret;
+    }
+    return ret;
+}
+
 static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCurrentToken)
 {
     bool parseState = false;
@@ -260,6 +320,7 @@ static ACCExpr *getExprList(ACCExpr *head, std::string terminator, bool repeatCu
         if (head->value == "(" && head->operands.size() == 1)
             head = head->operands.front();
     }
+    head = cleanupExpr(head);
     return head;
 }
 
