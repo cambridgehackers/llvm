@@ -112,7 +112,7 @@ typedef struct {
     bool                       rule;
     std::list<StoreListElement> storeList;
     std::list<LetListElement> letList;
-    std::list<CallListElement> callList;
+    std::list<CallListElement *> callList;
     std::string                type;
     std::list<ParamElement>    params;
     std::map<std::string, std::string> alloca;

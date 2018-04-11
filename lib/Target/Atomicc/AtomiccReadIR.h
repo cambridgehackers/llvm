@@ -195,14 +195,7 @@ void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr)
                             ACCExpr *cond = getExpression();
                             ParseCheck(checkItem(":"), "':' missing");
                             ACCExpr *expr = str2tree(bufp);
-                            MI->callList.push_back(CallListElement{expr, cond, isAction});
-                            if (isIdChar(expr->value[0]) && expr->operands.size() && expr->operands.front()->value == "{")
-                                MI->meta[MetaInvoke][expr->value].insert(tree2str(cond));
-                            else {
-                                printf("[%s:%d] called method name not found %s\n", __FUNCTION__, __LINE__, tree2str(expr).c_str());
-dumpExpr("READCALL", expr);
-                                exit(-1);
-                            }
+                            MI->callList.push_back(new CallListElement{expr, cond, isAction});
                         }
                         else
                             ParseCheck(false, "unknown method item");

@@ -390,26 +390,33 @@ static std::list<ModData> modLine;
             }
         }
         for (auto info: MI->callList) {
-            walkRead(MI, info.cond, nullptr);
-            walkRead(MI, info.value, info.cond);
-            if (!info.isAction)
+            if (isIdChar(info->value->value[0]) && info->value->operands.size() && info->value->operands.front()->value == "{")
+                MI->meta[MetaInvoke][info->value->value].insert(tree2str(info->cond));
+            else {
+                printf("[%s:%d] called method name not found %s\n", __FUNCTION__, __LINE__, tree2str(info->value).c_str());
+dumpExpr("READCALL", info->value);
+                    exit(-1);
+            }
+            walkRead(MI, info->cond, nullptr);
+            walkRead(MI, info->value, info->cond);
+            if (!info->isAction)
                 continue;
             ACCExpr *tempCond = str2tree(methodName);
-            if (info.cond) {
-                ACCExpr *temp = info.cond;
+            if (info->cond) {
+                ACCExpr *temp = info->cond;
                 if (temp->value != "&")
                     temp = allocExpr("&", temp);
                 temp->operands.push_back(tempCond);
                 tempCond = temp;
             }
-            std::string calledName = info.value->value;
+            std::string calledName = info->value->value;
 printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
-            if (!info.value->operands.size() || info.value->operands.front()->value != "{") {
+            if (!info->value->operands.size() || info->value->operands.front()->value != "{") {
                 printf("[%s:%d] incorrectly formed call expression\n", __FUNCTION__, __LINE__);
                 exit(-1);
             }
             // 'Or' together ENA lines from all invocations of a method from this class
-            if (info.isAction) {
+            if (info->isAction) {
                 if (!enableList[calledName])
                     enableList[calledName] = allocExpr("||");
                 enableList[calledName]->operands.push_back(tempCond);
@@ -422,7 +429,7 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             auto AI = CI->params.begin();
             std::string pname = calledName.substr(0, calledName.length()-5) + MODULE_SEPARATOR;
             int argCount = CI->params.size();
-            ACCExpr *param = info.value->operands.front()->operands.front();
+            ACCExpr *param = info->value->operands.front()->operands.front();
 printf("[%s:%d] param '%s'\n", __FUNCTION__, __LINE__, tree2str(param).c_str());
 //dumpExpr("param", param);
             auto setParam = [&] (const ACCExpr *item) -> void {
@@ -604,9 +611,9 @@ void promoteGuards(ModuleIR *IR)
         MethodInfo *MIRdy = IR->method[getRdyName(methodName)];
         assert(MIRdy);
         for (auto info: MI->callList) {
-            ACCExpr *tempCond = allocExpr(getRdyName(info.value->value));
-            if (info.cond) {
-                ACCExpr *icon = invertExpr(info.cond);
+            ACCExpr *tempCond = allocExpr(getRdyName(info->value->value));
+            if (info->cond) {
+                ACCExpr *icon = invertExpr(info->cond);
                 if (icon->value != "|")
                     icon = allocExpr("|", icon);
                 icon->operands.push_back(tempCond);
@@ -661,9 +668,10 @@ printf("[%s:%d] ARRAAA size %d '%s' post '%s'\n", __FUNCTION__, __LINE__, size, 
         }
     }
 }
-static ACCExpr *findSubscript (ModuleIR *IR, ACCExpr *expr, int &size, ACCExpr **subscript, std::string &post)
+static ACCExpr *findSubscript (ModuleIR *IR, ACCExpr *expr, int &size, std::string &fieldName, ACCExpr **subscript, std::string &post)
 {
     if (isIdChar(expr->value[0]) && expr->operands.size() && expr->operands.front()->value == "[") {
+        fieldName = expr->value;
         *subscript = expr->operands.front()->operands.front();
         expr->operands.pop_front();
         if (expr->operands.size() && isIdChar(expr->operands.front()->value[0])) {
@@ -678,33 +686,21 @@ static ACCExpr *findSubscript (ModuleIR *IR, ACCExpr *expr, int &size, ACCExpr *
         return expr;
     }
     for (auto item: expr->operands)
-        if (ACCExpr *ret = findSubscript(IR, item, size, subscript, post))
+        if (ACCExpr *ret = findSubscript(IR, item, size, fieldName, subscript, post))
             return ret;
     return nullptr;
 }
-static ACCExpr *cloneReplaceTree (ACCExpr *expr, ACCExpr *target, int size, ACCExpr *subscript, std::string &post)
+static ACCExpr *cloneReplaceTree (ACCExpr *expr, ACCExpr *target)
 {
-    for (auto item: expr->operands)
-        cloneReplaceTree(item, target, size, subscript, post);
-    if (expr != target)
-        return nullptr;
-    std::string fieldName = expr->value;
-    std::string lastElement = fieldName + autostr(size - 1) + post;
-    expr->value = lastElement; // if only 1 element
-    for (int i = 0; i < size - 1; i++) {
-        std::string ind = autostr(i);
-        expr->value = "?";
-        expr->operands.push_back(allocExpr("==", subscript, allocExpr(ind)));
-        expr->operands.push_back(allocExpr(fieldName + ind + post));
-        if (i == size - 2)
-            expr->operands.push_back(allocExpr(lastElement));
-        else {
-            ACCExpr *nitem = allocExpr("");
-            expr->operands.push_back(nitem);
-            expr = nitem;
-        }
+    ACCExpr *newExpr = allocExpr(expr->value);
+    if (expr != target) {
+        for (auto item: expr->operands)
+            newExpr->operands.push_back(cloneReplaceTree(item, target));
+        return newExpr;
     }
-    return nullptr;
+    for (auto item: expr->operands)
+        newExpr->operands.push_back(item);
+    return newExpr;
 }
 
 void generateModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStrVH, FILE *OStrV)
@@ -726,20 +722,31 @@ void generateModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStrVH, FILE *OStrV)
                 walkSubscript(IR, item.value);
             }
             for (auto item: MI->callList)
-                walkSubscript(IR, item.cond);
+                walkSubscript(IR, item->cond);
             for (auto item: MI->callList) {
                 int size = -1;
-                ACCExpr *subscript = nullptr;
-                std::string post;
-                ACCExpr *expr = findSubscript(IR, item.value, size, &subscript, post);
-                if (expr)
-                    cloneReplaceTree(item.value, expr, size, subscript, post);
+                ACCExpr *cond = item->cond, *subscript = nullptr;
+                std::string fieldName, post;
+                if (ACCExpr *expr = findSubscript(IR, item->value, size, fieldName, &subscript, post)) {
+                    for (int ind = 0; ind < size; ind++) {
+                        ACCExpr *newCond = allocExpr("==", subscript, allocExpr(autostr(ind)));
+                        if (cond)
+                            newCond = allocExpr("&", cond, newCond);
+                        expr->value = fieldName + autostr(ind) + post;
+                        if (ind == 0)
+                            item->cond = newCond;
+                        else
+                            MI->callList.push_back(new CallListElement{
+                                cloneReplaceTree(item->value, expr), newCond, item->isAction});
+                    }
+                    expr->value = fieldName + "0" + post;
+                }
             }
         }
         promoteGuards(IR);
-        // now generate the verilog header file '.vh'
-        metaGenerate(IR, OStrVH);
         // Only generate verilog for modules derived from Module
         generateModuleDef(IR, OStrV);
+        // now generate the verilog header file '.vh'
+        metaGenerate(IR, OStrVH);
     }
 }
