@@ -600,34 +600,6 @@ std::string getRdyName(std::string basename)
     return rdyName;
 }
 
-// lift guards from called method interfaces
-void promoteGuards(ModuleIR *IR)
-{
-    for (auto FI : IR->method) {
-        std::string methodName = FI.first;
-        MethodInfo *MI = FI.second;
-        if (endswith(methodName, "__RDY"))
-            continue;
-        MethodInfo *MIRdy = IR->method[getRdyName(methodName)];
-        assert(MIRdy);
-        for (auto info: MI->callList) {
-            ACCExpr *tempCond = allocExpr(getRdyName(info->value->value));
-            if (info->cond) {
-                ACCExpr *icon = invertExpr(info->cond);
-                if (icon->value != "|")
-                    icon = allocExpr("|", icon);
-                icon->operands.push_back(tempCond);
-                tempCond = icon;
-            }
-            if (MIRdy->guard->value == "1")
-                MIRdy->guard = allocExpr("&");
-            else if (MIRdy->guard->value != "&")
-                MIRdy->guard = allocExpr("&", MIRdy->guard);
-            MIRdy->guard->operands.push_back(tempCond);
-        }
-    }
-}
-
 static void walkSubscript (ModuleIR *IR, ACCExpr *expr)
 {
     if (!expr)
@@ -693,13 +665,8 @@ static ACCExpr *findSubscript (ModuleIR *IR, ACCExpr *expr, int &size, std::stri
 static ACCExpr *cloneReplaceTree (ACCExpr *expr, ACCExpr *target)
 {
     ACCExpr *newExpr = allocExpr(expr->value);
-    if (expr != target) {
-        for (auto item: expr->operands)
-            newExpr->operands.push_back(cloneReplaceTree(item, target));
-        return newExpr;
-    }
     for (auto item: expr->operands)
-        newExpr->operands.push_back(item);
+        newExpr->operands.push_back(expr == target ? item : cloneReplaceTree(item, target));
     return newExpr;
 }
 
@@ -709,7 +676,6 @@ void generateModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStrVH, FILE *OStrV)
         for (auto item: IR->method) {
             std::string methodName = item.first;
             MethodInfo *MI = item.second;
-            std::string rdyName = getRdyName(methodName);
             walkSubscript(IR, MI->guard);
             for (auto item: MI->storeList) {
                 walkSubscript(IR, item.cond);
@@ -742,8 +708,27 @@ void generateModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStrVH, FILE *OStrV)
                     expr->value = fieldName + "0" + post;
                 }
             }
+            // lift guards from called method interfaces
+            if (!endswith(methodName, "__RDY"))
+            if (MethodInfo *MIRdy = IR->method[getRdyName(methodName)])
+            for (auto item: MI->callList) {
+                ACCExpr *tempCond = allocExpr(getRdyName(item->value->value));
+                if (item->cond) {
+                    ACCExpr *icon = invertExpr(item->cond);
+                    if (icon->value != "|")
+                        icon = allocExpr("|", icon);
+                    icon->operands.push_back(tempCond);
+                    tempCond = icon;
+                }
+                if (MIRdy->guard->value == "1")
+                    MIRdy->guard = tempCond;
+                else {
+                    if (MIRdy->guard->value != "&")
+                        MIRdy->guard = allocExpr("&", MIRdy->guard);
+                    MIRdy->guard->operands.push_back(tempCond);
+                }
+            }
         }
-        promoteGuards(IR);
         // Only generate verilog for modules derived from Module
         generateModuleDef(IR, OStrV);
         // now generate the verilog header file '.vh'
