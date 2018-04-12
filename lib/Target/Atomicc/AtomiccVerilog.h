@@ -401,7 +401,7 @@ dumpExpr("READCALL", info->value);
             walkRead(MI, info->value, info->cond);
             if (!info->isAction)
                 continue;
-            ACCExpr *tempCond = str2tree(methodName);
+            ACCExpr *tempCond = allocExpr(methodName);
             if (info->cond) {
                 ACCExpr *temp = info->cond;
                 if (temp->value != "&")
@@ -432,12 +432,10 @@ printf("[%s:%d] CALLLLLL '%s'\n", __FUNCTION__, __LINE__, calledName.c_str());
             ACCExpr *param = info->value->operands.front()->operands.front();
 printf("[%s:%d] param '%s'\n", __FUNCTION__, __LINE__, tree2str(param).c_str());
 //dumpExpr("param", param);
-            auto setParam = [&] (const ACCExpr *item) -> void {
+            auto setParam = [&] (ACCExpr *item) -> void {
                 if(argCount-- > 0) {
-                    std::string scanexp = tree2str(item);
-printf("[%s:%d] infmuxVL[%s] = cond '%s' tree '%s'\n", __FUNCTION__, __LINE__, (pname + AI->name).c_str(),
-tree2str(tempCond).c_str(), scanexp.c_str());
-                    muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, str2tree(scanexp)});
+printf("[%s:%d] infmuxVL[%s] = cond '%s' tree '%s'\n", __FUNCTION__, __LINE__, (pname + AI->name).c_str(), tree2str(tempCond).c_str(), tree2str(item).c_str());
+                    muxValueList[pname + AI->name].push_back(MuxValueEntry{tempCond, item});
                     typeList[pname + AI->name] = AI->type;
                     AI++;
                 }
@@ -456,15 +454,25 @@ tree2str(tempCond).c_str(), scanexp.c_str());
     // combine mux'ed assignments into a single 'assign' statement
     // Context: before local state declarations, to allow inlining
     for (auto item: muxValueList) {
-        std::string prevCond;
-        std::string temp, prevValue;
+        ACCExpr *prevCond = nullptr, *prevValue = nullptr;
+        ACCExpr *temp = nullptr, *head = nullptr;
         for (auto element: item.second) {
-            if (prevCond != "")
-                temp += prevCond + " ? " + prevValue + " : ";
-            prevCond = tree2str(element.cond);
-            prevValue = tree2str(element.value);
+            if (prevCond) {
+                ACCExpr *newExpr = allocExpr("?", prevCond, prevValue);
+                if (temp)
+                    temp->operands.push_back(newExpr);
+                temp = newExpr;
+                if (!head)
+                    head = temp;
+            }
+            prevCond = element.cond;
+            prevValue = element.value;
         }
-        setAssign(item.first, str2tree(temp + prevValue), typeList[item.first]);
+        if (temp)
+            temp->operands.push_back(prevValue);
+        else
+            head = prevValue;
+        setAssign(item.first, head, typeList[item.first]);
     }
     // recursively process all replacements internal to the list of 'setAssign' items
     for (auto item: assignList)
