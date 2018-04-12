@@ -55,13 +55,6 @@ static bool inline startswith(std::string str, std::string suffix)
     return str.substr(0, suffix.length()) == suffix;
 }
 
-enum TokType {TOK_NONE, TOK_ID, TOK_NUMBER, TOK_ARITHOP, TOK_RELOP, TOK_LBRACE, TOK_MISCOP,
-    TOK_EOF};
-typedef struct {
-    TokType type;
-    std::string value;
-} TokenValue;
-
 typedef struct ACCExpr {
     std::list<ACCExpr *>operands;
     std::string value;
