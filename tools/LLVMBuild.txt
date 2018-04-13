@@ -47,7 +47,6 @@ subdirectories =
  llvm-split
  opt
  verify-uselistorder
- veriloggen
 
 [component_0]
 type = Group
