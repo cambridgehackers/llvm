@@ -80,6 +80,10 @@ static bool isAlloca(const Value *arg)
 {
     if (const GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
         arg = dyn_cast<Instruction>(IG->getPointerOperand());
+    if (const CastInst *IG = dyn_cast_or_null<CastInst>(arg))
+        arg = dyn_cast<Instruction>(IG->getOperand(0));
+    if (const GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
+        arg = dyn_cast<Instruction>(IG->getPointerOperand());
     if (const Instruction *source = dyn_cast_or_null<Instruction>(arg))
     if (source->getOpcode() == Instruction::Alloca)
             return true;
