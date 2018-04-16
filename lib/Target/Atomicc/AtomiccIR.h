@@ -131,9 +131,4 @@ typedef struct ModuleIR {
     std::list<FieldElement>           interfaces;
     std::list<InterfaceConnectType>   interfaceConnect;
 } ModuleIR;
-
-void readModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStr);
-void generateModuleIR(std::list<ModuleIR *> &irSeq, FILE *OStrVH, FILE *OStrV);
-void metaGenerate(ModuleIR *IR, FILE *OStr);
-std::string getRdyName(std::string basename);
 #endif /* __ATOMICIR_H__ */
