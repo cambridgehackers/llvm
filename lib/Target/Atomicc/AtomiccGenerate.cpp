@@ -195,13 +195,27 @@ ClassMethodTable *getClass(const StructType *STy)
                     targetItem = targetItem.substr(0, idx);
                 }
                 int Idx = 0;
+printf("[%s:%d] CONNECT %s = %s target %s tif %s\n", __FUNCTION__, __LINE__, target.c_str(), source.c_str(), targetItem.c_str(), targetInterface.c_str());
                 for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-                    if (const StructType *STyE = dyn_cast<StructType>(*I))
+                    Type *telement = *I;
+                    if (const PointerType *PTy = dyn_cast<PointerType>(telement))
+                        telement = PTy->getElementType();
+                    if (const StructType *STyE = dyn_cast<StructType>(telement))
                     if (targetItem == fieldName(STy, Idx)) {
+printf("[%s:%d] found targetitem %s\n", __FUNCTION__, __LINE__, targetItem.c_str());
                         int Idx = 0;
+                        if (targetInterface == "") {
+printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
+                            IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getStructName(STyE)});
+                            goto nextInterface;
+                        }
+                        else
                         for (auto I = STyE->element_begin(), E = STyE->element_end(); I != E; ++I, Idx++) {
-                            if (const PointerType *PTy = dyn_cast<PointerType>(*I))
-                            if (const StructType *STyI = dyn_cast<StructType>(PTy->getElementType()))
+printf("[%s:%d] targetif %s name %s\n", __FUNCTION__, __LINE__, targetInterface.c_str(), fieldName(STyE, Idx).c_str());
+                            Type *element = *I;
+                            if (const PointerType *PTy = dyn_cast<PointerType>(element))
+                                element = PTy->getElementType();
+                            if (const StructType *STyI = dyn_cast<StructType>(element))
                             if (targetInterface == fieldName(STyE, Idx)) {
 printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
                                 IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getStructName(STyI)});
