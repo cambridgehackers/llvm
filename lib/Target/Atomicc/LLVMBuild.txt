@@ -27,5 +27,5 @@ parent = Target
 type = Library
 name = AtomiccCodeGen
 parent = Atomicc
-required_libraries = AsmPrinter MC CodeGen Core AtomiccInfo SelectionDAG Support Target Interpreter ExecutionEngine RuntimeDyld Support
+required_libraries = AsmPrinter MC CodeGen Core AtomiccInfo SelectionDAG Support Target TransformUtils Interpreter ExecutionEngine RuntimeDyld Support
 add_to_library_groups = Atomicc
