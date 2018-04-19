@@ -941,6 +941,7 @@ void generateIR(std::string OutputDir)
               : (!strncmp(sname.c_str(), "union.", 6))       ? '2'
               : (!strncmp(sname.c_str(), "class.", 6))       ? '4'
               : (!strncmp(sname.c_str(), "ainterface.", 11)) ? '5'
+              : (!strncmp(sname.c_str(), "serialize.", 10))  ? '6'
               : (!strncmp(sname.c_str(), "emodule.", 8))     ? '7'
               : '9') + getStructName(current.first);
         if (strncmp(sname.c_str(), "class.std::", 11) // don't generate anything for std classes
