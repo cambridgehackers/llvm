@@ -193,7 +193,7 @@ extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
             VMap[arg] = func->arg_begin();
         else {
             int64_t val = bcap[argCount-1];
-            printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
+            //printf("[%s:%d] Load %lld\n", __FUNCTION__, __LINE__, val);
             VMap[arg] = ConstantInt::get(arg->getType(), val);
         }
     }

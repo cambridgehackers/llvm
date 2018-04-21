@@ -352,6 +352,7 @@ int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_ty
  */
 static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep_type_iterator E)
 {
+static int errorLimit = 5;
     VectorType *LastIndexIsVector = 0;
     int64_t Total = getGEPOffset(&LastIndexIsVector, I, E);
     ERRORIF(LastIndexIsVector);
@@ -359,6 +360,7 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
     if (trace_gep)
         printf("[%s:%d] cbuffer %s Total %ld\n", __FUNCTION__, __LINE__, cbuffer.c_str(), (unsigned long)Total);
     if (Total == -1) {
+if (errorLimit > 0)
         printf("[%s:%d] non-constant offset cbuffer %s Total %ld\n", __FUNCTION__, __LINE__, cbuffer.c_str(), (unsigned long)Total);
     }
     if (I != E)
@@ -384,6 +386,7 @@ static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep
         }
     }
     if (trace_gep || Total == -1)
+if (Total != -1 || errorLimit-- > 0)
         printf("%s: return '%s'\n", __FUNCTION__, cbuffer.c_str());
     return cbuffer;
 }
@@ -603,13 +606,13 @@ std::string printOperand(const Value *Operand)
         case Instruction::IntToPtr: case Instruction::PtrToInt:
         case Instruction::AddrSpaceCast:
         case Instruction::Trunc: case Instruction::ZExt:
-            printf("printOperand: CASTTTTINNNNNNNNNNNNNNNN opcode %d.=%s\n", opcode, I->getOpcodeName());
+            //printf("printOperand: CASTTTTINNNNNNNNNNNNNNNN opcode %d.=%s\n", opcode, I->getOpcodeName());
             vout += printOperand(I->getOperand(0));
             break;
         case Instruction::BitCast: {
             StructType *inType = nullptr, *outType = nullptr;
             bool derived = checkDerived(I->getOperand(0)->getType(), I->getType());
-            printf("printOperand: BITCAASSSSS opcode %d.=%s derived %d\n", opcode, I->getOpcodeName(), derived);
+            //printf("printOperand: BITCAASSSSS opcode %d.=%s derived %d\n", opcode, I->getOpcodeName(), derived);
             std::string operand = printOperand(I->getOperand(0));
             std::string replace, ctype;
             if (auto PTy = dyn_cast<PointerType>(I->getType()))
