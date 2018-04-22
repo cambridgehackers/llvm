@@ -103,8 +103,8 @@ typedef struct {
 typedef struct {
     ACCExpr                   *guard;
     bool                       rule;
-    std::list<StoreListElement> storeList;
-    std::list<LetListElement> letList;
+    std::list<StoreListElement *> storeList;
+    std::list<LetListElement *> letList;
     std::list<CallListElement *> callList;
     std::string                type;
     std::list<ParamElement>    params;
