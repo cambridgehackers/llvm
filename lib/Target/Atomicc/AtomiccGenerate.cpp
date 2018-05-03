@@ -10,6 +10,7 @@
 // This file implements zzz
 //
 //===----------------------------------------------------------------------===//
+#include <sys/stat.h> // mkdir
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/CallSite.h"
@@ -19,6 +20,7 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
+static std::string generatedDirectory = "generated/";
 static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
@@ -936,6 +938,8 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
 void generateIR(std::string OutputDir)
 {
     std::map<std::string, const StructType *> structAlpha;
+    mkdir(generatedDirectory.c_str(), 0777);
+    OutputDir = generatedDirectory + OutputDir;
     for (auto current : classCreate) {
         assert(current.first);
         std::string sname = current.first->getName();
