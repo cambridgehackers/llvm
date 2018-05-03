@@ -151,10 +151,10 @@ ClassMethodTable *getClass(const StructType *STy)
                 if (idx >= 0)
                     ret = ret.substr(0,idx);
                 idx = ret.find(':');
-                std::string typeName = ret.substr(idx+1);
-                if (startswith(typeName, "l_"))
-                    typeName = CBEMangle(typeName);
-                IR->unionList.push_back(UnionItem{ret.substr(0, idx), typeName});
+                std::string typName = ret.substr(idx+1);
+                if (startswith(typName, "l_"))
+                    typName = CBEMangle(typName);
+                IR->unionList.push_back(UnionItem{ret.substr(0, idx), typName});
                 last_subs = subs;
             }
         }
