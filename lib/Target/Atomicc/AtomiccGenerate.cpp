@@ -434,7 +434,6 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI).c_str());
         I->dump();
         I->getParent()->getParent()->dump();
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
         parseError();
         exit(-1);
     }
@@ -467,7 +466,6 @@ ICL->dump();
         vout += "}";
     }
     }
-printf("[%s:%d] RETURRNING %s\n", __FUNCTION__, __LINE__, vout.c_str());
     return vout;
 }
 
