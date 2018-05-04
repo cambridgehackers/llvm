@@ -21,7 +21,7 @@ using namespace llvm;
 
 static int trace_function;//=1;
 static int trace_call;//=1;
-static int trace_gep=1;
+static int trace_gep;//=1;
 static int trace_operand;//=1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
@@ -357,6 +357,13 @@ static int errorLimit = 5;
     int64_t Total = getGEPOffset(&LastIndexIsVector, I, E);
     ERRORIF(LastIndexIsVector);
     std::string cbuffer = printOperand(Ptr);
+    bool removeSubscript = false;
+    if (const GlobalVariable *globalVar = dyn_cast<GlobalVariable>(Ptr))
+    if (const ConstantDataArray *CPA = dyn_cast_or_null<ConstantDataArray>(globalVar->getInitializer())) {
+        ERRORIF(!CPA->isString());
+        cbuffer = printString(CPA->getAsString());
+        removeSubscript = true;
+    }
     if (trace_gep)
         printf("[%s:%d] cbuffer %s Total %ld\n", __FUNCTION__, __LINE__, cbuffer.c_str(), (unsigned long)Total);
     if (Total == -1) {
@@ -382,7 +389,9 @@ if (errorLimit > 0)
         else {
             if (trace_gep)
                 printf("[%s:%d] cbuffer %s\n", __FUNCTION__, __LINE__, cbuffer.c_str());
-            cbuffer += "[" + printOperand(I.getOperand()) + "]";
+            std::string op = printOperand(I.getOperand());
+            if (!removeSubscript || op != "0")
+                cbuffer += "[" + op + "]";
         }
     }
     if (trace_gep || Total == -1)
