@@ -21,7 +21,7 @@ using namespace llvm;
 
 static int trace_function;//=1;
 static int trace_call;//=1;
-static int trace_gep;//=1;
+static int trace_gep=1;
 static int trace_operand;//=1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
@@ -425,33 +425,40 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI).c_str());
         I->dump();
         I->getParent()->getParent()->dump();
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
         parseError();
         exit(-1);
     }
     std::string pcalledFunction = printOperand(*AI++); // skips 'this' param
     if (trace_call || fname == "")
         printf("CALL: CALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
-    if (fname == "") {
-        fname = "[ERROR_" + calledName + "_ERROR]";
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-        exit(-1);
-    }
     if (calledName == "printf") {
-        //printf("CALL: PRINTFCALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+        printf("CALL: PRINTFCALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+ICL->dump();
         vout = "printf{" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ",";
-    }
-    else
-        vout = pcalledFunction + MODULE_SEPARATOR + fname;
-    if (useParams || calledName == "printf") {
-        if (calledName != "printf")
-            vout += "{";
         for (; AI != AE; ++AI) { // first param processed as pcalledFunction
             vout += sep + printOperand(*AI);
             sep = ",";
         }
         vout += "}";
     }
+    else if (fname == "") {
+        fname = "[ERROR_" + calledName + "_ERROR]";
+        exit(-1);
+    }
+    else {
+        vout = pcalledFunction + MODULE_SEPARATOR + fname;
+    if (useParams) {
+        vout += "{";
+        for (; AI != AE; ++AI) { // first param processed as pcalledFunction
+            vout += sep + printOperand(*AI);
+            sep = ",";
+        }
+        vout += "}";
+    }
+    }
+printf("[%s:%d] RETURRNING %s\n", __FUNCTION__, __LINE__, vout.c_str());
     return vout;
 }
 
@@ -852,8 +859,10 @@ static std::string processMethod(std::string methodName, const Function *func,
                 retGuard += parenOperand(II->getOperand(0));
                 break;
             case Instruction::Call: { // can have value
-                if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf")
+                if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf") {
+                    mlines.push_back("PRINTF " + tempCond + ":" + printCall(II, true));
                     break;
+                }
                 std::string temp = (isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ") + tempCond;
                 mlines.push_back("CALL" + temp + ":" + printCall(II, true));
                 break;
