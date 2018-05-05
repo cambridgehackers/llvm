@@ -102,6 +102,7 @@ typedef struct {
 
 typedef struct {
     ACCExpr                   *guard;
+    std::string                name;
     bool                       rule;
     std::list<StoreListElement *> storeList;
     std::list<LetListElement *> letList;
