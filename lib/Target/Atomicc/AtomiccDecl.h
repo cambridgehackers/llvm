@@ -90,7 +90,6 @@ std::string getMethodName(const Function *func);
 const StructType *findThisArgument(const Function *func);
 void preprocessModule(Module *Mod);
 std::string GetValueName(const Value *Operand);
-int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_type_iterator E);
 void prepareReplace(const Value *olda, Value *newa);
 void recursiveDelete(Value *V);
 void pushWork(Function *func, std::string mName);

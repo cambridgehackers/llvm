@@ -321,7 +321,7 @@ const StructType *findThisArgument(const Function *func)
 /*
  * Calculate offset from base pointer for GEP
  */
-int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_type_iterator E)
+static int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I, gep_type_iterator E)
 {
     uint64_t Total = 0;
     const DataLayout TD = EE->getDataLayout();
@@ -453,6 +453,8 @@ ICL->dump();
     }
     else if (fname == "") {
         fname = "[ERROR_" + calledName + "_ERROR]";
+        printf("[%s:%d] fname missing\n", __FUNCTION__, __LINE__);
+        I->dump();
         exit(-1);
     }
     else {
@@ -783,7 +785,6 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         std::string fldName = fieldName(table->STy, Idx);
         const Type *element = *I;
         int64_t vecCount = -1;
-        unsigned arrayLen = 0;
         if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = table->replaceCount[Idx];
@@ -794,7 +795,8 @@ static void processField(ClassMethodTable *table, FILE *OStr)
             continue;
         }
         if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
-            arrayLen = ATy->getNumElements();
+            assert(vecCount == -1 && "both vecCount and array count are not allowed");
+            vecCount = ATy->getNumElements();
             element = ATy->getElementType();
         }
         std::string temp;
@@ -805,8 +807,6 @@ static void processField(ClassMethodTable *table, FILE *OStr)
             element = STy;
         if (vecCount != -1)
             temp += "/Count " + utostr(vecCount) + " ";
-        if (arrayLen != 0)
-            temp += "/Array " + utostr(arrayLen) + " ";
         if (isInterface(dyn_cast<StructType>(element)))
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), typeName(element).c_str(), fldName.c_str());
         else

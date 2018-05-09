@@ -118,7 +118,6 @@ typedef struct {
     std::string fldName;
     int64_t     vecCount;
     std::string type;
-    unsigned    arrayLen;
     bool        isPtr;
 } FieldElement;
 
