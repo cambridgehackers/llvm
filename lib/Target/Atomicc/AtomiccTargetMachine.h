@@ -34,7 +34,9 @@ struct AtomiccTargetMachine : public LLVMTargetMachine {
                      StringRef FS, const TargetOptions &Options,
                      Optional<Reloc::Model> RM, CodeModel::Model CM,
                      CodeGenOpt::Level OL)
-      : LLVMTargetMachine(T, "e-m:e-i64:8-f80:128-n8:16:32:64-S128", TT, CPU, FS, Options, Reloc::Static, CM, OL),
+      // Also change: clang/lib/Basic/Targets.cpp
+      //: LLVMTargetMachine(T, "e-m:e-i64:8-f80:128-n8:16:32:64-S128", TT, CPU, FS, Options, Reloc::Static, CM, OL),
+      : LLVMTargetMachine(T, "e-m:e-i64:8-f80:128-n8-S128", TT, CPU, FS, Options, Reloc::Static, CM, OL),
       TLOF(make_unique<TargetLoweringObjectFileELF>())
       { }
 
