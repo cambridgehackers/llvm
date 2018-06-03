@@ -169,8 +169,8 @@ static int derivedStruct(const StructType *STyA, const StructType *STyB)
 
 int checkDerived(const Type *A, const Type *B)
 {
-    if (const PointerType *PTyA = cast_or_null<PointerType>(A))
-    if (const PointerType *PTyB = cast_or_null<PointerType>(B))
+    if (const PointerType *PTyA = dyn_cast_or_null<PointerType>(A))
+    if (const PointerType *PTyB = dyn_cast_or_null<PointerType>(B))
         return derivedStruct(dyn_cast<StructType>(PTyA->getElementType()),
                              dyn_cast<StructType>(PTyB->getElementType()));
     return 0;
