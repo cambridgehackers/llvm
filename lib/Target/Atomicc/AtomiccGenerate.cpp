@@ -529,7 +529,7 @@ static std::string typeName(const Type *Ty)
          llvm_unreachable("Unhandled case in processTypes!");
      }
 }
-static uint64_t sizeType(const Type *Ty)
+uint64_t sizeType(const Type *Ty)
 {
     switch (Ty->getTypeID()) {
     case Type::VoidTyID:

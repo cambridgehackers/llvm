@@ -14,14 +14,12 @@
 #ifndef LLVM_LIB_TARGET_ATOMICCBACKEND_ATOMICCTARGETMACHINE_H
 #define LLVM_LIB_TARGET_ATOMICCBACKEND_ATOMICCTARGETMACHINE_H
 
-#include "llvm/IR/DataLayout.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/LegacyPassManager.h"
-//#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/TargetRegistry.h"
 
 namespace llvm {
