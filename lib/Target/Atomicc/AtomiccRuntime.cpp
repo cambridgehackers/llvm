@@ -116,7 +116,7 @@ restart: // restart here after inlining function.... basic block structure might
                 std::string callingName = thisFunc->getName();
                 const StructType *callingSTy = findThisArgument(thisFunc);
                 Value *callV = ICL->getCalledValue();
-                Function *func = dyn_cast<Function>(callV);
+                const Function *func = getCallee(ICL);
                 if (Instruction *oldOp = dyn_cast<Instruction>(callV)) {
                     std::string opName = printOperand(callV);
                     func = dyn_cast_or_null<Function>(Mod->getNamedValue(opName));
@@ -129,7 +129,7 @@ restart: // restart here after inlining function.... basic block structure might
                             parentFunc->dump();
                         exit(-1);
                     }
-                    II->setOperand(II->getNumOperands()-1, func);
+                    II->setOperand(II->getNumOperands()-1, const_cast<Function *>(func));
                     recursiveDelete(oldOp);
                 }
                 std::string calledName = func->getName();
@@ -138,7 +138,7 @@ restart: // restart here after inlining function.... basic block structure might
                 if (parentFunc != func && thisFunc != func)
                 if (callingSTy == STy) {
                     //fprintf(stdout,"callProcess: %s cName %s single!!!!\n", callingName.c_str(), calledName.c_str());
-                    processMethodInlining(func, parentFunc);
+                    processMethodInlining(const_cast<Function *>(func), parentFunc);
                     InlineFunctionInfo IFI;
 //printf("[%s:%d] beforeInline thisFunc %p func %p\n", __FUNCTION__, __LINE__, thisFunc, func);
 //thisFunc->dump();

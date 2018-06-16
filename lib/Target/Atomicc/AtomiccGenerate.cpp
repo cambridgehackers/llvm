@@ -416,16 +416,34 @@ std::string getMethodName(const Function *func)
     std::string fname = func->getName();
     if (fname == "printf")
         return "";
+#if 0
+    if (ClassMethodTable *targetTable = getFunctionTable(func))
+        for (auto item: targetTable->method)
+printf("[%s:%d] LOOKINGFOR %p itemfirst %s sec %p\n", __FUNCTION__, __LINE__, func, item.first.c_str(), item.second);
+func->dump();
+#endif
     return "";
 }
 
+const Function *getCallee(const Instruction *I)
+{
+    const CallInst *ICL = dyn_cast<CallInst>(I);
+    const Value *val = ICL->getCalledValue();
+    const Function *func = ICL->getCalledFunction();
+    if (!func) {
+        if (auto bcast = dyn_cast<ConstantExpr>(val))
+            val = bcast->getOperand(0);
+        func = dyn_cast<Function>(val);
+    }
+    return func;
+}
 /*
  * Generate a string for a function/method call
  */
 static std::string printCall(const Instruction *I, bool useParams = false)
 {
     const CallInst *ICL = dyn_cast<CallInst>(I);
-    const Function *func = ICL->getCalledFunction();
+    const Function *func = getCallee(I);
     std::string calledName = func->getName();
     std::string vout, sep, fname = getMethodName(func);
     CallSite CS(const_cast<Instruction *>(I));
@@ -442,7 +460,6 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         printf("CALL: CALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (calledName == "printf") {
         printf("CALL: PRINTFCALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
-ICL->dump();
         vout = "printf{" + pcalledFunction.substr(1, pcalledFunction.length()-2);
         sep = ",";
         for (; AI != AE; ++AI) { // first param processed as pcalledFunction
@@ -866,11 +883,12 @@ static std::string processMethod(std::string methodName, const Function *func,
                 retGuard += parenOperand(II->getOperand(0));
                 break;
             case Instruction::Call: { // can have value
-                if (cast<CallInst>(II)->getCalledFunction()->getName() == "printf") {
+                const Function *fcall = getCallee(II);
+                if (fcall->getName() == "printf") {
                     mlines.push_back("PRINTF " + tempCond + ":" + printCall(II, true));
                     break;
                 }
-                std::string temp = (isActionMethod(cast<CallInst>(II)->getCalledFunction()) ? "/Action " : " ") + tempCond;
+                std::string temp = (isActionMethod(fcall) ? "/Action " : " ") + tempCond;
                 mlines.push_back("CALL" + temp + ":" + printCall(II, true));
                 break;
                 }
