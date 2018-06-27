@@ -95,7 +95,7 @@ static bool isAlloca(const Value *arg)
  */
 std::string fieldName(const StructType *STy, uint64_t ind)
 {
-    return getClass(STy)->fieldName[ind];
+    return getClass(STy)->fieldName[ind].name;
 }
 
 bool isInterface(const StructType *STy)
@@ -181,8 +181,15 @@ ClassMethodTable *getClass(const StructType *STy)
                 ret = ret.substr(0,idx);
             idx = ret.find(':');
 //printf("[%s:%d] sequence %d ret %s idx %d\n", __FUNCTION__, __LINE__, processSequence, ret.c_str(), idx);
-            if (processSequence == 0)
-                table->fieldName[fieldSub++] = ret;
+            if (processSequence == 0) {
+                std::string options;
+                std::string name = ret;
+                if (idx >= 0) {
+                    options = ret.substr(idx+1);
+                    name = ret.substr(0, idx);
+                }
+                table->fieldName[fieldSub++] = FieldNameInfo{name, options};
+            }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
             else if (processSequence == 3) { // interface connect
@@ -799,7 +806,8 @@ static void processField(ClassMethodTable *table, FILE *OStr)
     // generate local state element declarations
     int Idx = 0;
     for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
-        std::string fldName = fieldName(table->STy, Idx);
+        auto fitem = getClass(table->STy)->fieldName[Idx];
+        std::string fldName = fitem.name;
         const Type *element = *I;
         int64_t vecCount = -1;
         if (const Type *newType = table->replaceType[Idx]) {
@@ -819,6 +827,8 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         std::string temp;
         if (isa<PointerType>(element))
             temp += "/Ptr";
+        if (fitem.options != "")
+            temp += "/" + fitem.options;
         if (const PointerType *PTy = dyn_cast<PointerType>(element))
         if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
             element = STy;

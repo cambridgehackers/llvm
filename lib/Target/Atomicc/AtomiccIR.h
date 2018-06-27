@@ -119,6 +119,9 @@ typedef struct {
     int64_t     vecCount;
     std::string type;
     bool        isPtr;
+    bool        isInput; // used for verilog interfaces
+    bool        isOutput; // used for verilog interfaces
+    bool        isInout; // used for verilog interfaces
 } FieldElement;
 
 typedef struct ModuleIR {

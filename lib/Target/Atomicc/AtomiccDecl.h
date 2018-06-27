@@ -46,10 +46,15 @@ typedef struct {
     const char *name;
 } INTMAP_TYPE;
 
+typedef struct {
+    std::string name;
+    std::string options;
+} FieldNameInfo;
+
 class ClassMethodTable {
 public:
     const StructType                  *STy;
-    std::map<int, std::string>        fieldName;
+    std::map<int, FieldNameInfo>      fieldName;
     std::map<std::string, const Function *> method;
     std::map<int, const Type *>       replaceType;
     std::map<int, uint64_t>           replaceCount;
