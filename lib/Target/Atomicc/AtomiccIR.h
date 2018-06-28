@@ -122,6 +122,7 @@ typedef struct {
     bool        isInput; // used for verilog interfaces
     bool        isOutput; // used for verilog interfaces
     bool        isInout; // used for verilog interfaces
+    bool        isParameter; // used for verilog interfaces
 } FieldElement;
 
 typedef struct ModuleIR {
