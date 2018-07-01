@@ -365,6 +365,9 @@ static int errorLimit = 5;
     ERRORIF(LastIndexIsVector);
     std::string cbuffer = printOperand(Ptr);
     bool removeSubscript = false;
+    if (cbuffer == "_") { // optimization for verilog port names
+        cbuffer = "";
+    }
     if (const GlobalVariable *globalVar = dyn_cast<GlobalVariable>(Ptr))
     if (const ConstantDataArray *CPA = dyn_cast_or_null<ConstantDataArray>(globalVar->getInitializer())) {
         ERRORIF(!CPA->isString());
@@ -384,7 +387,9 @@ if (errorLimit > 0)
     for (; I != E; ++I) {
         if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
-            std::string fname = MODULE_SEPARATOR + fieldName(STy, foffset);
+            std::string fname = fieldName(STy, foffset);
+            if (cbuffer != "")   // optimization for verilog port references
+                fname = MODULE_SEPARATOR + fname;
             if (trace_gep)
                 printf("[%s:%d] cbuffer %s STy %s fname %s foffset %d\n", __FUNCTION__, __LINE__, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset);
             if (cbuffer == "this") {
@@ -877,7 +882,10 @@ static std::string processMethod(std::string methodName, const Function *func,
                 findAlloca(dyn_cast<Instruction>(SI->getPointerOperand()));
                 std::string dest = printOperand(SI->getPointerOperand());
                 std::string alloc = "STORE ";
-                if (isAlloca(SI->getPointerOperand()))
+                bool isInter = false;
+                if (auto IG = dyn_cast<GetElementPtrInst>(SI->getPointerOperand()))
+                    isInter = isInterface(dyn_cast<StructType>(IG->getSourceElementType()));
+                if (isInter || isAlloca(SI->getPointerOperand()))
                     alloc = "LET " + typeName(cast<PointerType>(
                       SI->getPointerOperand()->getType())->getElementType()) + " ";
                 mlines.push_back(alloc + tempCond + ":" + dest + " = " + value);
