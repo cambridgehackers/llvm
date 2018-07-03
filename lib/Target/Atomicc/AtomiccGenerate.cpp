@@ -546,6 +546,8 @@ static std::string typeName(const Type *Ty)
          return "";
      case Type::IntegerTyID:
          return "INTEGER_" + utostr(cast<IntegerType>(Ty)->getBitWidth());
+     case Type::FloatTyID:
+         return "FLOAT";
      case Type::StructTyID:
          return getStructName((cast<StructType>(Ty)));
      case Type::ArrayTyID: {
@@ -553,8 +555,10 @@ static std::string typeName(const Type *Ty)
          return "ARRAY_" + utostr(ATy->getNumElements()) + "_" + typeName(ATy->getElementType());
          }
      case Type::PointerTyID:
-        return typeName(cast<PointerType>(Ty)->getElementType());
+         return typeName(cast<PointerType>(Ty)->getElementType());
      default:
+         printf("[%s:%d] unhandled ID %d\n", __FUNCTION__, __LINE__, Ty->getTypeID());
+         Ty->dump();
          llvm_unreachable("Unhandled case in processTypes!");
      }
 }
@@ -565,6 +569,8 @@ uint64_t sizeType(const Type *Ty)
         return 0;
     case Type::IntegerTyID:
         return cast<IntegerType>(Ty)->getBitWidth();
+    case Type::FloatTyID:
+         return sizeof(float) * 8; // HACKHACKHACK
     case Type::StructTyID: {
         uint64_t total = 0;
         const StructType *STy = cast<StructType>(Ty);
