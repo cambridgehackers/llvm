@@ -755,8 +755,17 @@ std::string printOperand(const Value *Operand)
                     sprintf(temp, "%ld", (long)CI->getSExtValue());
                 cbuffer += temp;
             }
-            else
+            else if (const ConstantFP *CFP = dyn_cast<ConstantFP>(CPV)) {
+                SmallString<8> StrVal;
+                CFP->getValueAPF().toString(StrVal);
+                cbuffer += StrVal;
+            }
+            else {
+                printf("[%s:%d] STRUCTUREDTYPES %p Operand %p\n", __FUNCTION__, __LINE__, I, Operand);
+                Operand->dump();
+                if (CPV) CPV->dump();
                 ERRORIF(1); /* handle structured types */
+            }
         }
     }
     if (trace_operand)
