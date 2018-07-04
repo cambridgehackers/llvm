@@ -388,13 +388,16 @@ if (errorLimit > 0)
         if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
             std::string fname = fieldName(STy, foffset);
-            if (cbuffer != "")   // optimization for verilog port references
+            if (fname == "_")   // optimization for verilog port references
+                fname = "";
+            else if (cbuffer != "")  // optimization for verilog port references
                 fname = MODULE_SEPARATOR + fname;
             if (trace_gep)
                 printf("[%s:%d] cbuffer %s STy %s fname %s foffset %d\n", __FUNCTION__, __LINE__, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset);
             if (cbuffer == "this") {
                 cbuffer = "";
-                fname = fname.substr(1);
+                if (fname != "")
+                    fname = fname.substr(1);
             }
             cbuffer += fname;
         }
@@ -472,7 +475,8 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         printf("CALL: CALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
     if (calledName == "printf") {
         printf("CALL: PRINTFCALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
-        vout = "printf{" + pcalledFunction.substr(1, pcalledFunction.length()-2);
+        vout = "printf{" + pcalledFunction;
+//.substr(1, pcalledFunction.length()-2);
         sep = ",";
         for (; AI != AE; ++AI) { // first param processed as pcalledFunction
             vout += sep + printOperand(*AI);
@@ -735,11 +739,12 @@ std::string printOperand(const Value *Operand)
             /* handle expressions */
             ERRORIF(isa<UndefValue>(CPV) && CPV->getType()->isSingleValueType()); /* handle 'undefined' */
             if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(CPV)) {
-                cbuffer += "(";
+                //cbuffer += "(";
                 int op = CE->getOpcode();
                 assert (op == Instruction::GetElementPtr);
                 // used for character string args to printf()
-                cbuffer += printGEPExpression(CE->getOperand(0), gep_type_begin(CPV), gep_type_end(CPV)) +  ")";
+                cbuffer += printGEPExpression(CE->getOperand(0), gep_type_begin(CPV), gep_type_end(CPV));
+// +  ")";
             }
             else if (const ConstantInt *CI = dyn_cast<ConstantInt>(CPV)) {
                 char temp[100];
