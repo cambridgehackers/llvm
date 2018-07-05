@@ -49,6 +49,7 @@ typedef struct {
 typedef struct {
     std::string name;
     std::string options;
+    std::string params;
 } FieldNameInfo;
 
 class ClassMethodTable {

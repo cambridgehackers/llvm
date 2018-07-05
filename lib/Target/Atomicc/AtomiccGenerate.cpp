@@ -182,13 +182,20 @@ ClassMethodTable *getClass(const StructType *STy)
             idx = ret.find(':');
 //printf("[%s:%d] sequence %d ret %s idx %d\n", __FUNCTION__, __LINE__, processSequence, ret.c_str(), idx);
             if (processSequence == 0) {
+                std::string params;
+                int lt = ret.find('<');
+                if (lt >= 0) {
+                    params = ret.substr(lt);
+                    ret = ret.substr(0, lt);
+                    idx = ret.find(':');
+                }
                 std::string options;
                 std::string name = ret;
                 if (idx >= 0) {
                     options = ret.substr(idx+1);
                     name = ret.substr(0, idx);
                 }
-                table->fieldName[fieldSub++] = FieldNameInfo{name, options};
+                table->fieldName[fieldSub++] = FieldNameInfo{name, options, params};
             }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
@@ -863,6 +870,8 @@ static void processField(ClassMethodTable *table, FILE *OStr)
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), typeName(element).c_str(), fldName.c_str());
         else
             fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), typeName(element).c_str(), fldName.c_str());
+        if (fitem.params != "")
+            fprintf(OStr, "    PARAMS %s %s\n", fldName.c_str(), fitem.params.c_str());
     }
 }
 
