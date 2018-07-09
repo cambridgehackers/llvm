@@ -17,6 +17,11 @@
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/LoopAnalysisManager.h"
+#include "llvm/IR/Dominators.h"
+#include "llvm/Analysis/OptimizationDiagnosticInfo.h"
+#include "llvm/Transforms/Utils/UnrollLoop.h"
 
 using namespace llvm;
 
@@ -28,6 +33,67 @@ int trace_pair;//= 1;
 
 std::list<MEMORY_REGION> memoryRegion;
 
+/* This unrolls loops
+ */
+static bool processLoops(Function *func)
+{
+    bool changed = false;
+    DominatorTree *DT = new DominatorTree;
+    PostDomTreeBase<BasicBlock> *PDT = new PostDomTreeBase<BasicBlock>();
+    LoopInfo *LI = new LoopInfo;
+    if (func->isDeclaration())
+        return changed;
+    DT->recalculate(*func);
+    PDT->recalculate(*func);
+    LI->analyze(*DT);
+    SmallVector<Loop *, 4> PreOrderLoops = LI->getLoopsInReverseSiblingPreorder();
+    printf("[%s:%d] START %s loopc %d\n", __FUNCTION__, __LINE__, func->getName().str().c_str(), (int)PreOrderLoops.size());
+    if (PreOrderLoops.size()) {
+        printf("[%s:%d]DT\n", __FUNCTION__, __LINE__);
+        DT->print(errs());
+        printf("[%s:%d]PDT\n", __FUNCTION__, __LINE__);
+        PDT->print(errs());
+        printf("[%s:%d]LI\n", __FUNCTION__, __LINE__);
+        LI->print(errs());
+        func->dump();
+    }
+    for (Loop *L : PreOrderLoops) {
+printf("[%s:%d]LLLLLLLLLLLLLL %p\n", __FUNCTION__, __LINE__, L);
+L->print(errs());
+        if (!L->isLoopSimplifyForm()) { 
+            printf("ERROROR:  Not unrolling loop which is not in loop-simplify form.\n");
+            exit(-1);
+        }
+        unsigned TripCount = 16;
+        unsigned TripMultiple = 1;
+        unsigned Count = 16;
+        bool Force = true;
+        bool AllowRuntime = true;
+        bool AllowExpensiveTripCount = true;
+        bool PreserveCondBr = false;
+        bool PreserveOnlyFirst = false;
+        bool PreserveLCSSA = false;
+        unsigned PeelCount = 0;
+
+        TargetLibraryInfoImpl TLII(Triple(globalMod->getTargetTriple()));
+        TargetLibraryInfo TLI(TLII);
+        BlockFrequencyInfo BFI;
+        AssumptionCache AC(*func);
+        ScalarEvolution SE(*func, TLI, AC, *DT, *LI);
+        OptimizationRemarkEmitter ORE(func, &BFI);
+        changed |= llvm::UnrollLoop( L, Count, TripCount, Force, AllowRuntime,
+            AllowExpensiveTripCount, PreserveCondBr, PreserveOnlyFirst,
+            TripMultiple, PeelCount, LI, &SE, DT, &AC, &ORE, PreserveLCSSA);
+printf("[%s:%d] before verifyDomTree %d\n", __FUNCTION__, __LINE__, changed);
+        DT->verifyDomTree();
+    }
+    printf("[%s:%d]OVER\n", __FUNCTION__, __LINE__);
+    if (changed)
+        func->dump();
+    return changed;
+}
+
+
 /*
  * Remove Alloca items inserted by clang as part of dwarf debug support.
  * (the 'this' pointer was copied into a stack temp rather than being
@@ -37,6 +103,7 @@ std::list<MEMORY_REGION> memoryRegion;
 static void processAlloca(Function *func)
 {
     std::map<const Value *,Instruction *> remapValue;
+    bool changed = processLoops(func); // must be before processAlloca
 restart:
     remapValue.clear();
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
@@ -83,6 +150,15 @@ restart:
                 }
                 break;
                 }
+            case Instruction::Add: {
+                // these come from the loop expansion
+                if (auto lhs = dyn_cast<ConstantInt>(II->getOperand(0)))
+                if (auto rhs = dyn_cast<ConstantInt>(II->getOperand(1))) {
+                    auto newItem = ConstantInt::get(II->getType(), lhs->getZExtValue() + rhs->getZExtValue());
+                    II->replaceAllUsesWith(newItem);
+                }
+                break;
+                }
             };
             IIb = PI;
         }
@@ -96,6 +172,10 @@ restart:
             if (count == 1)
                 recursiveDelete(item.second);
         }
+    }
+    if (changed) {
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+func->dump();
     }
 }
 
@@ -197,6 +277,9 @@ extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
             VMap[arg] = ConstantInt::get(arg->getType(), val);
         }
     }
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+argFunc->dump();
+func->dump();
     CloneFunctionInto(func, argFunc, VMap, false, Returnsfunc, "", nullptr);
     processAlloca(func);
     if (trace_fixup) {
