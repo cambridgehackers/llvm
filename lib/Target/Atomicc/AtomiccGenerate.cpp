@@ -868,7 +868,7 @@ static void processField(ClassMethodTable *table, FILE *OStr)
             temp += "/Count " + utostr(vecCount) + " ";
         if (isInterface(dyn_cast<StructType>(element)))
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), typeName(element).c_str(), fldName.c_str());
-        else
+        else if (fldName != "__defaultClock" && fldName != "__defaultnReset")
             fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), typeName(element).c_str(), fldName.c_str());
         if (fitem.params != "")
             fprintf(OStr, "    PARAMS %s %s\n", fldName.c_str(), fitem.params.c_str());
