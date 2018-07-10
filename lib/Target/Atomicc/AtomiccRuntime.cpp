@@ -87,9 +87,9 @@ L->print(errs());
 printf("[%s:%d] before verifyDomTree %d\n", __FUNCTION__, __LINE__, changed);
         DT->verifyDomTree();
     }
-    printf("[%s:%d]OVER\n", __FUNCTION__, __LINE__);
-    if (changed)
-        func->dump();
+    printf("[%s:%d]OVER changed %d\n", __FUNCTION__, __LINE__, changed);
+    //if (changed)
+        //func->dump();
     return changed;
 }
 
@@ -116,8 +116,10 @@ restart:
                 if (target->getOpcode() == Instruction::Alloca) {
                     if (!dyn_cast<CallInst>(II->getOperand(0))) { // don't do remapping for calls
                     // remember values stored in Alloca temps
-                    remapValue[II->getOperand(1)] = II;
-//printf("[%s:%d] STORE %p\n", __FUNCTION__, __LINE__, II);
+                    remapValue[target] = II;
+//printf("[%s:%d] STORE target %p II %p\n", __FUNCTION__, __LINE__, target, II);
+//target->dump();
+//II->dump();
                     }
                 }
                 }
@@ -126,6 +128,7 @@ restart:
                 if (Instruction *val = remapValue[II->getOperand(0)]) {
                     // replace loads from temp areas with stored values
 //printf("[%s:%d] LOAD %p\n", __FUNCTION__, __LINE__, val);
+//II->dump();
                     II->replaceAllUsesWith(val->getOperand(0));
                     recursiveDelete(II);
                 }
@@ -150,15 +153,16 @@ restart:
                 }
                 break;
                 }
-            case Instruction::Add: {
+            case Instruction::Add:
                 // these come from the loop expansion
                 if (auto lhs = dyn_cast<ConstantInt>(II->getOperand(0)))
                 if (auto rhs = dyn_cast<ConstantInt>(II->getOperand(1))) {
                     auto newItem = ConstantInt::get(II->getType(), lhs->getZExtValue() + rhs->getZExtValue());
                     II->replaceAllUsesWith(newItem);
+                    recursiveDelete(II);
+                    goto restart;
                 }
                 break;
-                }
             };
             IIb = PI;
         }
@@ -167,15 +171,18 @@ restart:
         if (item.second)
         if (Instruction *allocItem = dyn_cast<Instruction>(item.second->getOperand(1))) {
             int count = 0;
+            for (auto UB = allocItem->use_begin(), UE = allocItem->use_end(); UB != UE; UB++) {
+                if (auto II = dyn_cast<Instruction>(UB->getUser()))
+                if (II->getOpcode() == Instruction::Store)
+                    continue;
+                count++;
+            }
+            if (count < 2)
             for (auto UB = allocItem->use_begin(), UE = allocItem->use_end(); UB != UE; UB++)
-                 count++;
-            if (count == 1)
-                recursiveDelete(item.second);
+                if (auto II = dyn_cast<Instruction>(UB->getUser()))
+                if (II->getOpcode() == Instruction::Store)
+                    II->eraseFromParent();
         }
-    }
-    if (changed) {
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-func->dump();
     }
 }
 
