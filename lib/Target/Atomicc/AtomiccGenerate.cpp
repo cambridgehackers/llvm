@@ -100,7 +100,7 @@ std::string fieldName(const StructType *STy, uint64_t ind)
 
 bool isInterface(const StructType *STy)
 {
-    return STy && startswith(getStructName(STy), "l_ainterface");
+    return STy && startswith(getClass(STy)->IR->name, "l_ainterface");
 }
 
 bool isActionMethod(const Function *func)
@@ -125,6 +125,21 @@ static void checkClass(const StructType *STy, const StructType *ActSTy)
     }
 }
 
+static std::string legacygetStructName(const StructType *STy)
+{
+    assert(STy);
+    getClass(STy);
+    if (!STy->isLiteral() && !STy->getName().empty()) {
+        std::string temp = STy->getName().str();
+        if (startswith(temp, "emodule"))
+            temp = temp.substr(1);
+        return CBEMangle("l_" + temp);
+    }
+    if (!UnnamedStructIDs[STy])
+        UnnamedStructIDs[STy] = NextTypeID++;
+    return "l_unnamed_" + utostr(UnnamedStructIDs[STy]);
+}
+
 ClassMethodTable *getClass(const StructType *STy)
 {
     int fieldSub = 0;
@@ -134,7 +149,11 @@ ClassMethodTable *getClass(const StructType *STy)
         classCreate[STy]->STy = STy;
         ModuleIR *IR = new ModuleIR;
         table->IR = IR;
-        IR->name = getStructName(STy);
+        IR->name = legacygetStructName(STy);
+        if (startswith(IR->name, "l_module_OC_")) {
+            IR->name = IR->name.substr(12);
+printf("[%s:%d]CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC %s\n", __FUNCTION__, __LINE__, IR->name.c_str());
+        }
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
         int processSequence = 0; // fields
@@ -220,7 +239,7 @@ printf("[%s:%d] found targetitem %s\n", __FUNCTION__, __LINE__, targetItem.c_str
                         int Idx = 0;
                         if (targetInterface == "") {
 printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
-                            IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getStructName(STyE)});
+                            IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyE)->IR->name});
                             goto nextInterface;
                         }
                         else
@@ -232,7 +251,7 @@ printf("[%s:%d] targetif %s name %s\n", __FUNCTION__, __LINE__, targetInterface.
                             if (const StructType *STyI = dyn_cast<StructType>(element))
                             if (targetInterface == fieldName(STyE, Idx)) {
 printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
-                                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getStructName(STyI)});
+                                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyI)->IR->name});
                                 goto nextInterface;
                             }
                         }
@@ -254,20 +273,6 @@ printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str()
 /*
  * Name functions
  */
-std::string getStructName(const StructType *STy)
-{
-    assert(STy);
-    getClass(STy);
-    if (!STy->isLiteral() && !STy->getName().empty()) {
-        std::string temp = STy->getName().str();
-        if (startswith(temp, "emodule"))
-            temp = temp.substr(1);
-        return CBEMangle("l_" + temp);
-    }
-    if (!UnnamedStructIDs[STy])
-        UnnamedStructIDs[STy] = NextTypeID++;
-    return "l_unnamed_" + utostr(UnnamedStructIDs[STy]);
-}
 
 std::string GetValueName(const Value *Operand)
 {
@@ -560,7 +565,7 @@ static std::string typeName(const Type *Ty)
      case Type::FloatTyID:
          return "FLOAT";
      case Type::StructTyID:
-         return getStructName((cast<StructType>(Ty)));
+         return getClass(cast<StructType>(Ty))->IR->name;
      case Type::ArrayTyID: {
          const ArrayType *ATy = cast<ArrayType>(Ty);
          return "ARRAY_" + utostr(ATy->getNumElements()) + "_" + typeName(ATy->getElementType());
@@ -950,7 +955,7 @@ static std::string processMethod(std::string methodName, const Function *func,
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     bool isModule = startswith(table->STy->getName(), "module");
-    fprintf(OStr, "%sMODULE %s {\n", isModule ? "" : "E", getStructName(table->STy).c_str());
+    fprintf(OStr, "%sMODULE %s {\n", isModule ? "" : "E", table->IR->name.c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
     for (auto item: table->IR->priority)
@@ -1027,7 +1032,7 @@ void generateIR(std::string OutputDir)
               : (!strncmp(sname.c_str(), "ainterface.", 11)) ? '5'
               : (!strncmp(sname.c_str(), "serialize.", 10))  ? '6'
               : (!strncmp(sname.c_str(), "emodule.", 8))     ? '7'
-              : '9') + getStructName(current.first);
+              : '9') + getClass(current.first)->IR->name;
         if (strncmp(sname.c_str(), "class.std::", 11) // don't generate anything for std classes
          && strncmp(sname.c_str(), "struct.std::", 12))
             structAlpha[sortName] = current.first;

@@ -83,7 +83,6 @@ extern Module *globalMod;
 void constructAddressMap(Module *Mod);
 std::string fieldName(const StructType *STy, uint64_t ind);
 std::string printOperand(const Value *Operand);
-std::string getStructName(const StructType *STy);
 std::string CBEMangle(const std::string &S);
 void memdump(unsigned char *p, int len, const char *title);
 void memdumpl(unsigned char *p, int len, const char *title);
