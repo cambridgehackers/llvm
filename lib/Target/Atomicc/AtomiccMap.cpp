@@ -161,7 +161,7 @@ static int derivedStruct(const StructType *STyA, const StructType *STyB)
             return 1;     // all types are derived from themselves
         //BUG: this only checks 1 level of derived???
         for (auto I = STyA->element_begin(), E = STyA->element_end(); I != E; ++I, Idx++)
-            if (fieldName(STyA, Idx) == "" && dyn_cast<StructType>(*I) && *I == STyB)
+            if (getClass(STyA)->fieldName[Idx].name == "" && dyn_cast<StructType>(*I) && *I == STyB)
                 return 1;
     }
     return 0;
@@ -191,10 +191,10 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
     case Type::StructTyID: {
         StructType *STy = cast<StructType>(Ty);
         const StructLayout *SLO = TD.getStructLayout(STy);
-        getClass(STy); // allocate classCreate
+        auto table = getClass(STy); // allocate classCreate
         int Idx = 0;
         for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-            std::string fname = fieldName(STy, Idx);
+            std::string fname = table->fieldName[Idx].name;
             char *eaddr = addr + SLO->getElementOffset(Idx);
             Type *element = *I;
             if (PointerType *PTy = dyn_cast<PointerType>(element)) {

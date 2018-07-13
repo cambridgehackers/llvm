@@ -89,14 +89,6 @@ static bool isAlloca(const Value *arg)
             return true;
     return false;
 }
-/*
- * Return the name of the 'ind'th field of a StructType.
- * This code depends on a modification to llvm/clang that generates structFieldMap.
- */
-std::string fieldName(const StructType *STy, uint64_t ind)
-{
-    return getClass(STy)->fieldName[ind].name;
-}
 
 bool isInterface(const StructType *STy)
 {
@@ -117,7 +109,7 @@ static void checkClass(const StructType *STy, const StructType *ActSTy)
         if (table)
             if (const Type *newType = table->replaceType[Idx])
                 element = newType;
-        std::string fname = fieldName(STy, Idx);
+        std::string fname = table->fieldName[Idx].name;
         if (const StructType *iSTy = dyn_cast<StructType>(element)) {
             if (fname == "")
                 checkClass(iSTy, ActSTy);
@@ -234,22 +226,24 @@ printf("[%s:%d] CONNECT %s = %s target %s tif %s\n", __FUNCTION__, __LINE__, tar
                     if (const PointerType *PTy = dyn_cast<PointerType>(telement))
                         telement = PTy->getElementType();
                     if (const StructType *STyE = dyn_cast<StructType>(telement))
-                    if (targetItem == fieldName(STy, Idx)) {
+                    if (targetItem == table->fieldName[Idx].name) {
+                        auto tableE = getClass(STyE);
 printf("[%s:%d] found targetitem %s\n", __FUNCTION__, __LINE__, targetItem.c_str());
                         int Idx = 0;
                         if (targetInterface == "") {
 printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
-                            IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyE)->IR->name});
+                            IR->interfaceConnect.push_back(InterfaceConnectType{target, source, tableE->IR->name});
                             goto nextInterface;
                         }
                         else
                         for (auto I = STyE->element_begin(), E = STyE->element_end(); I != E; ++I, Idx++) {
-printf("[%s:%d] targetif %s name %s\n", __FUNCTION__, __LINE__, targetInterface.c_str(), fieldName(STyE, Idx).c_str());
+                            std::string elementName = tableE->fieldName[Idx].name;
+printf("[%s:%d] targetif %s name %s\n", __FUNCTION__, __LINE__, targetInterface.c_str(), elementName.c_str());
                             Type *element = *I;
                             if (const PointerType *PTy = dyn_cast<PointerType>(element))
                                 element = PTy->getElementType();
                             if (const StructType *STyI = dyn_cast<StructType>(element))
-                            if (targetInterface == fieldName(STyE, Idx)) {
+                            if (targetInterface == elementName) {
 printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
                                 IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyI)->IR->name});
                                 goto nextInterface;
@@ -399,13 +393,14 @@ if (errorLimit > 0)
     for (; I != E; ++I) {
         if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
-            std::string fname = fieldName(STy, foffset);
+            ClassMethodTable *table = getClass(STy);
+            std::string fname = table->fieldName[foffset].name;
             if (fname == "_")   // optimization for verilog port references
                 fname = "";
             else if (cbuffer != "")  // optimization for verilog port references
                 fname = MODULE_SEPARATOR + fname;
             if (trace_gep)
-                printf("[%s:%d] cbuffer %s STy %s fname %s foffset %d\n", __FUNCTION__, __LINE__, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset);
+                printf("[%s:%d] cbuffer %s STy %s fname %s foffset %d, options %s params %s\n", __FUNCTION__, __LINE__, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset, table->fieldName[foffset].options.c_str(), table->fieldName[foffset].params.c_str());
             if (cbuffer == "this") {
                 cbuffer = "";
                 if (fname != "")
@@ -843,7 +838,7 @@ static void processField(ClassMethodTable *table, FILE *OStr)
     // generate local state element declarations
     int Idx = 0;
     for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
-        auto fitem = getClass(table->STy)->fieldName[Idx];
+        auto fitem = table->fieldName[Idx];
         std::string fldName = fitem.name;
         const Type *element = *I;
         int64_t vecCount = -1;
