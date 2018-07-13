@@ -366,10 +366,16 @@ static int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I,
 static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep_type_iterator E)
 {
 static int errorLimit = 5;
+static int nesting = 0;
+    nesting++;
     VectorType *LastIndexIsVector = 0;
     int64_t Total = getGEPOffset(&LastIndexIsVector, I, E);
     ERRORIF(LastIndexIsVector);
     std::string cbuffer = printOperand(Ptr);
+    bool processingInterface = false;
+    if (auto IG = dyn_cast<GetElementPtrInst>(Ptr))
+    if (auto PTy = dyn_cast<PointerType>(IG->getPointerOperand()->getType()))
+        processingInterface = isInterface(dyn_cast<StructType>(PTy->getElementType()));
     bool removeSubscript = false;
     if (cbuffer == "_") { // optimization for verilog port names
         cbuffer = "";
@@ -380,8 +386,10 @@ static int errorLimit = 5;
         cbuffer = printString(CPA->getAsString());
         removeSubscript = true;
     }
-    if (trace_gep)
-        printf("[%s:%d] cbuffer %s Total %ld\n", __FUNCTION__, __LINE__, cbuffer.c_str(), (unsigned long)Total);
+    if (trace_gep) {
+        printf("%s: START nest %d cbuffer %s Total %ld Ptr %p processingInterface %d\n", __FUNCTION__, nesting, cbuffer.c_str(), (unsigned long)Total, (void *)Ptr, processingInterface);
+        Ptr->getType()->dump();
+    }
     if (Total == -1) {
 if (errorLimit > 0)
         printf("[%s:%d] non-constant offset cbuffer %s Total %ld\n", __FUNCTION__, __LINE__, cbuffer.c_str(), (unsigned long)Total);
@@ -397,28 +405,31 @@ if (errorLimit > 0)
             std::string fname = table->fieldName[foffset].name;
             if (fname == "_")   // optimization for verilog port references
                 fname = "";
-            else if (cbuffer != "")  // optimization for verilog port references
+            else if (cbuffer != "" && !processingInterface)  // optimization for verilog port references
                 fname = MODULE_SEPARATOR + fname;
             if (trace_gep)
-                printf("[%s:%d] cbuffer %s STy %s fname %s foffset %d, options %s params %s\n", __FUNCTION__, __LINE__, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset, table->fieldName[foffset].options.c_str(), table->fieldName[foffset].params.c_str());
+                printf("[%s:%d] nest %d cbuffer %s STy %s fname %s foffset %d, options %s params %s\n", __FUNCTION__, __LINE__, nesting, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset, table->fieldName[foffset].options.c_str());
             if (cbuffer == "this") {
                 cbuffer = "";
-                if (fname != "")
+                if (fname != "" && fname.substr(0,1) == MODULE_SEPARATOR)
                     fname = fname.substr(1);
             }
             cbuffer += fname;
+            processingInterface = isInterface(STy);
         }
         else {
             if (trace_gep)
-                printf("[%s:%d] cbuffer %s\n", __FUNCTION__, __LINE__, cbuffer.c_str());
+                printf("[%s:%d] nest %d cbuffer %s\n", __FUNCTION__, __LINE__, nesting, cbuffer.c_str());
             std::string op = printOperand(I.getOperand());
             if (!removeSubscript || op != "0")
                 cbuffer += "[" + op + "]";
+            processingInterface = false;
         }
     }
     if (trace_gep || Total == -1)
 if (Total != -1 || errorLimit-- > 0)
-        printf("%s: return '%s'\n", __FUNCTION__, cbuffer.c_str());
+        printf("%s: END nest %d return '%s'\n", __FUNCTION__, nesting, cbuffer.c_str());
+    nesting--;
     return cbuffer;
 }
 
@@ -464,7 +475,7 @@ const Function *getCallee(const Instruction *I)
  */
 static std::string printCall(const Instruction *I, bool useParams = false)
 {
-    const CallInst *ICL = dyn_cast<CallInst>(I);
+    //const CallInst *ICL = dyn_cast<CallInst>(I);
     const Function *func = getCallee(I);
     std::string calledName = func->getName();
     std::string vout, sep, fname = getMethodName(func);
@@ -479,9 +490,9 @@ static std::string printCall(const Instruction *I, bool useParams = false)
     }
     std::string pcalledFunction = printOperand(*AI++); // skips 'this' param
     if (trace_call || fname == "")
-        printf("CALL: CALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+        printf("CALL: CALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), (void*)func, pcalledFunction.c_str(), fname.c_str());
     if (calledName == "printf") {
-        printf("CALL: PRINTFCALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), func, pcalledFunction.c_str(), fname.c_str());
+        printf("CALL: PRINTFCALLER func %s[%p] pcalledFunction '%s' fname %s\n", calledName.c_str(), (void*)func, pcalledFunction.c_str(), fname.c_str());
         vout = "printf{" + pcalledFunction;
 //.substr(1, pcalledFunction.length()-2);
         sep = ",";
@@ -739,7 +750,7 @@ std::string printOperand(const Value *Operand)
         //we need pointer to pass struct params (PipeIn)
         const Constant* CPV = dyn_cast<Constant>(Operand);
         if (trace_operand)
-            printf("[%s:%d] before depth %d noninst %p CPV %p\n", __FUNCTION__, __LINE__, depth, Operand, CPV);
+            printf("[%s:%d] before depth %d noninst %p CPV %p\n", __FUNCTION__, __LINE__, depth, (void *)Operand, (void *)CPV);
         if (!CPV || isa<GlobalValue>(CPV))
             cbuffer += GetValueName(Operand);
         else {
@@ -773,7 +784,7 @@ std::string printOperand(const Value *Operand)
                 cbuffer += StrVal;
             }
             else {
-                printf("[%s:%d] STRUCTUREDTYPES %p Operand %p\n", __FUNCTION__, __LINE__, I, Operand);
+                printf("[%s:%d] STRUCTUREDTYPES %p Operand %p\n", __FUNCTION__, __LINE__, (void *)I, (void *)Operand);
                 Operand->dump();
                 if (CPV) CPV->dump();
                 ERRORIF(1); /* handle structured types */
@@ -817,7 +828,7 @@ static void processBlockConditions(const Function *currentFunction)
                 for (auto CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
                     const BasicBlock *caseBB = CI->getCaseSuccessor();
                     int64_t val = CI->getCaseValue()->getZExtValue();
-                    printf("[%s:%d] [%lld] = %s\n", __FUNCTION__, __LINE__, val, caseBB?caseBB->getName().str().c_str():"NONE");
+                    printf("[%s:%d] [%d] = %s\n", __FUNCTION__, __LINE__, (int)val, caseBB?caseBB->getName().str().c_str():"NONE");
                     if (getCondStr(caseBB) == "") // 'true' condition
                         setCondition(caseBB, false,
                              "(" + parenOperand(SI->getCondition()) + " == " + autostr(val) + ")", &*BBI);
