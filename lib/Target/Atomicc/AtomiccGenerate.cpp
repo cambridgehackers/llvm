@@ -919,7 +919,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 bool isInter = false;
                 if (auto IG = dyn_cast<GetElementPtrInst>(SI->getPointerOperand()))
                     isInter = isInterface(dyn_cast<StructType>(IG->getSourceElementType()));
-                if (isInter || isAlloca(SI->getPointerOperand()))
+                if (isInter || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand()))
                     alloc = "LET " + typeName(cast<PointerType>(
                       SI->getPointerOperand()->getType())->getElementType()) + " ";
                 mlines.push_back(alloc + tempCond + ":" + dest + " = " + value);
