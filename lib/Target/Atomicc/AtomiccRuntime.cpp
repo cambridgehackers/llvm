@@ -284,9 +284,9 @@ extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
             VMap[arg] = ConstantInt::get(arg->getType(), val);
         }
     }
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
-argFunc->dump();
-func->dump();
+//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+//argFunc->dump();
+//func->dump();
     CloneFunctionInto(func, argFunc, VMap, false, Returnsfunc, "", nullptr);
     processAlloca(func);
     if (trace_fixup) {
