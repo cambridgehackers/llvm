@@ -35,18 +35,19 @@ std::list<MEMORY_REGION> memoryRegion;
 
 /* This unrolls loops
  */
-static bool processLoops(Function *func)
+static void processLoops(Function *func)
 {
     bool changed = false;
     DominatorTree *DT = new DominatorTree;
     PostDomTreeBase<BasicBlock> *PDT = new PostDomTreeBase<BasicBlock>();
     LoopInfo *LI = new LoopInfo;
     if (func->isDeclaration())
-        return changed;
+        return;
     DT->recalculate(*func);
     PDT->recalculate(*func);
     LI->analyze(*DT);
     SmallVector<Loop *, 4> PreOrderLoops = LI->getLoopsInReverseSiblingPreorder();
+#if 0
     printf("[%s:%d] START %s loopc %d\n", __FUNCTION__, __LINE__, func->getName().str().c_str(), (int)PreOrderLoops.size());
     if (PreOrderLoops.size()) {
         printf("[%s:%d]DT\n", __FUNCTION__, __LINE__);
@@ -57,23 +58,18 @@ static bool processLoops(Function *func)
         LI->print(errs());
         func->dump();
     }
+#endif
     for (Loop *L : PreOrderLoops) {
-printf("[%s:%d]LLLLLLLLLLLLLL %p\n", __FUNCTION__, __LINE__, L);
-L->print(errs());
+//printf("[%s:%d]LLLLLLLLLLLLLL %p\n", __FUNCTION__, __LINE__, L);
+//L->print(errs());
         if (!L->isLoopSimplifyForm()) { 
             printf("ERROROR:  Not unrolling loop which is not in loop-simplify form.\n");
             exit(-1);
         }
-        unsigned TripCount = 16;
-        unsigned TripMultiple = 1;
-        unsigned Count = 16;
-        bool Force = true;
-        bool AllowRuntime = true;
-        bool AllowExpensiveTripCount = true;
-        bool PreserveCondBr = false;
-        bool PreserveOnlyFirst = false;
+        unsigned TripCount = 16, TripMultiple = 1, Count = 16, PeelCount = 0;
+        bool Force = true, AllowRuntime = true, AllowExpensiveTripCount = true;
+        bool PreserveCondBr = false, PreserveOnlyFirst = false;
         bool PreserveLCSSA = false;
-        unsigned PeelCount = 0;
 
         TargetLibraryInfoImpl TLII(Triple(globalMod->getTargetTriple()));
         TargetLibraryInfo TLI(TLII);
@@ -84,13 +80,9 @@ L->print(errs());
         changed |= llvm::UnrollLoop( L, Count, TripCount, Force, AllowRuntime,
             AllowExpensiveTripCount, PreserveCondBr, PreserveOnlyFirst,
             TripMultiple, PeelCount, LI, &SE, DT, &AC, &ORE, PreserveLCSSA);
-printf("[%s:%d] before verifyDomTree %d\n", __FUNCTION__, __LINE__, changed);
+        //printf("[%s:%d] before verifyDomTree %d\n", __FUNCTION__, __LINE__, changed);
         DT->verifyDomTree();
     }
-    printf("[%s:%d]OVER changed %d\n", __FUNCTION__, __LINE__, changed);
-    //if (changed)
-        //func->dump();
-    return changed;
 }
 
 
@@ -103,7 +95,7 @@ printf("[%s:%d] before verifyDomTree %d\n", __FUNCTION__, __LINE__, changed);
 static void processAlloca(Function *func)
 {
     std::map<const Value *,Instruction *> remapValue;
-    bool changed = processLoops(func); // must be before processAlloca
+    processLoops(func); // must be before processAlloca
 restart:
     remapValue.clear();
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
@@ -145,7 +137,7 @@ restart:
                     if (src->getOpcode() == Instruction::BitCast) {
                         builder.CreateStore(builder.CreateLoad(src->getOperand(0)),
                             dest->getOperand(0));
-                        printf("[%s:%d] deleting call\n", __FUNCTION__, __LINE__);
+                        //printf("[%s:%d] deleting call\n", __FUNCTION__, __LINE__);
                         recursiveDelete(II);
                         goto restart;
                     }

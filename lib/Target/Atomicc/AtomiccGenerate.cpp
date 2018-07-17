@@ -228,23 +228,23 @@ printf("[%s:%d] CONNECT %s = %s target %s tif %s\n", __FUNCTION__, __LINE__, tar
                     if (const StructType *STyE = dyn_cast<StructType>(telement))
                     if (targetItem == table->fieldName[Idx].name) {
                         auto tableE = getClass(STyE);
-printf("[%s:%d] found targetitem %s\n", __FUNCTION__, __LINE__, targetItem.c_str());
+//printf("[%s:%d] found targetitem %s\n", __FUNCTION__, __LINE__, targetItem.c_str());
                         int Idx = 0;
                         if (targetInterface == "") {
-printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
+//printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
                             IR->interfaceConnect.push_back(InterfaceConnectType{target, source, tableE->IR->name});
                             goto nextInterface;
                         }
                         else
                         for (auto I = STyE->element_begin(), E = STyE->element_end(); I != E; ++I, Idx++) {
                             std::string elementName = tableE->fieldName[Idx].name;
-printf("[%s:%d] targetif %s name %s\n", __FUNCTION__, __LINE__, targetInterface.c_str(), elementName.c_str());
+//printf("[%s:%d] targetif %s name %s\n", __FUNCTION__, __LINE__, targetInterface.c_str(), elementName.c_str());
                             Type *element = *I;
                             if (const PointerType *PTy = dyn_cast<PointerType>(element))
                                 element = PTy->getElementType();
                             if (const StructType *STyI = dyn_cast<StructType>(element))
                             if (targetInterface == elementName) {
-printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
+//printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
                                 IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyI)->IR->name});
                                 goto nextInterface;
                             }
@@ -390,10 +390,10 @@ static int nesting = 0;
         printf("%s: START nest %d cbuffer %s Total %ld Ptr %p processingInterface %d\n", __FUNCTION__, nesting, cbuffer.c_str(), (unsigned long)Total, (void *)Ptr, processingInterface);
         Ptr->getType()->dump();
     }
-    if (Total == -1) {
-if (errorLimit > 0)
-        printf("[%s:%d] non-constant offset cbuffer %s Total %ld\n", __FUNCTION__, __LINE__, cbuffer.c_str(), (unsigned long)Total);
-    }
+    //if (Total == -1) {
+//if (errorLimit > 0)
+        //printf("[%s:%d] non-constant offset cbuffer %s Total %ld\n", __FUNCTION__, __LINE__, cbuffer.c_str(), (unsigned long)Total);
+    //}
     if (I != E)
     if (const Constant *FirstOp = dyn_cast<Constant>(I.getOperand()))
     if (FirstOp->isNullValue() && std::next(I) != E)
@@ -408,7 +408,7 @@ if (errorLimit > 0)
             else if (cbuffer != "" && !processingInterface)  // optimization for verilog port references
                 fname = MODULE_SEPARATOR + fname;
             if (trace_gep)
-                printf("[%s:%d] nest %d cbuffer %s STy %s fname %s foffset %d, options %s params %s\n", __FUNCTION__, __LINE__, nesting, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset, table->fieldName[foffset].options.c_str());
+                printf("[%s:%d] nest %d cbuffer %s STy %s fname %s foffset %d, options %s\n", __FUNCTION__, __LINE__, nesting, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset, table->fieldName[foffset].options.c_str());
             if (cbuffer == "this") {
                 cbuffer = "";
                 if (fname != "" && fname.substr(0,1) == MODULE_SEPARATOR)
@@ -426,7 +426,7 @@ if (errorLimit > 0)
             processingInterface = false;
         }
     }
-    if (trace_gep || Total == -1)
+    if (trace_gep /*|| Total == -1*/)
 if (Total != -1 || errorLimit-- > 0)
         printf("%s: END nest %d return '%s'\n", __FUNCTION__, nesting, cbuffer.c_str());
     nesting--;
