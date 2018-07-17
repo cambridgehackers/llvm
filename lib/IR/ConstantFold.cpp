@@ -566,7 +566,6 @@ Constant *llvm::ConstantFoldCastInstruction(unsigned opc, Constant *V,
   if ((isa<ConstantVector>(V) || isa<ConstantDataVector>(V)) &&
       DestTy->isVectorTy() &&
       DestTy->getVectorNumElements() == V->getType()->getVectorNumElements()) {
-printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     SmallVector<Constant*, 16> res;
     VectorType *DestVecTy = cast<VectorType>(DestTy);
     Type *DstEltTy = DestVecTy->getElementType();

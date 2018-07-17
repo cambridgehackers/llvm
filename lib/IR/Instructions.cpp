@@ -3132,12 +3132,10 @@ if ((SrcTy->isIntegerTy() || DstTy->isIntegerTy()) && SrcTy->isIntegerTy() != Ds
     PointerType *SrcPtrTy = dyn_cast<PointerType>(SrcTy->getScalarType());
     PointerType *DstPtrTy = dyn_cast<PointerType>(DstTy->getScalarType());
 
-//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     // BitCast implies a no-op cast of type only. No bits change.
     // However, you can't cast pointers to anything but pointers.
     if (!SrcPtrTy != !DstPtrTy)
       return false;
-//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
 
     // For non-pointer cases, the cast is okay if the source and destination bit
     // widths are identical.
@@ -3160,12 +3158,10 @@ if ((SrcTy->isIntegerTy() || DstTy->isIntegerTy()) && SrcTy->isIntegerTy() != Ds
   }
   case Instruction::AddrSpaceCast: {
     PointerType *SrcPtrTy = dyn_cast<PointerType>(SrcTy->getScalarType());
-//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     if (!SrcPtrTy)
       return false;
 
     PointerType *DstPtrTy = dyn_cast<PointerType>(DstTy->getScalarType());
-//printf("[%s:%d]\n", __FUNCTION__, __LINE__);
     if (!DstPtrTy)
       return false;
 

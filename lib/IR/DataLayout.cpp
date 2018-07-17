@@ -495,15 +495,8 @@ unsigned DataLayout::getAlignmentInfo(AlignTypeEnum AlignType,
   // See if we found an exact match. Of if we are looking for an integer type,
   // but don't have an exact match take the next largest integer. This is where
   // the lower_bound will point to when it fails an exact match.
-#if 1
-if (AlignType == INTEGER_ALIGN) {
-    // If we didn't have a larger value try the largest value we have.
-if ((ABIInfo ? I->ABIAlign : I->PrefAlign) != 1) {
-printf("[%s:%d]DATALAYOUT abiinfo %d width %d itypewid %d abial %d\n", __FUNCTION__, __LINE__, ABIInfo, (int)BitWidth, (int)I->TypeBitWidth, (int) I->ABIAlign);
-return 1;
-}
-}
-#endif
+  if (AlignType == INTEGER_ALIGN && (ABIInfo ? I->ABIAlign : I->PrefAlign) != 1) // Atomicc change
+    return 1;
   if (I != Alignments.end() && I->AlignType == (unsigned)AlignType &&
       (I->TypeBitWidth == BitWidth || AlignType == INTEGER_ALIGN))
     return ABIInfo ? I->ABIAlign : I->PrefAlign;

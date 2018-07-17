@@ -392,7 +392,6 @@ bool LLParser::ParseUnnamedType() {
      StructType *STy = dyn_cast<StructType>(Result);
      Lex.Lex();  // eat lltok::equal
      STy->structFieldMap = Lex.getStrVal();
-//printf("[%s:%d] map %s %d\n", __FUNCTION__, __LINE__, STy->structFieldMap.c_str(), Lex.getKind());
      if (ParseToken(lltok::StringConstant, "expected structField string"))
        return true;
   }

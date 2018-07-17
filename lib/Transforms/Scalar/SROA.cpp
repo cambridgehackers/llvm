@@ -2926,8 +2926,8 @@ printf("[%s:%d] LIFESTART/END\n", __FUNCTION__, __LINE__);
     //else
       //New = IRB.CreateLifetimeEnd(Ptr, Size);
 
-    //(void)New;
-    //DEBUG(dbgs() << "          to: " << *New << "\n");
+    (void)New;
+    DEBUG(dbgs() << "          to: " << *New << "\n");
 
     return true;
   }

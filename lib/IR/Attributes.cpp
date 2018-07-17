@@ -242,8 +242,6 @@ std::pair<unsigned, Optional<unsigned>> Attribute::getAllocSizeArgs() const {
 
 std::string Attribute::getAsString(bool InAttrGrp) const {
   if (!pImpl) return "";
-  //if (hasAttribute(Attribute::AtomiccMethod))
-    //return "\"atomicc_method\"=\"true\"";
 
   if (hasAttribute(Attribute::SanitizeAddress))
     return "sanitize_address";
