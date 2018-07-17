@@ -480,8 +480,10 @@ static std::string printCall(const Instruction *I, bool useParams = false)
     std::string vout, sep, fname = getMethodName(func);
     CallSite CS(const_cast<Instruction *>(I));
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
-    if (calledName == "__ValidReadyRuntime")
-        return printOperand(*AI);
+    if (calledName == "__ValidReadyRuntime") {
+        std::string val = printOperand(*AI);
+        return val.substr(1, val.length() - 2);
+    }
     if (!func) {
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI).c_str());
         I->dump();
