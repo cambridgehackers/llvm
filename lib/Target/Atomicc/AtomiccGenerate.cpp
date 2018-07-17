@@ -475,12 +475,13 @@ const Function *getCallee(const Instruction *I)
  */
 static std::string printCall(const Instruction *I, bool useParams = false)
 {
-    //const CallInst *ICL = dyn_cast<CallInst>(I);
     const Function *func = getCallee(I);
     std::string calledName = func->getName();
     std::string vout, sep, fname = getMethodName(func);
     CallSite CS(const_cast<Instruction *>(I));
     CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
+    if (calledName == "__ValidReadyRuntime")
+        return printOperand(*AI);
     if (!func) {
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI).c_str());
         I->dump();
@@ -942,6 +943,8 @@ static std::string processMethod(std::string methodName, const Function *func,
                 break;
             case Instruction::Call: { // can have value
                 const Function *fcall = getCallee(II);
+                if (fcall->getName() == "__ValidReadyRuntime") // value picked up in expression
+                    break;
                 if (fcall->getName() == "printf") {
                     mlines.push_back("PRINTF " + tempCond + ":" + printCall(II, true));
                     break;
