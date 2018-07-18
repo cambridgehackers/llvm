@@ -144,7 +144,7 @@ ClassMethodTable *getClass(const StructType *STy)
         IR->name = legacygetStructName(STy);
         if (startswith(IR->name, "l_module_OC_")) {
             IR->name = IR->name.substr(12);
-printf("[%s:%d]CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC %s\n", __FUNCTION__, __LINE__, IR->name.c_str());
+            //printf("[%s:%d]CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC %s\n", __FUNCTION__, __LINE__, IR->name.c_str());
         }
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
@@ -220,7 +220,7 @@ printf("[%s:%d]CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC %s\n", 
                     targetItem = targetItem.substr(0, idx);
                 }
                 int Idx = 0;
-printf("[%s:%d] CONNECT %s = %s target %s tif %s\n", __FUNCTION__, __LINE__, target.c_str(), source.c_str(), targetItem.c_str(), targetInterface.c_str());
+                //printf("[%s:%d] CONNECT %s = %s target %s tif %s\n", __FUNCTION__, __LINE__, target.c_str(), source.c_str(), targetItem.c_str(), targetInterface.c_str());
                 for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
                     Type *telement = *I;
                     if (const PointerType *PTy = dyn_cast<PointerType>(telement))
@@ -483,6 +483,14 @@ static std::string printCall(const Instruction *I, bool useParams = false)
     if (calledName == "__ValidReadyRuntime") {
         std::string val = printOperand(*AI);
         return val.substr(1, val.length() - 2);
+    }
+    if (calledName == "__bitconcat" || calledName == "__bitsubstr") {
+        std::string val;
+        for (; AI != AE; ++AI) {
+            val += sep + printOperand(*AI);
+            sep = ",";
+        }
+        return calledName + "{" + val + "}";
     }
     if (!func) {
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI).c_str());
@@ -945,9 +953,11 @@ static std::string processMethod(std::string methodName, const Function *func,
                 break;
             case Instruction::Call: { // can have value
                 const Function *fcall = getCallee(II);
-                if (fcall->getName() == "__ValidReadyRuntime") // value picked up in expression
-                    break;
-                if (fcall->getName() == "printf") {
+                std::string calledName = fcall->getName();
+                if (calledName == "__ValidReadyRuntime"
+                 || calledName == "__bitconcat" || calledName == "__bitsubstr")
+                    break;                    // value picked up in expression
+                if (calledName == "printf") {
                     mlines.push_back("PRINTF " + tempCond + ":" + printCall(II, true));
                     break;
                 }

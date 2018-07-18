@@ -3065,10 +3065,10 @@ CastInst::castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
 #if 1
 if ((SrcTy->isIntegerTy() || DstTy->isIntegerTy()) && SrcTy->isIntegerTy() != DstTy->isIntegerTy()
     && sizeType(SrcTy) == sizeType(DstTy)) {
-    printf("[%s:%d]CCCCCCCCCCCCCCCCCCCCCCCCCc srcint %d dstint %d srcsize %d dstsize %d\n", __FUNCTION__, __LINE__,
+    printf("[%s:%d]BITCAST srcint %d dstint %d srcsize %d dstsize %d\n", __FUNCTION__, __LINE__,
     SrcTy->isIntegerTy(), DstTy->isIntegerTy(), (int)sizeType(SrcTy), (int)sizeType(DstTy));
-    SrcTy->dump();
-    DstTy->dump();
+    //SrcTy->dump();
+    //DstTy->dump();
     return true;
 }
 #endif
