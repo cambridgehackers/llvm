@@ -64,6 +64,7 @@ typedef struct {
     std::string target;
     std::string source;
     std::string type;
+    bool        isForward;
 } InterfaceConnectType;
 
 enum {MetaNone, MetaRead, MetaInvoke, MetaMax};
@@ -123,6 +124,7 @@ typedef struct {
     bool        isOutput; // used for verilog interfaces
     bool        isInout; // used for verilog interfaces
     bool        isParameter; // used for verilog interfaces
+    bool        isLocalInterface; // interface declaration that is used to connect to local objects (does not appear in module signature)
 } FieldElement;
 
 typedef struct ModuleIR {

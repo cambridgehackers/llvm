@@ -213,6 +213,11 @@ ClassMethodTable *getClass(const StructType *STy)
             else if (processSequence == 3) { // interface connect
                 std::string source = ret.substr(idx+1);
                 std::string target = ret.substr(0, idx);
+                bool isForward = false;
+                if (startswith(target, "FORWARD;")) {
+                    isForward = true;
+                    target = target.substr(8);
+                }
                 std::string targetItem = target, targetInterface;
                 idx = targetItem.find("$");
                 if (idx > 0) {
@@ -232,7 +237,7 @@ ClassMethodTable *getClass(const StructType *STy)
                         int Idx = 0;
                         if (targetInterface == "") {
 //printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
-                            IR->interfaceConnect.push_back(InterfaceConnectType{target, source, tableE->IR->name});
+                            IR->interfaceConnect.push_back(InterfaceConnectType{target, source, tableE->IR->name, isForward});
                             goto nextInterface;
                         }
                         else
@@ -245,7 +250,7 @@ ClassMethodTable *getClass(const StructType *STy)
                             if (const StructType *STyI = dyn_cast<StructType>(element))
                             if (targetInterface == elementName) {
 //printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
-                                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyI)->IR->name});
+                                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyI)->IR->name, isForward});
                                 goto nextInterface;
                             }
                         }
@@ -982,7 +987,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
     for (auto item: table->IR->priority)
         fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
     for (auto item: table->IR->interfaceConnect)
-        fprintf(OStr, "    INTERFACECONNECT %s %s %s\n", item.target.c_str(), item.source.c_str(), item.type.c_str());
+        fprintf(OStr, "    INTERFACECONNECT%s %s %s %s\n", item.isForward ? "/Forward" : "", item.target.c_str(), item.source.c_str(), item.type.c_str());
     for (auto item: table->IR->unionList)
         fprintf(OStr, "    UNION %s %s\n", item.type.c_str(), item.name.c_str());
     if (table->IR->unionList.size())

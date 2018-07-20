@@ -53,7 +53,7 @@ int i;
         if (temp == 0x5a5a5a5a5a5a5a5a)
             printf("_ ");
         else
-            printf("0x%llx ", temp);
+            printf("0x%llx ", (long long)temp);
         p += sizeof(uint64_t);
         i += sizeof(uint64_t);
         len -= sizeof(uint64_t);
