@@ -741,10 +741,11 @@ std::string printOperand(const Value *Operand)
             for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
                 std::string cStr = getCondStr(inBlock);
-                if (cStr != "")
+                bool haveCond = cStr != "" && opIndex != Eop - 1;
+                if (haveCond)
                     vout += cStr + " ? ";
                 vout += parenOperand(PN->getIncomingValue(opIndex));
-                if (opIndex != Eop - 1)
+                if (haveCond)
                     vout += ":";
             }
             break;
