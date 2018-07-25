@@ -257,7 +257,6 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
  */
 void constructAddressMap(Module *Mod)
 {
-printf("[%s:%d] start\n", __FUNCTION__, __LINE__);
     for (auto MI = Mod->global_begin(), ME = Mod->global_end(); MI != ME; MI++) {
         void *addr = EE->getPointerToGlobal(&*MI);
         Type *Ty = MI->getType()->getElementType();
