@@ -94,6 +94,11 @@ static void processLoops(Function *func)
  */
 static void processAlloca(Function *func)
 {
+bool trace = false; //func->getName() == "_ZN12AdapterToBusI7NOCDatajE6in$enqES0_i";
+if (trace) {
+printf("[%s:%d]BEFORE\n", __FUNCTION__, __LINE__);
+func->dump();
+}
     std::map<const Value *,Instruction *> remapValue;
     processLoops(func); // must be before processAlloca
 restart:
@@ -109,9 +114,11 @@ restart:
                     if (!dyn_cast<CallInst>(II->getOperand(0))) { // don't do remapping for calls
                     // remember values stored in Alloca temps
                     remapValue[target] = II;
-//printf("[%s:%d] STORE target %p II %p\n", __FUNCTION__, __LINE__, target, II);
-//target->dump();
-//II->dump();
+if (trace) {
+printf("[%s:%d] STORE target %p II %p\n", __FUNCTION__, __LINE__, target, II);
+target->dump();
+II->dump();
+}
                     }
                 }
                 }
@@ -119,14 +126,18 @@ restart:
             case Instruction::Load:
                 if (Instruction *val = remapValue[II->getOperand(0)]) {
                     // replace loads from temp areas with stored values
-//printf("[%s:%d] LOAD %p\n", __FUNCTION__, __LINE__, val);
-//II->dump();
+if (trace) {
+printf("[%s:%d] LOAD %p\n", __FUNCTION__, __LINE__, val);
+II->dump();
+}
                     II->replaceAllUsesWith(val->getOperand(0));
                     recursiveDelete(II);
                 }
                 break;
             case Instruction::Call: {
                 CallInst *ICL = dyn_cast<CallInst>(II);
+                Value *called = II->getOperand(II->getNumOperands()-1);
+                Function *CF = dyn_cast<Function>(called);
                 IRBuilder<> builder(II->getParent());
                 builder.SetInsertPoint(II);
                 if (Function *cfunc = dyn_cast<Function>(ICL->getCalledValue())) {
@@ -137,10 +148,36 @@ restart:
                     if (src->getOpcode() == Instruction::BitCast) {
                         builder.CreateStore(builder.CreateLoad(src->getOperand(0)),
                             dest->getOperand(0));
-                        //printf("[%s:%d] deleting call\n", __FUNCTION__, __LINE__);
+                        if (trace) {
+                            printf("[%s:%d] deleting call\n", __FUNCTION__, __LINE__);
+                            II->dump();
+                        }
                         recursiveDelete(II);
                         goto restart;
                     }
+                    }
+                }
+                for (int i = 0; i < II->getNumOperands() - 2; i++) {
+                    if (Instruction *val = remapValue[II->getOperand(i)]) {
+if (trace) {
+printf("[%s:%d] remapcall %d\n", __FUNCTION__, __LINE__, i);
+II->dump();
+}
+                        SmallVector<llvm::Value *, 4> Args;
+                        Args.resize(II->getNumOperands()-1);
+                        for (int j = 0; j < II->getNumOperands() - 1; j++)
+                            if (j == i)
+                                Args[j] = val->getOperand(0);
+                            else
+                                Args[j] = II->getOperand(j);
+                        auto nitem = builder.CreateCall(CF, Args);
+if (trace) {
+printf("[%s:%d]\n", __FUNCTION__, __LINE__);
+nitem->dump();
+}
+                        II->replaceAllUsesWith(nitem);
+                        II->eraseFromParent();
+                        goto restart;
                     }
                 }
                 break;
@@ -162,6 +199,10 @@ restart:
     for (auto item: remapValue) {
         if (item.second)
         if (Instruction *allocItem = dyn_cast<Instruction>(item.second->getOperand(1))) {
+if (trace) {
+printf("[%s:%d]remap\n", __FUNCTION__, __LINE__);
+allocItem->dump();
+}
             int count = 0;
             for (auto UB = allocItem->use_begin(), UE = allocItem->use_end(); UB != UE; UB++) {
                 if (auto II = dyn_cast<Instruction>(UB->getUser()))
@@ -176,6 +217,10 @@ restart:
                     II->eraseFromParent();
         }
     }
+if (trace) {
+printf("[%s:%d]AFTER\n", __FUNCTION__, __LINE__);
+func->dump();
+}
 }
 
 /*
