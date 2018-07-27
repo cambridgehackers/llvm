@@ -738,25 +738,16 @@ std::string printOperand(const Value *Operand)
             }
         case Instruction::PHI: {
             const PHINode *PN = dyn_cast<PHINode>(I);
-            std::string prevCond, finalVal = "0";
+            vout += "PHI(";
+            std::string sep;
             for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
                 std::string cStr = getCondStr(inBlock);
                 std::string val = parenOperand(PN->getIncomingValue(opIndex));
-                if (trace_operand)
-                    printf("[%s:%d] prevCond %s cond %s val %s vout %s\n", __FUNCTION__, __LINE__, prevCond.c_str(), cStr.c_str(), val.c_str(), vout.c_str());
-                if (cStr == "(" + prevCond + " ^ 1)")
-                    cStr = "";
-                if (cStr != "")
-                    vout += cStr + " ? " + val + " : ";
-                else
-                    finalVal = val;
-                prevCond = cStr;
+                vout += sep + cStr + ":" + val;
+                sep = ", ";
             }
-            if (endswith(vout, " : "))
-                vout += finalVal;
-            if (trace_operand)
-                printf("[%s:%d] PHI result cond %s vout %s\n", __FUNCTION__, __LINE__, prevCond.c_str(), vout.c_str());
+            vout += ")";
             break;
             }
         case Instruction::Alloca:
