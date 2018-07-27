@@ -738,12 +738,14 @@ std::string printOperand(const Value *Operand)
             }
         case Instruction::PHI: {
             const PHINode *PN = dyn_cast<PHINode>(I);
-            vout += "PHI(";
+            vout += "__phi(";
             std::string sep;
             for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
                 std::string cStr = getCondStr(inBlock);
                 std::string val = parenOperand(PN->getIncomingValue(opIndex));
+                if (cStr == "")
+                    cStr = "__default";
                 vout += sep + cStr + ":" + val;
                 sep = ", ";
             }
