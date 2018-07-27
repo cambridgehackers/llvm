@@ -738,16 +738,23 @@ std::string printOperand(const Value *Operand)
             }
         case Instruction::PHI: {
             const PHINode *PN = dyn_cast<PHINode>(I);
+            std::string prevCond, finalVal = "0";
             for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
                 std::string cStr = getCondStr(inBlock);
-                bool haveCond = cStr != "" && opIndex != Eop - 1;
-                if (haveCond)
-                    vout += cStr + " ? ";
-                vout += parenOperand(PN->getIncomingValue(opIndex));
-                if (haveCond)
-                    vout += ":";
+                std::string val = parenOperand(PN->getIncomingValue(opIndex));
+                if (trace_operand)
+                    printf("[%s:%d] cond %s val %s vout %s\n", __FUNCTION__, __LINE__, cStr.c_str(), val.c_str(), vout.c_str());
+                if (cStr != "")
+                    vout += cStr + " ? " + val + " : ";
+                else
+                    finalVal = val;
+                prevCond = cStr;
             }
+            if (endswith(vout, " : "))
+                vout += finalVal;
+            if (trace_operand)
+                printf("[%s:%d] PHI result cond %s vout %s\n", __FUNCTION__, __LINE__, prevCond.c_str(), vout.c_str());
             break;
             }
         case Instruction::Alloca:
@@ -759,9 +766,9 @@ std::string printOperand(const Value *Operand)
             exit(1);
             break;
         }
-        cbuffer += vout;
         if (trace_operand)
-             printf("[%s:%d] after depth %d op %s\n", __FUNCTION__, __LINE__, depth, I->getOpcodeName());
+             printf("[%s:%d] after depth %d op %s cbuffer %s vout %s\n", __FUNCTION__, __LINE__, depth, I->getOpcodeName(), cbuffer.c_str(), vout.c_str());
+        cbuffer += vout;
     }
     else {
         //we need pointer to pass struct params (PipeIn)
@@ -930,10 +937,15 @@ static std::string processMethod(std::string methodName, const Function *func,
     std::string retGuard, valsep;
     for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
         std::string tempCond = getCondStr(&*BI);
+        bool thisPHI = false;
         for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE; IIb++) {
             const Instruction *II = &*IIb;
             switch(II->getOpcode()) {
+            case Instruction::PHI:
+                thisPHI = true;
+                break;
             case Instruction::Store: {
+                std::string localCond = thisPHI ? "" : tempCond;
                 const StoreInst *SI = cast<StoreInst>(II);
                 std::string value = printOperand(SI->getOperand(0));
                 findAlloca(dyn_cast<Instruction>(SI->getPointerOperand()));
@@ -945,7 +957,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 if (isInter || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand()))
                     alloc = "LET " + typeName(cast<PointerType>(
                       SI->getPointerOperand()->getType())->getElementType()) + " ";
-                mlines.push_back(alloc + tempCond + ":" + dest + " = " + value);
+                mlines.push_back(alloc + localCond + ":" + dest + " = " + value);
                 break;
                 }
             case Instruction::Ret:
