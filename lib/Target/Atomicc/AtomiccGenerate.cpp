@@ -744,7 +744,9 @@ std::string printOperand(const Value *Operand)
                 std::string cStr = getCondStr(inBlock);
                 std::string val = parenOperand(PN->getIncomingValue(opIndex));
                 if (trace_operand)
-                    printf("[%s:%d] cond %s val %s vout %s\n", __FUNCTION__, __LINE__, cStr.c_str(), val.c_str(), vout.c_str());
+                    printf("[%s:%d] prevCond %s cond %s val %s vout %s\n", __FUNCTION__, __LINE__, prevCond.c_str(), cStr.c_str(), val.c_str(), vout.c_str());
+                if (cStr == "(" + prevCond + " ^ 1)")
+                    cStr = "";
                 if (cStr != "")
                     vout += cStr + " ? " + val + " : ";
                 else
