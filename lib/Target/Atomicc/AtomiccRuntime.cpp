@@ -110,7 +110,7 @@ restart:
             switch (II->getOpcode()) {
             case Instruction::Store:
                 if (Instruction *target = dyn_cast<Instruction>(II->getOperand(1))) {
-                if (target->getOpcode() == Instruction::Alloca) {
+                if (target->getOpcode() == Instruction::Alloca && endswith(target->getName(), ".addr")) {
                     if (!dyn_cast<CallInst>(II->getOperand(0))) { // don't do remapping for calls
                     // remember values stored in Alloca temps
                     remapValue[target] = II;
