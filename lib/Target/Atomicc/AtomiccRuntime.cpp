@@ -115,7 +115,7 @@ restart:
                     // remember values stored in Alloca temps
                     remapValue[target] = II;
 if (trace) {
-printf("[%s:%d] STORE target %p II %p\n", __FUNCTION__, __LINE__, target, II);
+printf("[%s:%d] STORE target %p II %p\n", __FUNCTION__, __LINE__, (void *)target, (void *)II);
 target->dump();
 II->dump();
 }
@@ -127,7 +127,7 @@ II->dump();
                 if (Instruction *val = remapValue[II->getOperand(0)]) {
                     // replace loads from temp areas with stored values
 if (trace) {
-printf("[%s:%d] LOAD %p\n", __FUNCTION__, __LINE__, val);
+printf("[%s:%d] LOAD %p\n", __FUNCTION__, __LINE__, (void *)val);
 II->dump();
 }
                     II->replaceAllUsesWith(val->getOperand(0));
@@ -157,7 +157,7 @@ II->dump();
                     }
                     }
                 }
-                for (int i = 0; i < II->getNumOperands() - 2; i++) {
+                for (unsigned int i = 0; i < II->getNumOperands() - 2; i++) {
                     if (Instruction *val = remapValue[II->getOperand(i)]) {
 if (trace) {
 printf("[%s:%d] remapcall %d\n", __FUNCTION__, __LINE__, i);
@@ -165,7 +165,7 @@ II->dump();
 }
                         SmallVector<llvm::Value *, 4> Args;
                         Args.resize(II->getNumOperands()-1);
-                        for (int j = 0; j < II->getNumOperands() - 1; j++)
+                        for (unsigned int j = 0; j < II->getNumOperands() - 1; j++)
                             if (j == i)
                                 Args[j] = val->getOperand(0);
                             else
@@ -301,7 +301,7 @@ extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
     // first clone template function into temp function, so that we can
     // edit, filling in actual captured data values
     if (trace_fixup) {
-        printf("[%s:%d] BEFORECLONE func %p\n", __FUNCTION__, __LINE__, argFunc);
+        printf("[%s:%d] BEFORECLONE func %p\n", __FUNCTION__, __LINE__, (void *)argFunc);
         argFunc->dump();
     }
     Type *Params[] = {argFunc->arg_begin()->getType()};
@@ -346,7 +346,7 @@ extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType
     void *ptr = malloc(newsize);
     memset(ptr, 0x5a, newsize);
     if (trace_malloc)
-        printf("[%s:%d] %ld = %p type %p sty %p vecCount %lld\n", __FUNCTION__, __LINE__, size, ptr, type, STy, vecCount);
+        printf("[%s:%d] %ld = %p type %p sty %p vecCount %lld\n", __FUNCTION__, __LINE__, size, (void *)ptr, (void *)type, (void *)STy, vecCount);
     memoryRegion.push_back(MEMORY_REGION{ptr, newsize, type, STy, vecCount});
     return ptr;
 }
@@ -383,7 +383,7 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
 extern "C" void atomiccSchedulePriority(const char *rule, const char *priority, const StructType *STy)
 {
     ClassMethodTable *table = getClass(STy);
-    printf("%s: %s %s %p\n", __FUNCTION__, rule, priority, STy);
+    printf("%s: %s %s %p\n", __FUNCTION__, rule, priority, (void *)STy);
     STy->dump();
     table->IR->priority[rule] = priority;
 }

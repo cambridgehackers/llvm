@@ -843,15 +843,21 @@ static void processBlockConditions(const Function *currentFunction)
                 }
             case Instruction::Switch: {
                 const SwitchInst* SI = cast<SwitchInst>(II);
-                //BasicBlock *defaultBB = SI->getDefaultDest();
+                std::string defaultCond, sep;
                 for (auto CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
                     const BasicBlock *caseBB = CI->getCaseSuccessor();
                     int64_t val = CI->getCaseValue()->getZExtValue();
                     printf("[%s:%d] [%d] = %s\n", __FUNCTION__, __LINE__, (int)val, caseBB?caseBB->getName().str().c_str():"NONE");
-                    if (getCondStr(caseBB) == "") // 'true' condition
-                        setCondition(caseBB, false,
-                             "(" + parenOperand(SI->getCondition()) + " == " + autostr(val) + ")", &*BBI);
+                    if (getCondStr(caseBB) == "") { // 'true' condition
+                        std::string sval = autostr(val);
+                        std::string cond = parenOperand(SI->getCondition());
+                        setCondition(caseBB, false, "(" + cond + " == " + sval + ")", &*BBI);
+                        defaultCond += sep + "(" + cond + " != " + sval + ")";
+                        sep = " & ";
+                        }
                 }
+                if (BasicBlock *defaultBB = SI->getDefaultDest())
+                    setCondition(defaultBB, false, "(" + defaultCond + ")", &*BBI);
                 break;
                 }
             }
