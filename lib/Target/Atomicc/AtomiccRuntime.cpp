@@ -346,7 +346,7 @@ extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType
     void *ptr = malloc(newsize);
     memset(ptr, 0x5a, newsize);
     if (trace_malloc)
-        printf("[%s:%d] %ld = %p type %p sty %p vecCount %lld\n", __FUNCTION__, __LINE__, size, (void *)ptr, (void *)type, (void *)STy, vecCount);
+        printf("[%s:%d] %ld = %p type %p sty %p vecCount %ld\n", __FUNCTION__, __LINE__, size, (void *)ptr, (void *)type, (void *)STy, (long)vecCount);
     memoryRegion.push_back(MEMORY_REGION{ptr, newsize, type, STy, vecCount});
     return ptr;
 }

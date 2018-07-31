@@ -544,37 +544,122 @@ std::string parenOperand(const Value *Operand)
 }
 
 static std::map<const BasicBlock *, std::list<BlockCondItem>> blockCondition;
-static void setCondition(const BasicBlock *bb, bool invert, std::string val, const BasicBlock *from)
-{
-    // each element in list is a valid path to get to the target BasicBlock.
-    // therefore the 'execute guard' for the BB is the 'OR' of all elements in the list.
-    blockCondition[bb].push_back(BlockCondItem{invert, val, from});
-}
+static std::map<const BasicBlock *, std::string> blockStr;
+
 static std::string getCondStr(const BasicBlock *bb)
 {
+    auto bptr = blockStr.find(bb);
+    if (bptr != blockStr.end())
+        return bptr->second;
+    std::string exprTop;
     if (blockCondition[bb].size() == 1) {
         BlockCondItem &BC = blockCondition[bb].front();
         if (!blockCondition[BC.from].size()) {
             if (!BC.invert)
-                return BC.cond;
-            return "(" + BC.cond + " ^ 1)";
+                exprTop = BC.cond;
+            else
+                exprTop = "(" + BC.cond + " ^ 1)";
+            goto retLabel;
         }
     }
-    std::string exprTop;
     for (auto item: blockCondition[bb]) {
         std::string thisTerm = item.cond;
         if (item.invert)
             // Since we are 'AND'ing conditions together, remove inversions
-            thisTerm = "(" + thisTerm + "^ 1)";
+            thisTerm = "(" + thisTerm + " ^ 1)";
         std::string condStr = getCondStr(item.from);
-        if (condStr != "")
-            // if BB where 'If' statement existed had a condition, 'AND' it in
-            thisTerm = "(" + thisTerm + " & " + condStr + ")";
-        if (exprTop != "")  // 'OR' together all paths of getting to this BB
+//printf("[%s:%d] %p bef term '%s' cond '%s' top %s\n", __FUNCTION__, __LINE__, bb, thisTerm.c_str(), condStr.c_str(), exprTop.c_str());
+        if (condStr == "( 1 )")
+            condStr = "";
+        if (condStr != "") {
+            if (thisTerm == "( 1 )")
+                thisTerm = condStr;
+            else
+{
+//printf("[%s:%d] %p conddddddddddddddddddand '%s' '%s'\n", __FUNCTION__, __LINE__, bb, thisTerm.c_str(), condStr.c_str());
+                // if BB where 'If' statement existed had a condition, 'AND' it in
+                thisTerm = "(" + thisTerm + " & " + condStr + ")";
+}
+        }
+        if ("(" + thisTerm + " ^ 1)" == exprTop || "(" + exprTop + " ^ 1)" == thisTerm)
+            thisTerm = "";
+        else if (exprTop != "")  // 'OR' together all paths of getting to this BB
+{
+//printf("[%s:%d] %p conddddddddddddddddddor '%s' '%s'\n", __FUNCTION__, __LINE__, bb, thisTerm.c_str(), exprTop.c_str());
             thisTerm = "(" + thisTerm + " | " + exprTop + ")";
+}
         exprTop = thisTerm;
     }
+retLabel:
+    if (exprTop == "( 1 )")
+        exprTop = "";
+    blockStr[bb] = exprTop;
     return exprTop;
+}
+
+static void processBlockConditions(const Function *currentFunction)
+{
+    blockCondition.clear();
+    blockStr.clear();
+    for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
+        auto setCondition = [&](const BasicBlock *bb, bool invert, std::string val, const BasicBlock *from) -> void {
+            // each element in list is a valid path to get to the target BasicBlock.
+            // therefore the 'execute guard' for the BB is the 'OR' of all elements in the list.
+            blockCondition[bb].push_back(BlockCondItem{invert, val, &*BBI});
+        };
+        for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE; IIb++) {
+            const Instruction *II = &*IIb;
+            switch (II->getOpcode()) {
+            case Instruction::Br: {
+                // BUG BUG BUG -> combine the condition for the current block with the getConditions for this instruction
+                const BranchInst *BI = dyn_cast<BranchInst>(II);
+                if (BI && BI->isConditional()) {
+                    setCondition(BI->getSuccessor(0), false, parenOperand(BI->getCondition()), &*BBI); // 'true' condition
+                    setCondition(BI->getSuccessor(1), true, parenOperand(BI->getCondition()), &*BBI); // 'inverted' condition
+                }
+                else if (isa<IndirectBrInst>(II)) {
+                    printf("[%s:%d] indirect\n", __FUNCTION__, __LINE__);
+                    for (unsigned i = 0, e = II->getNumOperands(); i != e; ++i) {
+                        printf("[%d] = %s\n", i, printOperand(II->getOperand(i)).c_str());
+                    }
+                }
+                else
+                    setCondition(BI->getSuccessor(0), false, "( 1 )", &*BBI);
+                break;
+                }
+            case Instruction::Switch: {
+                const SwitchInst* SI = cast<SwitchInst>(II);
+                std::string defaultCond, sep;
+                for (auto CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
+                    const BasicBlock *caseBB = CI->getCaseSuccessor();
+                    int64_t val = CI->getCaseValue()->getZExtValue();
+                    printf("[%s:%d] [%d] = %s\n", __FUNCTION__, __LINE__, (int)val, caseBB?caseBB->getName().str().c_str():"NONE");
+                    //if (getCondStr(caseBB) == "") { // 'true' condition
+                        std::string sval = autostr(val);
+                        std::string cond = parenOperand(SI->getCondition());
+                        setCondition(caseBB, false, "(" + cond + " == " + sval + ")", &*BBI);
+                        defaultCond += sep + "(" + cond + " == " + sval + ")";
+                        sep = " | ";
+                        //}
+                }
+                if (BasicBlock *defaultBB = SI->getDefaultDest())
+                    setCondition(defaultBB, false, "((" + defaultCond + ") ^ 1)", &*BBI);
+                break;
+                }
+            }
+        }
+    }
+int trace_blockCond = 1;
+    if (trace_blockCond && blockCondition.size()) {
+        printf("%s: blockconditions: %s\n", __FUNCTION__, currentFunction->getName().str().c_str());
+        for (auto item: blockCondition) {
+            printf("     block %s = %p\n", item.first->getName().str().c_str(), item.first);
+            for (auto info: item.second) {
+                printf("        invert %d cond %s from %p\n", info.invert, info.cond.c_str(), info.from);
+            }
+            printf("        condition: %s\n", getCondStr(item.first).c_str());
+        }
+    }
 }
 
 static std::string typeName(const Type *Ty)
@@ -814,55 +899,6 @@ std::string printOperand(const Value *Operand)
         printf("[%s:%d] depth %d return '%s'\n", __FUNCTION__, __LINE__, depth, cbuffer.c_str());
     depth--;
     return cbuffer;
-}
-
-static void processBlockConditions(const Function *currentFunction)
-{
-    for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
-        for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE; IIb++) {
-            const Instruction *II = &*IIb;
-            switch (II->getOpcode()) {
-            case Instruction::Br: {
-                // BUG BUG BUG -> combine the condition for the current block with the getConditions for this instruction
-                const BranchInst *BI = dyn_cast<BranchInst>(II);
-                if (BI && BI->isConditional()) {
-                    //printf("[%s:%d] condition %s [%p, %p]\n", __FUNCTION__, __LINE__, printOperand(BI->getCondition()).c_str(), BI->getSuccessor(0), BI->getSuccessor(1));
-                    setCondition(BI->getSuccessor(0), false, parenOperand(BI->getCondition()), &*BBI); // 'true' condition
-                    setCondition(BI->getSuccessor(1), true, parenOperand(BI->getCondition()), &*BBI); // 'inverted' condition
-                }
-                else if (isa<IndirectBrInst>(II)) {
-                    printf("[%s:%d] indirect\n", __FUNCTION__, __LINE__);
-                    for (unsigned i = 0, e = II->getNumOperands(); i != e; ++i) {
-                        printf("[%d] = %s\n", i, printOperand(II->getOperand(i)).c_str());
-                    }
-                }
-                else {
-                    //printf("[%s:%d] BRUNCOND %p\n", __FUNCTION__, __LINE__, BI->getSuccessor(0));
-                }
-                break;
-                }
-            case Instruction::Switch: {
-                const SwitchInst* SI = cast<SwitchInst>(II);
-                std::string defaultCond, sep;
-                for (auto CI = SI->case_begin(), CE = SI->case_end(); CI != CE; ++CI) {
-                    const BasicBlock *caseBB = CI->getCaseSuccessor();
-                    int64_t val = CI->getCaseValue()->getZExtValue();
-                    printf("[%s:%d] [%d] = %s\n", __FUNCTION__, __LINE__, (int)val, caseBB?caseBB->getName().str().c_str():"NONE");
-                    if (getCondStr(caseBB) == "") { // 'true' condition
-                        std::string sval = autostr(val);
-                        std::string cond = parenOperand(SI->getCondition());
-                        setCondition(caseBB, false, "(" + cond + " == " + sval + ")", &*BBI);
-                        defaultCond += sep + "(" + cond + " != " + sval + ")";
-                        sep = " & ";
-                        }
-                }
-                if (BasicBlock *defaultBB = SI->getDefaultDest())
-                    setCondition(defaultBB, false, "(" + defaultCond + ")", &*BBI);
-                break;
-                }
-            }
-        }
-    }
 }
 
 /*
