@@ -23,6 +23,7 @@ static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
 static int trace_operand;//=1;
+static int trace_blockCond;//= 1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
 static std::string globalMethodName;
@@ -649,7 +650,6 @@ static void processBlockConditions(const Function *currentFunction)
             }
         }
     }
-int trace_blockCond = 1;
     if (trace_blockCond && blockCondition.size()) {
         printf("%s: blockconditions: %s\n", __FUNCTION__, currentFunction->getName().str().c_str());
         for (auto item: blockCondition) {
