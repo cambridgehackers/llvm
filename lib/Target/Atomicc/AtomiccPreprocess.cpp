@@ -23,25 +23,6 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
-static void processSelect(Function *thisFunc)
-{
-    for (auto BB = thisFunc->begin(), BE = thisFunc->end(); BB != BE; ++BB) {
-        for (auto IIb = BB->begin(), IE = BB->end(); IIb != IE;) {
-            Instruction *II = &*IIb;
-            auto PI = std::next(BasicBlock::iterator(II));
-            switch (II->getOpcode()) {
-            case Instruction::Select:
-                // a Select instruction is generated for size calculation for
-                // _Znam (operator new[](unsigned long))
-                II->replaceAllUsesWith(II->getOperand(2));
-                recursiveDelete(II);
-                break;
-            };
-            IIb = PI;
-        }
-    }
-}
-
 /*
  * Map calls to 'new()' and 'malloc()' in constructors to call 'llvm_translate_malloc'.
  * This enables llvm-translate to easily maintain a list of valid memory regions
@@ -51,6 +32,8 @@ Value *findElementCount(Instruction *I)
 {
     Value *ret = NULL;
     if (I) {
+        if (I->getOpcode() == Instruction::Select)
+            I = cast<Instruction>(I->getOperand(2));
         if (CallInst *CI = dyn_cast<CallInst>(I)) {
             if (Value *called = CI->getOperand(CI->getNumOperands()-1))
             if (const Function *CF = dyn_cast<Function>(called))
@@ -151,7 +134,11 @@ static void processOverflow(CallInst *II)
 printf("[%s:%d] func %s\n", __FUNCTION__, __LINE__, fname.c_str());
     for(auto UI = II->user_begin(), UE = II->user_end(); UI != UE;) {
         auto UIN = std::next(UI);
-        UI->replaceAllUsesWith(newins);
+        bool replaceMul = false;
+        if (auto ins = dyn_cast<ExtractValueInst>(*UI))
+        if (ins->getNumIndices() == 1 && ins->getIndices()[0] == 0)
+            replaceMul = true;
+        UI->replaceAllUsesWith(replaceMul ? newins : ConstantInt::get(UI->getType(), 0));
         recursiveDelete(*UI);
         UI = UIN;
     }
@@ -227,10 +214,6 @@ void preprocessModule(Module *Mod)
             }
             Declare->eraseFromParent();
         }
-
-    // remove Select statements; construct vtab tables
-    for (auto FI = Mod->begin(), FE = Mod->end(); FI != FE; FI++)
-        processSelect(&*FI);
 
     // process various function calls
     static struct {

@@ -821,6 +821,10 @@ std::string printOperand(const Value *Operand)
                  + parenOperand(I->getOperand(1));
             break;
             }
+        case Instruction::Select: {
+            vout += parenOperand(I->getOperand(0)) + " ? " + parenOperand(I->getOperand(1)) + " : " + parenOperand(I->getOperand(2));
+            break;
+        }
         case Instruction::PHI: {
             const PHINode *PN = dyn_cast<PHINode>(I);
             vout += "__phi(";
