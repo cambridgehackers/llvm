@@ -214,9 +214,9 @@ ClassMethodTable *getClass(const StructType *STy)
             else if (processSequence == 3) { // interface connect
                 std::string source = ret.substr(idx+1);
                 std::string target = ret.substr(0, idx);
-                bool isForward = false;
-                if (startswith(target, "FORWARD;")) {
-                    isForward = true;
+                bool isForward = true;
+                if (startswith(target, "CONNECT;")) {
+                    isForward = false;
                     target = target.substr(8);
                 }
                 std::string targetItem = target, targetInterface;
