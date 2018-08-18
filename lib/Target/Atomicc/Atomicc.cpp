@@ -71,6 +71,9 @@ bool AtomiccWriter::runOnModule(Module &M)
      * Top level processing done after all module object files are loaded
      */
     globalMod = &M;
+    for (auto item = globalMod->getFunctionList().begin(),
+              iend = globalMod->getFunctionList().end(); item != iend; item++)
+        functionMap[item->getName()] = &*item;
     // Before running constructors, clean up and rewrite IR
     preprocessModule(&M);
 

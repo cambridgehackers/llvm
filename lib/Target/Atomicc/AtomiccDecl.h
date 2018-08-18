@@ -79,6 +79,7 @@ extern ExecutionEngine *EE;
 extern std::list<MEMORY_REGION> memoryRegion;
 extern int trace_pair;
 extern Module *globalMod;
+extern std::map<std::string, Function *> functionMap;
 
 void constructAddressMap(Module *Mod);
 std::string printOperand(const Value *Operand);
@@ -96,7 +97,7 @@ void preprocessModule(Module *Mod);
 std::string GetValueName(const Value *Operand);
 void prepareReplace(const Value *olda, Value *newa);
 void recursiveDelete(Value *V);
-void pushWork(Function *func, std::string mName);
+void pushWork(ClassMethodTable *table, Function *func, std::string mName);
 void dumpMemoryRegions(int arg);
 ClassMethodTable *getClass(const StructType *STy);
 bool isActionMethod(const Function *func);

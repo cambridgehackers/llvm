@@ -280,10 +280,10 @@ restart: // restart here after inlining function.... basic block structure might
 /*
  * Add a function to the processing list for generation of cpp and verilog.
  */
-void pushWork(Function *func, std::string mName)
+void pushWork(ClassMethodTable *table, Function *func, std::string mName)
 {
     //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
-    getClass(findThisArgument(func))->method[mName] = func;
+    table->method[mName] = func;
     // inline intra-class method call bodies
     processMethodInlining(func, func);
 }
@@ -370,10 +370,10 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
     if (trace_pair)
         printf("[%s:%d] name %s size %ld ena %s\n", __FUNCTION__, __LINE__, enaName.c_str(), aenaFunc->arg_size(), enaFunc->getName().str().c_str());
     table->ruleFunctions[enaName + "__ENA"] = true;
-    pushWork(enaFunc, enaName + "__ENA");
+    pushWork(table, enaFunc, enaName + "__ENA");
     if (ardyFunc) {
         table->ruleFunctions[enaName + "__RDY"] = true;
-        pushWork(fixupFunction(bcap, ardyFunc), enaName + "__RDY");
+        pushWork(table, fixupFunction(bcap, ardyFunc), enaName + "__RDY");
     }
 }
 

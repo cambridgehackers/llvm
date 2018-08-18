@@ -31,6 +31,7 @@ static std::string globalMethodName;
 static DenseMap<const Value*, unsigned> AnonValueNumbers;
 static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
+std::map<std::string, Function *> functionMap;
 Module *globalMod;
 
 static INTMAP_TYPE predText[] = {
@@ -260,8 +261,8 @@ ClassMethodTable *getClass(const StructType *STy)
         nextInterface:;
             }
             else if (idx >= 0) {
-                if (Function *func = globalMod->getFunction(ret.substr(0, idx)))
-                    pushWork(func, ret.substr(idx+1));
+                if (Function *func = functionMap[ret.substr(0, idx)])
+                    pushWork(table, func, ret.substr(idx+1));
                 }
             last_subs = subs;
         }
@@ -1035,6 +1036,7 @@ static std::string processMethod(std::string methodName, const Function *func,
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     bool isModule = startswith(table->STy->getName(), "module");
+//printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), table->IR->name.c_str());
     fprintf(OStr, "%sMODULE %s {\n", isModule ? "" : "E", table->IR->name.c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
