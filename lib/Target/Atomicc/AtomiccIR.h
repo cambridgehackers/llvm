@@ -102,6 +102,11 @@ typedef struct {
 } UnionItem;
 
 typedef struct {
+    std::string type;
+    bool        noReplace;
+} AllocaItem;
+
+typedef struct {
     ACCExpr                   *guard;
     std::string                name;
     bool                       rule;
@@ -111,7 +116,7 @@ typedef struct {
     std::list<CallListElement *> printfList;
     std::string                type;
     std::list<ParamElement>    params;
-    std::map<std::string, std::string> alloca;
+    std::map<std::string, AllocaItem> alloca;
     MetaRef                    meta[MetaMax];
 } MethodInfo;
 
