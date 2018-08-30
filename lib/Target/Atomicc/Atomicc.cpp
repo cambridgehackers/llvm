@@ -42,6 +42,58 @@ namespace {
 } // end anonymous namespace.
 char AtomiccWriter::ID = 0;
 
+#include <unistd.h>
+#include <fcntl.h>
+#ifdef __APPLE__ // hack for debugging
+#include <libproc.h>
+#endif
+#define MAX_FILENAME 1000
+static char filenameBuffer[MAX_FILENAME];
+char *getExecutionFilename(char *buf, int buflen)
+{
+    int rc, fd;
+#ifdef __APPLE__ // hack for debugging
+    static char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
+    rc = proc_pidpath (getpid(), pathbuf, sizeof(pathbuf));
+    return pathbuf;
+#endif
+    char *filename = 0;
+    buf[0] = 0;
+    fd = open("/proc/self/maps", O_RDONLY);
+    while ((rc = read(fd, buf, buflen-1)) > 0) {
+	buf[rc] = 0;
+	rc = 0;
+	while(buf[rc]) {
+	    char *endptr;
+	    unsigned long addr = strtoul(&buf[rc], &endptr, 16);
+	    if (endptr && *endptr == '-') {
+		char *endptr2;
+		unsigned long addr2 = strtoul(endptr+1, &endptr2, 16);
+		if (addr <= (unsigned long)&getExecutionFilename && (unsigned long)&getExecutionFilename <= addr2) {
+		    filename = strstr(endptr2, "  ");
+		    while (*filename == ' ')
+			filename++;
+		    endptr2 = strstr(filename, "\n");
+		    if (endptr2)
+			*endptr2 = 0;
+		    fprintf(stderr, "buffer %s\n", filename);
+		    goto endloop;
+		}
+	    }
+	    while(buf[rc] && buf[rc] != '\n')
+		rc++;
+	    if (buf[rc])
+		rc++;
+	}
+    }
+endloop:
+    if (!filename) {
+	fprintf(stderr, "[%s:%d] could not find execution filename\n", __FUNCTION__, __LINE__);
+	return 0;
+    }
+    return filename;
+}
+
 bool AtomiccWriter::runOnModule(Module &M)
 {
     std::string OutputDir = "tmp/foo";
@@ -92,6 +144,10 @@ bool AtomiccWriter::runOnModule(Module &M)
 
     // Read/process IR to generate verilog module definitions
     globalPath = "../../../atomicc/";
+    char *fn = getExecutionFilename(filenameBuffer, sizeof(filenameBuffer));
+    globalPath = fn;
+    int ind = globalPath.rfind("/");
+    globalPath = globalPath.substr(0, ind) + "/../../../atomicc/";
     std::string commandLine = globalPath + "veriloggen " + OutputDir;
     int ret = system(commandLine.c_str());
 printf("[%s:%d] RETURN from '%s' %d\n", __FUNCTION__, __LINE__, commandLine.c_str(), ret);
