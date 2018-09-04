@@ -1090,6 +1090,8 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         std::string options;
         if (table->ruleFunctions[globalMethodName])
             options += "/Rule";
+        else if (startswith(methodName, "RULE")) //HACK for __rule declarations HACK HACK HACK
+            options += "/Rule";                  //HACK for __rule declarations HACK HACK HACK
         fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
         for (auto line: malines)
              fprintf(OStr, "        %s\n", line.c_str());
