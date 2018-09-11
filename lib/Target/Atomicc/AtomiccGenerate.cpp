@@ -547,9 +547,20 @@ std::string parenOperand(const Value *Operand)
 
 static std::map<const BasicBlock *, std::list<BlockCondItem>> blockCondition;
 static std::map<const BasicBlock *, std::string> blockStr;
+static std::map<const BasicBlock *, bool> getCondStrCheck;
 
-static std::string getCondStr(const BasicBlock *bb)
+static std::string getCondStr(const BasicBlock *bb, bool initCheck = false)
 {
+    if (initCheck)
+        getCondStrCheck.clear();
+    if (getCondStrCheck[bb]) {
+        std::string name;
+        if (bb->hasName())
+            name = bb->getName();
+        printf("%s: ERROR: loop in block cycle %s\n", __FUNCTION__, name.c_str());
+        return "";
+    }
+    getCondStrCheck[bb] = true;
     auto bptr = blockStr.find(bb);
     if (bptr != blockStr.end())
         return bptr->second;
@@ -636,7 +647,7 @@ static void processBlockConditions(const Function *currentFunction)
                     const BasicBlock *caseBB = CI->getCaseSuccessor();
                     int64_t val = CI->getCaseValue()->getZExtValue();
                     printf("[%s:%d] [%d] = %s\n", __FUNCTION__, __LINE__, (int)val, caseBB?caseBB->getName().str().c_str():"NONE");
-                    //if (getCondStr(caseBB) == "") { // 'true' condition
+                    //if (getCondStr(caseBB, true) == "") { // 'true' condition
                         std::string sval = autostr(val);
                         std::string cond = parenOperand(SI->getCondition());
                         setCondition(caseBB, false, "(" + cond + " == " + sval + ")", &*BBI);
@@ -658,7 +669,7 @@ static void processBlockConditions(const Function *currentFunction)
             for (auto info: item.second) {
                 printf("        invert %d cond %s from %p\n", info.invert, info.cond.c_str(), info.from);
             }
-            printf("        condition: %s\n", getCondStr(item.first).c_str());
+            printf("        condition: %s\n", getCondStr(item.first, true).c_str());
         }
     }
 }
@@ -832,7 +843,7 @@ std::string printOperand(const Value *Operand)
             std::string sep;
             for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
-                std::string cStr = getCondStr(inBlock);
+                std::string cStr = getCondStr(inBlock, true);
                 std::string val = parenOperand(PN->getIncomingValue(opIndex));
                 if (cStr == "")
                     cStr = "__default";
@@ -978,7 +989,7 @@ static std::string processMethod(std::string methodName, const Function *func,
     /* Gather data for top level instructions in each basic block. */
     std::string retGuard, valsep;
     for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
-        std::string tempCond = getCondStr(&*BI);
+        std::string tempCond = getCondStr(&*BI, true);
         bool thisPHI = false;
         for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE; IIb++) {
             const Instruction *II = &*IIb;
@@ -1054,6 +1065,10 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         std::list<std::string> mlines, malines;
         std::string methodName = FI.first;
         const Function *func = FI.second;
+        if (!func) {
+            printf("[%s:%d] name %s missing func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), func);
+            continue;
+        }
         std::string rdyName = getRdyName(methodName);
         std::string rdyGuard;
         if (endswith(methodName, "__RDY"))
