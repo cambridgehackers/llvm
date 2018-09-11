@@ -3119,8 +3119,16 @@ void Verifier::visitStoreInst(StoreInst &SI) {
   PointerType *PTy = dyn_cast<PointerType>(SI.getOperand(1)->getType());
   Assert(PTy, "Store operand must be a pointer.", &SI);
   Type *ElTy = PTy->getElementType();
+#if 1
+  if(ElTy != SI.getOperand(0)->getType()) {
+printf("[%s:%d] %s\n", __FUNCTION__, __LINE__, "Stored value type does not match pointer operand type!");
+SI.dump();
+ElTy->dump();
+  }
+#else
   Assert(ElTy == SI.getOperand(0)->getType(),
          "Stored value type does not match pointer operand type!", &SI, ElTy);
+#endif
   Assert(SI.getAlignment() <= Value::MaximumAlignment,
          "huge alignment values are unsupported", &SI);
   Assert(ElTy->isSized(), "storing unsized types is not allowed", &SI);
