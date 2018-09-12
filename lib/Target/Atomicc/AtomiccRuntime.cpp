@@ -17,11 +17,6 @@
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/LoopAnalysisManager.h"
-#include "llvm/IR/Dominators.h"
-#include "llvm/Analysis/OptimizationDiagnosticInfo.h"
-#include "llvm/Transforms/Utils/UnrollLoop.h"
 
 using namespace llvm;
 
@@ -32,59 +27,6 @@ static int trace_fixup;//= 1;
 int trace_pair;//= 1;
 
 std::list<MEMORY_REGION> memoryRegion;
-
-/* This unrolls loops
- */
-static void processLoops(Function *func)
-{
-    bool changed = false;
-    DominatorTree *DT = new DominatorTree;
-    PostDomTreeBase<BasicBlock> *PDT = new PostDomTreeBase<BasicBlock>();
-    LoopInfo *LI = new LoopInfo;
-    if (func->isDeclaration())
-        return;
-    DT->recalculate(*func);
-    PDT->recalculate(*func);
-    LI->analyze(*DT);
-    SmallVector<Loop *, 4> PreOrderLoops = LI->getLoopsInReverseSiblingPreorder();
-#if 0
-    printf("[%s:%d] START %s loopc %d\n", __FUNCTION__, __LINE__, func->getName().str().c_str(), (int)PreOrderLoops.size());
-    if (PreOrderLoops.size()) {
-        printf("[%s:%d]DT\n", __FUNCTION__, __LINE__);
-        DT->print(errs());
-        printf("[%s:%d]PDT\n", __FUNCTION__, __LINE__);
-        PDT->print(errs());
-        printf("[%s:%d]LI\n", __FUNCTION__, __LINE__);
-        LI->print(errs());
-        func->dump();
-    }
-#endif
-    for (Loop *L : PreOrderLoops) {
-//printf("[%s:%d]LLLLLLLLLLLLLL %p\n", __FUNCTION__, __LINE__, L);
-//L->print(errs());
-        if (!L->isLoopSimplifyForm()) { 
-            printf("ERROROR:  Not unrolling loop which is not in loop-simplify form.\n");
-            exit(-1);
-        }
-        unsigned TripCount = 16, TripMultiple = 1, Count = 16, PeelCount = 0;
-        bool Force = true, AllowRuntime = true, AllowExpensiveTripCount = true;
-        bool PreserveCondBr = false, PreserveOnlyFirst = false;
-        bool PreserveLCSSA = false;
-
-        TargetLibraryInfoImpl TLII(Triple(globalMod->getTargetTriple()));
-        TargetLibraryInfo TLI(TLII);
-        BlockFrequencyInfo BFI;
-        AssumptionCache AC(*func);
-        ScalarEvolution SE(*func, TLI, AC, *DT, *LI);
-        OptimizationRemarkEmitter ORE(func, &BFI);
-        changed |= llvm::UnrollLoop( L, Count, TripCount, Force, AllowRuntime,
-            AllowExpensiveTripCount, PreserveCondBr, PreserveOnlyFirst,
-            TripMultiple, PeelCount, LI, &SE, DT, &AC, &ORE, PreserveLCSSA);
-        //printf("[%s:%d] before verifyDomTree %d\n", __FUNCTION__, __LINE__, changed);
-        DT->verifyDomTree();
-    }
-}
-
 
 /*
  * Remove Alloca items inserted by clang as part of dwarf debug support.
@@ -100,7 +42,6 @@ printf("[%s:%d]BEFORE\n", __FUNCTION__, __LINE__);
 func->dump();
 }
     std::map<const Value *,Instruction *> remapValue;
-    processLoops(func); // must be before processAlloca
 restart:
     remapValue.clear();
     for (auto BB = func->begin(), BE = func->end(); BB != BE; ++BB) {
