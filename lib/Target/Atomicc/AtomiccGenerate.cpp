@@ -33,6 +33,8 @@ static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 std::map<std::string, Function *> functionMap;
 Module *globalMod;
+static std::string processMethod(std::string methodName, const Function *func,
+           std::list<std::string> &mlines, std::list<std::string> &malines);
 
 static INTMAP_TYPE predText[] = {
     {FCmpInst::FCMP_FALSE, "false"}, {FCmpInst::FCMP_OEQ, "oeq"},
@@ -275,7 +277,7 @@ ClassMethodTable *getClass(const StructType *STy)
  * Name functions
  */
 
-std::string GetValueName(const Value *Operand)
+static std::string GetValueName(const Value *Operand)
 {
     const GlobalAlias *GA = dyn_cast<GlobalAlias>(Operand);
     const Value *V;
@@ -285,7 +287,7 @@ std::string GetValueName(const Value *Operand)
         return CBEMangle(GV->getName());
     std::string Name = Operand->getName();
     if (const Instruction *source = dyn_cast_or_null<Instruction>(Operand))
-    if (source->getOpcode() == Instruction::Alloca)
+    if (source->getOpcode() == Instruction::Alloca && globalMethodName != "")
         // Make the names unique across all methods in a class
         Name = globalMethodName + MODULE_SEPARATOR + Name;
     if (Name.empty()) { // Assign unique names to local temporaries.
@@ -300,13 +302,11 @@ std::string GetValueName(const Value *Operand)
             for (auto item: getClass(findThisArgument(func))->method)
                 if (item.second == func) {
                     Name = item.first.substr(0, item.first.length() - 5) + MODULE_SEPARATOR + Name;
-                    goto allDone;
+                    break;
                 }
-            printf("[%s:%d] COULDNT FIND PARAMFUNC\n", __FUNCTION__, __LINE__);
-            func->dump();
-            exit(-1);
-allDone:;
         }
+    if (endswith(Name, ".addr"))
+        Name = Name.substr(0, Name.length() - 5);
     std::string VarName;
     for (auto charp = Name.begin(), E = Name.end(); charp != E; ++charp) {
         char ch = *charp;
@@ -498,6 +498,31 @@ static std::string printCall(const Instruction *I, bool useParams = false)
             sep = ",";
         }
         return calledName + "{" + val + "}";
+    }
+    if (calledName == "__generateFor") {
+        bool foundGenvar = false;
+        for (; AI != AE; ++AI) { // first param processed as pcalledFunction
+            if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(*AI)) {
+                int op = CE->getOpcode();
+                assert (op == Instruction::PtrToInt);
+                auto func = cast<Function>(CE->getOperand(0));
+                if (!foundGenvar) {
+                    auto AII = func->arg_begin();
+                    AII++;
+                    vout += AII->getName().str();
+                    foundGenvar = true;
+                }
+                std::list<std::string> mlines, malines;
+                std::string ret = processMethod("", func, mlines, malines);
+                if (ret != "")
+                    vout += "," + ret;
+                else
+                    vout += "," + getMethodName(func);
+            }
+            else
+                vout += "," + printOperand(*AI);
+        }
+        return vout;
     }
     if (!func) {
         printf("%s: not an instantiable call!!!! %s\n", __FUNCTION__, printOperand(*AI).c_str());
@@ -1028,6 +1053,10 @@ static std::string processMethod(std::string methodName, const Function *func,
                 if (calledName == "__ValidReadyRuntime"
                  || calledName == "__bitconcat" || calledName == "__bitsubstr")
                     break;                    // value picked up in expression
+                if (calledName == "__generateFor") {
+                    mlines.push_back("GENERATE " + tempCond + ":" + printCall(II, true));
+                    break;
+                }
                 if (calledName == "printf") {
                     mlines.push_back("PRINTF " + tempCond + ":" + printCall(II, true));
                     break;

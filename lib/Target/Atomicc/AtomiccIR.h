@@ -107,6 +107,14 @@ typedef struct {
 } AllocaItem;
 
 typedef struct {
+    ACCExpr *cond;
+    ACCExpr *init;
+    ACCExpr *limit;
+    ACCExpr *incr;
+    std::string body;
+} GenerateForItem;
+
+typedef struct {
     ACCExpr                   *guard;
     std::string                name;
     bool                       rule;
@@ -116,6 +124,7 @@ typedef struct {
     std::list<CallListElement *> printfList;
     std::string                type;
     std::list<ParamElement>    params;
+    std::list<GenerateForItem> generateFor;
     std::map<std::string, AllocaItem> alloca;
     MetaRef                    meta[MetaMax];
 } MethodInfo;
@@ -137,6 +146,7 @@ typedef struct ModuleIR {
     std::list<std::string>            metaList;
     std::list<std::string>            softwareName;
     std::map<std::string, MethodInfo *> method;
+    std::map<std::string, MethodInfo *> generateBody;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::list<FieldElement>           fields;
     std::map<std::string, std::string> params;

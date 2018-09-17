@@ -94,7 +94,6 @@ std::string printString(std::string arg);
 std::string getMethodName(const Function *func);
 const StructType *findThisArgument(const Function *func);
 void preprocessModule(Module *Mod);
-std::string GetValueName(const Value *Operand);
 void prepareReplace(const Value *olda, Value *newa);
 void recursiveDelete(Value *V);
 void pushWork(ClassMethodTable *table, Function *func, std::string mName);
