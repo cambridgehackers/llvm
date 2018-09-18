@@ -238,6 +238,7 @@ PointerType *Type::getInt64PtrTy(LLVMContext &C, unsigned AS) {
 //===----------------------------------------------------------------------===//
 
 IntegerType *IntegerType::get(LLVMContext &C, unsigned NumBits) {
+if(NumBits < MIN_INT_BITS) printf("[%s:%d] %s = %d\n", __FUNCTION__, __LINE__, "bitwidth too small", NumBits);
   assert(NumBits >= MIN_INT_BITS && "bitwidth too small");
   assert(NumBits <= MAX_INT_BITS && "bitwidth too large");
   
