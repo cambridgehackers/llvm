@@ -108,6 +108,7 @@ typedef struct {
 
 typedef struct {
     ACCExpr *cond;
+    std::string var;
     ACCExpr *init;
     ACCExpr *limit;
     ACCExpr *incr;

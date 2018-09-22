@@ -300,6 +300,7 @@ static std::string GetValueName(const Value *Operand)
         if (auto arg = dyn_cast<Argument>(Operand)) {
             const Function *func = arg->getParent();
             for (auto item: getClass(findThisArgument(func))->method)
+                if (!startswith(item.first, "FOR$"))
                 if (item.second == func) {
                     Name = item.first.substr(0, item.first.length() - 5) + MODULE_SEPARATOR + Name;
                     break;
