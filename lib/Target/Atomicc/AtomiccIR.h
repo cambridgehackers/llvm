@@ -154,5 +154,6 @@ typedef struct ModuleIR {
     std::list<UnionItem>              unionList;
     std::list<FieldElement>           interfaces;
     std::list<InterfaceConnectType>   interfaceConnect;
+    int                               genvarCount;
 } ModuleIR;
 #endif /* __ATOMICIR_H__ */
