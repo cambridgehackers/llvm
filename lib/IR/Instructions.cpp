@@ -3020,52 +3020,13 @@ CastInst::getCastOpcode(
 /// could be broken out into the separate constructors but it is useful to have
 /// it in one place and to eliminate the redundant code for getting the sizes
 /// of the types involved.
-#if 1
-static uint64_t sizeType(const Type *Ty)
-{
-    switch (Ty->getTypeID()) {
-    case Type::VoidTyID:
-        return 0;
-    case Type::IntegerTyID:
-        return cast<IntegerType>(Ty)->getBitWidth();
-    case Type::StructTyID: {
-        uint64_t total = 0;
-        const StructType *STy = cast<StructType>(Ty);
-        for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I)
-            total += sizeType(*I);
-        return total;
-        }
-    case Type::ArrayTyID: {
-        const ArrayType *ATy = cast<ArrayType>(Ty);
-        return ATy->getNumElements() * sizeType(ATy->getElementType());
-        }
-    case Type::PointerTyID:
-       return sizeType(cast<PointerType>(Ty)->getElementType());
-    case Type::FunctionTyID:
-       return 0;
-    default:
-        printf("[%s:%d] sizeType FAILED %d INTEGER %d\n", __FUNCTION__, __LINE__, Ty->getTypeID(), Type::IntegerTyID);
-        Ty->dump();
-        llvm_unreachable("Unhandled case in processTypes!");
-    }
-    //HalfTyID,        ///<  1: 16-bit floating point type
-    //FloatTyID,       ///<  2: 32-bit floating point type
-    //DoubleTyID,      ///<  3: 64-bit floating point type
-    //FP128TyID,       ///<  5: 128-bit floating point type (112-bit mantissa)
-    //LabelTyID,       ///<  7: Labels
-    //MetadataTyID,    ///<  8: Metadata
-    //VectorTyID 
-}
-#endif
 bool 
 CastInst::castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
   // Check for type sanity on the arguments
   Type *SrcTy = S->getType();
 
 #if 1
-if ((SrcTy->isIntegerTy() || DstTy->isIntegerTy())// && SrcTy->isIntegerTy() != DstTy->isIntegerTy()
-    //&& sizeType(SrcTy) == sizeType(DstTy)
-) {
+if ((SrcTy->isIntegerTy() || DstTy->isIntegerTy())) {
     //printf("[%s:%d]BITCAST op %d Instruction::BitCast %d srcint %d dstint %d srcsize %d dstsize %d\n", __FUNCTION__, __LINE__, op, Instruction::BitCast, SrcTy->isIntegerTy(), DstTy->isIntegerTy(), (int)sizeType(SrcTy), (int)sizeType(DstTy));
     //SrcTy->dump();
     //DstTy->dump();
