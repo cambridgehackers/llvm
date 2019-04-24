@@ -139,6 +139,7 @@ typedef struct {
     bool        isOutput; // used for verilog interfaces
     bool        isInout; // used for verilog interfaces
     bool        isParameter; // used for verilog interfaces
+    bool        isShared;    // used for __shared (common CSE) support
     bool        isLocalInterface; // interface declaration that is used to connect to local objects (does not appear in module signature)
 } FieldElement;
 
