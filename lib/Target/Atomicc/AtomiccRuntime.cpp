@@ -22,6 +22,8 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
+static llvm::cl::opt<bool>
+    workTrace("worktrace", llvm::cl::Optional, llvm::cl::desc("trace clang method processing"));
 static int trace_malloc;//= 1;
 static int trace_fixup;//= 1;
 int trace_pair;//= 1;
@@ -223,7 +225,10 @@ restart: // restart here after inlining function.... basic block structure might
  */
 void pushWork(ClassMethodTable *table, Function *func, std::string mName)
 {
-    //printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
+    if (workTrace) {
+        printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
+        func->dump();
+    }
     table->method[mName] = func;
     // inline intra-class method call bodies
     processMethodInlining(func, func);
