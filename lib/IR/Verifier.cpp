@@ -2266,10 +2266,18 @@ void Verifier::visitReturnInst(ReturnInst &RI) {
            "return type!",
            &RI, F->getReturnType());
   else
-    Assert(N == 1 && F->getReturnType() == RI.getOperand(0)->getType(),
-           "Function return type does not match operand "
-           "type of return inst!",
-           &RI, F->getReturnType());
+{
+    if(N != 1 || F->getReturnType() != RI.getOperand(0)->getType()) {
+printf("[%s:%d]ZZFunction return type does not match operandtype of return inst\n", __FUNCTION__, __LINE__);
+F->getReturnType()->dump();
+RI.getOperand(0)->getType()->dump();
+F->dump();
+    }
+    //Assert(N == 1 && F->getReturnType() == RI.getOperand(0)->getType(),
+           //"Function return type does not match operand "
+           //"type of return inst!",
+           //&RI, F->getReturnType());
+}
 
   // Check to make sure that the return value has necessary properties for
   // terminators...
