@@ -691,9 +691,9 @@ static void processBlockConditions(const Function *currentFunction)
     if (trace_blockCond && blockCondition.size()) {
         printf("%s: blockconditions: %s\n", __FUNCTION__, currentFunction->getName().str().c_str());
         for (auto item: blockCondition) {
-            printf("     block %s = %p\n", item.first->getName().str().c_str(), item.first);
+            printf("     block %s = %p\n", item.first->getName().str().c_str(), (void *)item.first);
             for (auto info: item.second) {
-                printf("        invert %d cond %s from %p\n", info.invert, info.cond.c_str(), info.from);
+                printf("        invert %d cond %s from %p\n", info.invert, info.cond.c_str(), (void *)info.from);
             }
             printf("        condition: %s\n", getCondStr(item.first, true).c_str());
         }
@@ -865,9 +865,69 @@ std::string printOperand(const Value *Operand)
         }
         case Instruction::PHI: {
             const PHINode *PN = dyn_cast<PHINode>(I);
+            unsigned Eop = PN->getNumIncomingValues();
+            BasicBlock *startBlock = nullptr, *endBlock = nullptr;
+            const Value *topVal = nullptr;
+            bool hasFalse = false, hasTrue = false;
+            for (unsigned opIndex = 0; opIndex < Eop; opIndex++) {
+                BasicBlock *block = PN->getIncomingBlock(opIndex);
+                const Value *operand = PN->getIncomingValue(opIndex);
+                bool isBool = false;
+                if (const ConstantInt *CI = dyn_cast<ConstantInt>(operand))
+                if (CI->getType()->isIntegerTy(1)) {
+                    isBool = true;
+                    if (CI->getZExtValue())
+                        hasTrue = true;
+                    else
+                        hasFalse = true;
+                }
+                topVal = operand;
+                endBlock = block;
+                if (opIndex == Eop - 1)
+                    break;
+                startBlock = block;
+            }
+            if (hasFalse == hasTrue) {
+                printf("[%s:%d] error in PHI false %d true %d\n", __FUNCTION__, __LINE__, hasFalse, hasTrue);
+                PN->getParent()->dump();
+                exit(-1);
+            }
+            std::string val;
+            std::map<const BasicBlock *, int> termBlock;
+            termBlock[PN->getParent()] = 1;
+            /* now go through all blocks from start to last cond expr, building up expression */
+            for (auto RI = Function::iterator(startBlock), RE = Function::iterator(endBlock); RI != RE; RI++) {
+                auto TI = RI->getTerminator();
+                const BranchInst *BI = dyn_cast_or_null<BranchInst>(TI);
+                if (BI && BI->isConditional()) {
+                    std::string bval = parenOperand(BI->getCondition());
+                    const BasicBlock *tblock = BI->getSuccessor(0);
+                    const BasicBlock *fblock = BI->getSuccessor(1);
+                    const BasicBlock *nblock = &*std::next(RI);
+                    bool isLAnd = tblock == nblock;
+                    const BasicBlock *otherBlock = isLAnd ? fblock : tblock;
+                    if (!termBlock[otherBlock]) {
+                        termBlock[otherBlock] = 1;
+                        val += "(";
+                    }
+                    val += bval;
+                    if (termBlock[nblock])
+                        val += ")";
+                    val += (isLAnd ? " && " : " || ");
+                }
+                else {
+                    printf("[%s:%d] block doesnt end in brcond\n", __FUNCTION__, __LINE__);
+                    RI->dump();
+                }
+            }
+            val += parenOperand(topVal);
+            std::string cStr = getCondStr(startBlock, true);
+            vout += val;
+            break;
+// older style.  still needed for switch??
             vout += "__phi(";
             std::string sep;
-            for (unsigned opIndex = 0, Eop = PN->getNumIncomingValues(); opIndex < Eop; opIndex++) {
+            for (unsigned opIndex = 0; opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
                 std::string cStr = getCondStr(inBlock, true);
                 std::string val = parenOperand(PN->getIncomingValue(opIndex));
@@ -1096,7 +1156,7 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         std::string methodName = FI.first;
         const Function *func = FI.second;
         if (!func) {
-            printf("[%s:%d] name %s missing func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), func);
+            printf("[%s:%d] name %s missing func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), (void *)func);
             continue;
         }
         std::string rdyName = getRdyName(methodName);
