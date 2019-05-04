@@ -866,6 +866,7 @@ std::string printOperand(const Value *Operand)
         case Instruction::PHI: {
             const PHINode *PN = dyn_cast<PHINode>(I);
             unsigned Eop = PN->getNumIncomingValues();
+            {
             BasicBlock *startBlock = nullptr, *endBlock = nullptr;
             const Value *topVal = nullptr;
             bool hasFalse = false, hasTrue = false;
@@ -873,25 +874,24 @@ std::string printOperand(const Value *Operand)
                 BasicBlock *block = PN->getIncomingBlock(opIndex);
                 const Value *operand = PN->getIncomingValue(opIndex);
                 bool isBool = false;
-                if (const ConstantInt *CI = dyn_cast<ConstantInt>(operand))
-                if (CI->getType()->isIntegerTy(1)) {
+                topVal = operand;
+                endBlock = block;
+                if (opIndex == Eop - 1)
+                    break;
+                const ConstantInt *CI = dyn_cast<ConstantInt>(operand);
+                if (CI && CI->getType()->isIntegerTy(1)) {
                     isBool = true;
                     if (CI->getZExtValue())
                         hasTrue = true;
                     else
                         hasFalse = true;
                 }
-                topVal = operand;
-                endBlock = block;
-                if (opIndex == Eop - 1)
-                    break;
+                else
+                    goto legacy_phi;
                 startBlock = block;
             }
-            if (hasFalse == hasTrue) {
-                printf("[%s:%d] error in PHI false %d true %d\n", __FUNCTION__, __LINE__, hasFalse, hasTrue);
-                PN->getParent()->dump();
-                exit(-1);
-            }
+            if (hasFalse == hasTrue)
+                goto legacy_phi;
             std::string val;
             std::map<const BasicBlock *, int> termBlock;
             termBlock[PN->getParent()] = 1;
@@ -924,7 +924,8 @@ std::string printOperand(const Value *Operand)
             std::string cStr = getCondStr(startBlock, true);
             vout += val;
             break;
-// older style.  still needed for switch??
+            }
+legacy_phi:
             vout += "__phi(";
             std::string sep;
             for (unsigned opIndex = 0; opIndex < Eop; opIndex++) {
