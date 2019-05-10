@@ -119,6 +119,7 @@ typedef struct {
     ACCExpr                   *guard;
     std::string                name;
     bool                       rule;
+    bool                       action;
     std::list<StoreListElement *> storeList;
     std::list<LetListElement *> letList;
     std::list<CallListElement *> callList;
