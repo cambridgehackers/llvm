@@ -1139,7 +1139,12 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     bool isModule = startswith(table->STy->getName(), "module");
 printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), table->IR->name.c_str());
-    fprintf(OStr, "%sMODULE %s {\n", isModule ? "" : "E", table->IR->name.c_str());
+    char *header = "MODULE";
+    if (isInterface(table->STy))
+        header = "INTERFACE";
+    else if (!isModule)
+        header = "EMODULE";
+    fprintf(OStr, "%s %s {\n", header, table->IR->name.c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
     for (auto item: table->IR->priority)

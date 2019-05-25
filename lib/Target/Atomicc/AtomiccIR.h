@@ -157,5 +157,6 @@ typedef struct ModuleIR {
     std::list<FieldElement>           interfaces;
     std::list<InterfaceConnectType>   interfaceConnect;
     int                               genvarCount;
+    bool                              isInterface;
 } ModuleIR;
 #endif /* __ATOMICIR_H__ */
