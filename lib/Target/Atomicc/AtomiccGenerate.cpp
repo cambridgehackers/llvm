@@ -706,7 +706,7 @@ static std::string typeName(const Type *Ty)
      case Type::VoidTyID:
          return "";
      case Type::IntegerTyID:
-         return "INTEGER_" + utostr(cast<IntegerType>(Ty)->getBitWidth());
+         return "Bit(" + utostr(cast<IntegerType>(Ty)->getBitWidth()) + ")";
      case Type::FloatTyID:
          return "FLOAT";
      case Type::StructTyID:
@@ -1154,7 +1154,7 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
     for (auto item: table->IR->unionList)
         fprintf(OStr, "    UNION %s %s\n", item.type.c_str(), item.name.c_str());
     if (table->IR->unionList.size())
-        fprintf(OStr, "    FIELD INTEGER_%ld DATA\n", (long)sizeType(table->STy));
+        fprintf(OStr, "    FIELD Bit(%ld) DATA\n", (long)sizeType(table->STy));
     else
         processField(table, OStr);
     for (auto FI : table->method) {
