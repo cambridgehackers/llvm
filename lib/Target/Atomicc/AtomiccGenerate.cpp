@@ -1143,10 +1143,10 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
     if (isInterface(table->STy))
         header = "INTERFACE";
     else if (!isModule) {
-        if (table->methods.size())
-            header = "EMODULE";
-        else
+        if (table->STy->getName().substr(0, 6) == "struct")
             header = "STRUCT";
+        else
+            header = "EMODULE";
     }
     fprintf(OStr, "%s %s {\n", header, table->IR->name.c_str());
     for (auto item: table->softwareName)
