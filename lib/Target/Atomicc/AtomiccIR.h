@@ -148,7 +148,7 @@ typedef struct ModuleIR {
     std::string                       name;
     std::list<std::string>            metaList;
     std::list<std::string>            softwareName;
-    std::map<std::string, MethodInfo *> methods;
+    std::list<MethodInfo *> methods;
     std::map<std::string, MethodInfo *> generateBody;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     std::list<FieldElement>           fields;
