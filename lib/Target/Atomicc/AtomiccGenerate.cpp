@@ -299,7 +299,7 @@ static std::string GetValueName(const Value *Operand)
     else if (Name != "this")
         if (auto arg = dyn_cast<Argument>(Operand)) {
             const Function *func = arg->getParent();
-            for (auto item: getClass(findThisArgument(func))->method)
+            for (auto item: getClass(findThisArgument(func))->methods)
                 if (!startswith(item.first, "FOR$"))
                 if (item.second == func) {
                     Name = item.first.substr(0, item.first.length() - 5) + MODULE_SEPARATOR + Name;
@@ -451,7 +451,7 @@ static ClassMethodTable *getFunctionTable(const Function *func)
 std::string getMethodName(const Function *func)
 {
     if (ClassMethodTable *targetTable = getFunctionTable(func))
-        for (auto item: targetTable->method)
+        for (auto item: targetTable->methods)
             if (item.second == func)
                 return item.first;
     std::string fname = func->getName();
@@ -459,7 +459,7 @@ std::string getMethodName(const Function *func)
         return "";
 #if 0
     if (ClassMethodTable *targetTable = getFunctionTable(func))
-        for (auto item: targetTable->method)
+        for (auto item: targetTable->methods)
 printf("[%s:%d] LOOKINGFOR %p itemfirst %s sec %p\n", __FUNCTION__, __LINE__, func, item.first.c_str(), item.second);
 func->dump();
 #endif
@@ -1142,8 +1142,12 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
     char *header = "MODULE";
     if (isInterface(table->STy))
         header = "INTERFACE";
-    else if (!isModule)
-        header = "EMODULE";
+    else if (!isModule) {
+        if (table->methods.size())
+            header = "EMODULE";
+        else
+            header = "STRUCT";
+    }
     fprintf(OStr, "%s %s {\n", header, table->IR->name.c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
@@ -1157,7 +1161,7 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         fprintf(OStr, "    FIELD Bit(%ld) DATA\n", (long)sizeType(table->STy));
     else
         processField(table, OStr);
-    for (auto FI : table->method) {
+    for (auto FI : table->methods) {
         std::list<std::string> mlines, malines;
         std::string methodName = FI.first;
         const Function *func = FI.second;
@@ -1172,7 +1176,7 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         if (trace_function || trace_call)
             printf("PROCESSING %s %s\n", func->getName().str().c_str(), methodName.c_str());
         if (isModule)
-        if (auto rfunc = table->method[rdyName]) {
+        if (auto rfunc = table->methods[rdyName]) {
             std::list<std::string> mrlines;
             rdyGuard = processMethod(rdyName, rfunc, mrlines, mrlines);
             if (rdyGuard == "1")

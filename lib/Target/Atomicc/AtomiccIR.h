@@ -158,5 +158,7 @@ typedef struct ModuleIR {
     std::list<InterfaceConnectType>   interfaceConnect;
     int                               genvarCount;
     bool                              isInterface;
+    bool                              isStruct;
+    bool                              isSerialize;
 } ModuleIR;
 #endif /* __ATOMICIR_H__ */
