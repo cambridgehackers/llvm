@@ -1139,7 +1139,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     bool isModule = startswith(table->STy->getName(), "module");
 printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), table->IR->name.c_str());
-    char *header = "MODULE";
+    const char *header = "MODULE";
     if (isInterface(table->STy))
         header = "INTERFACE";
     else if (!isModule) {
