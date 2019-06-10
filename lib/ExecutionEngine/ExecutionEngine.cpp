@@ -1196,7 +1196,11 @@ void ExecutionEngine::InitializeMemory(const Constant *Init, void *Addr) {
   }
 
   if (isa<ConstantAggregateZero>(Init)) {
-    memset(Addr, 0, (size_t)getDataLayout().getTypeAllocSize(Init->getType()));
+    size_t thisSize = getDataLayout().getTypeAllocSize(Init->getType());
+printf("[%s:%d] constaggzero addr %p size %ld\n", __FUNCTION__, __LINE__, Addr, (long)thisSize);
+    if (thisSize > 1000000)
+        return;
+    memset(Addr, 0, thisSize);
     return;
   }
 
