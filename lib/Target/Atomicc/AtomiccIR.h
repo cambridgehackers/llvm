@@ -94,6 +94,7 @@ typedef struct {
 typedef struct {
     std::string name;
     std::string type;
+    std::string init;
 } ParamElement;
 
 typedef struct {
@@ -133,13 +134,13 @@ typedef struct {
 
 typedef struct {
     std::string fldName;
-    int64_t     vecCount;
+    std::string vecCount;
     std::string type;
     bool        isPtr;
     bool        isInput; // used for verilog interfaces
     bool        isOutput; // used for verilog interfaces
     bool        isInout; // used for verilog interfaces
-    bool        isParameter; // used for verilog interfaces
+    std::string isParameter; // used for verilog interfaces (initial value)
     bool        isShared;    // used for __shared (common CSE) support
     bool        isLocalInterface; // interface declaration that is used to connect to local objects (does not appear in module signature)
 } FieldElement;
@@ -160,5 +161,6 @@ typedef struct ModuleIR {
     bool                              isInterface;
     bool                              isStruct;
     bool                              isSerialize;
+    bool                              transformGeneric;
 } ModuleIR;
 #endif /* __ATOMICIR_H__ */
