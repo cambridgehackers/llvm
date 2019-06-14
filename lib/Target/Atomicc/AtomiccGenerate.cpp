@@ -96,7 +96,8 @@ static bool isAlloca(const Value *arg)
 
 bool isInterface(const StructType *STy)
 {
-    return STy && startswith(getClass(STy)->IR->name, "l_ainterface");
+    return STy && !STy->isLiteral() && !STy->getName().empty()
+       && startswith(STy->getName(), "ainterface.");
 }
 
 bool isActionMethod(const Function *func)
@@ -127,9 +128,17 @@ static std::string legacygetStructName(const StructType *STy)
     getClass(STy);
     if (!STy->isLiteral() && !STy->getName().empty()) {
         std::string temp = STy->getName().str();
-        if (startswith(temp, "emodule"))
-            temp = temp.substr(1);
-        return CBEMangle("l_" + temp);
+        static const char *prefix[] = {"emodule.", "module.",
+            "struct.(anonymous struct)::", "struct.",
+            "ainterface.", "serialize.", "class.", nullptr};
+        const char **p = prefix;
+        while (*p) {
+            if (startswith(temp, *p))
+                return temp.substr(strlen(*p));
+            p++;
+        }
+printf("[%s:%d] NAME '%s'\n", __FUNCTION__, __LINE__, temp.c_str());
+        exit(-1);
     }
     if (!UnnamedStructIDs[STy])
         UnnamedStructIDs[STy] = NextTypeID++;
@@ -146,10 +155,6 @@ ClassMethodTable *getClass(const StructType *STy)
         ModuleIR *IR = new ModuleIR;
         table->IR = IR;
         IR->name = legacygetStructName(STy);
-        if (startswith(IR->name, "l_module_OC_")) {
-            IR->name = IR->name.substr(12);
-            //printf("[%s:%d]CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC %s\n", __FUNCTION__, __LINE__, IR->name.c_str());
-        }
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
         int processSequence = 0; // fields
@@ -167,8 +172,6 @@ ClassMethodTable *getClass(const StructType *STy)
                     ret = ret.substr(0,idx);
                 idx = ret.find(':');
                 std::string typName = ret.substr(idx+1);
-                if (startswith(typName, "l_"))
-                    typName = CBEMangle(typName);
                 IR->unionList.push_back(UnionItem{ret.substr(0, idx), typName});
                 last_subs = subs;
             }
@@ -1143,10 +1146,12 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
     if (isInterface(table->STy))
         header = "INTERFACE";
     else if (!isModule) {
-        if (table->STy->getName().substr(0, 6) == "struct")
-            header = "STRUCT";
-        else
+        if (table->STy->getName().substr(0, 7) == "emodule")
             header = "EMODULE";
+        else if (table->STy->getName().substr(0, 9) == "serialize")
+            header = "SERIALIZE";
+        else
+            header = "STRUCT";
     }
     fprintf(OStr, "%s %s {\n", header, table->IR->name.c_str());
     for (auto item: table->softwareName)
