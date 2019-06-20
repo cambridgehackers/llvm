@@ -129,12 +129,16 @@ static std::string legacygetStructName(const StructType *STy)
     if (!STy->isLiteral() && !STy->getName().empty()) {
         std::string temp = STy->getName().str();
         static const char *prefix[] = {"emodule.", "module.",
-            "struct.(anonymous struct)::", "struct.",
-            "ainterface.", "serialize.", "class.", nullptr};
+            "struct.",
+            "ainterface.", "serialize.", "class.", "union.", nullptr};
         const char **p = prefix;
         while (*p) {
-            if (startswith(temp, *p))
-                return temp.substr(strlen(*p));
+            if (startswith(temp, *p)) {
+                temp = temp.substr(strlen(*p));
+                if (temp.find(" ") != std::string::npos)
+                    return CBEMangle(temp);
+                return temp;
+            }
             p++;
         }
 printf("[%s:%d] NAME '%s'\n", __FUNCTION__, __LINE__, temp.c_str());
