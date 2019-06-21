@@ -829,32 +829,27 @@ std::string printOperand(const Value *Operand)
             vout += printOperand(I->getOperand(0));
             break;
         case Instruction::BitCast: {
-            StructType *inType = nullptr, *outType = nullptr;
+            Type *outType = I->getType();
             bool derived = checkDerived(I->getOperand(0)->getType(), I->getType());
             //printf("printOperand: BITCAASSSSS opcode %d.=%s derived %d\n", opcode, I->getOpcodeName(), derived);
             std::string operand = printOperand(I->getOperand(0));
-            std::string replace, ctype;
-            if (auto PTy = dyn_cast<PointerType>(I->getType()))
-            if (auto STy = dyn_cast<StructType>(PTy->getElementType())) {
-                outType = STy;
-                ctype = typeName(outType);
-                if (auto PTy = dyn_cast<PointerType>(I->getOperand(0)->getType()))
-                if (auto STy = dyn_cast<StructType>(PTy->getElementType())) {
-                    inType = STy;
-                    ClassMethodTable *table = getClass(inType);
-                    for (auto item: table->IR->unionList) {
-                        printf("BBBBBBBB %s    UNION %s %s\n", ctype.c_str(), item.type.c_str(), item.name.c_str());
-                        if (item.type == ctype) {
-                            replace = MODULE_SEPARATOR + item.name;
-                            break;
-                        }
+            std::string replace, ctype = typeName(outType);
+            StructType *oSTy = nullptr;
+            if (auto oPTy = dyn_cast<PointerType>(I->getOperand(0)->getType()))
+                oSTy = dyn_cast<StructType>(oPTy->getElementType()); 
+            if (!derived && oSTy) {
+                ClassMethodTable *table = getClass(oSTy);
+                for (auto item: table->IR->unionList) {
+                    printf("BBBBBBBB %s    UNION %s %s\n", ctype.c_str(), item.type.c_str(), item.name.c_str());
+                    if (item.type == ctype) {
+                        vout += operand + MODULE_SEPARATOR + item.name;
+                        goto finish;
                     }
                 }
             }
-            if (derived || replace != "" || !inType || !outType)
-                vout += operand + replace;
-            else
-                vout += "BITCAST_" + typeName(outType) + "(" + operand + ")";
+            //vout += "BITCAST_" + typeName(outType) + "(" + operand + ")";
+            vout += operand;
+finish:;
             break;
             }
 
