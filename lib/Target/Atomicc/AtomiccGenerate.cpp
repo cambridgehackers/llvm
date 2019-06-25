@@ -713,7 +713,7 @@ static std::string typeName(const Type *Ty)
      case Type::VoidTyID:
          return "";
      case Type::IntegerTyID:
-         return "Bit(" + utostr(cast<IntegerType>(Ty)->getBitWidth()) + ")";
+         return "Bit(" + cast<IntegerType>(Ty)->getBitWidthString() + ")";
      case Type::FloatTyID:
          return "FLOAT";
      case Type::StructTyID:

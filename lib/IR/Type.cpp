@@ -18,6 +18,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -254,12 +255,39 @@ if(NumBits < MIN_INT_BITS) printf("[%s:%d] %s = %d\n", __FUNCTION__, __LINE__, "
     break;
   }
   
+    for (auto item: integerTypeMap) {
+        if (item.second.bitWidth == NumBits)
+            return item.second.type;
+    }
   IntegerType *&Entry = C.pImpl->IntegerTypes[NumBits];
 
   if (!Entry)
     Entry = new (C.pImpl->TypeAllocator) IntegerType(C, NumBits);
   
   return Entry;
+}
+
+unsigned IntegerType::integerMapIndex = HAS_STRING_SIZE;
+std::map<unsigned, IntegerType::IntegerExtraInfo> IntegerType::integerTypeMap;
+IntegerType *IntegerType::get(LLVMContext &C, unsigned NumBits, std::string NumBitsString) {
+printf("[%s:%d] setstring %d -> %s\n", __FUNCTION__, __LINE__, NumBits, NumBitsString.c_str());
+    for (auto item: integerTypeMap) {
+printf("[%s:%d] search '%s' next '%s' index %x\n", __FUNCTION__, __LINE__, NumBitsString.c_str(), item.second.bitWidthString.c_str(), item.first);
+        if (item.second.bitWidthString == NumBitsString)
+            return item.second.type;
+    }
+    integerMapIndex++;
+    integerTypeMap[integerMapIndex].type = get(C, integerMapIndex);
+    integerTypeMap[integerMapIndex].bitWidth = NumBits;
+    integerTypeMap[integerMapIndex].bitWidthString = NumBitsString;
+printf("[%s:%d] new '%s' num %x index %x\n", __FUNCTION__, __LINE__, NumBitsString.c_str(), NumBits, integerMapIndex);
+    return integerTypeMap[integerMapIndex].type;
+}
+std::string IntegerType::getBitWidthString() const {
+     unsigned width = getSubclassData();
+     if (width & HAS_STRING_SIZE)
+         return integerTypeMap[width].bitWidthString;
+     return utostr(width);
 }
 
 bool IntegerType::isPowerOf2ByteWidth() const {

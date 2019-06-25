@@ -26,6 +26,7 @@
 #include "llvm/Support/Compiler.h"
 #include <cassert>
 #include <cstdint>
+#include <map>
 
 namespace llvm {
 
@@ -42,13 +43,22 @@ class IntegerType : public Type {
 
 protected:
   explicit IntegerType(LLVMContext &C, unsigned NumBits) : Type(C, IntegerTyID){
-    setSubclassData(NumBits);
+    setSubclassData(NumBits); // atomiccWidth
   }
+  typedef struct {
+    unsigned bitWidth;
+    std::string bitWidthString;
+    IntegerType *type;
+  } IntegerExtraInfo;
+  static unsigned integerMapIndex;
+  static std::map<unsigned, IntegerExtraInfo> integerTypeMap;
+  static std::map<unsigned, IntegerType *> normalizeMap;
 
 public:
   /// This enum is just used to hold constants we need for IntegerType.
   enum {
     MIN_INT_BITS = 1,        ///< Minimum number of bits that can be specified
+    HAS_STRING_SIZE = (1<<23),
     MAX_INT_BITS = (1<<24)-1 ///< Maximum number of bits that can be specified
       ///< Note that bit width is stored in the Type classes SubclassData field
       ///< which has 24 bits. This yields a maximum bit width of 16,777,215
@@ -61,9 +71,16 @@ public:
   /// one instance with a given NumBits value is ever created.
   /// @brief Get or create an IntegerType instance.
   static IntegerType *get(LLVMContext &C, unsigned NumBits);
+  static IntegerType *get(LLVMContext &C, unsigned NumBits, std::string NumBitsString);
 
   /// @brief Get the number of bits in this IntegerType
-  unsigned getBitWidth() const { return getSubclassData(); }
+  unsigned getBitWidth() const {
+     unsigned width = getSubclassData();
+     if (width & HAS_STRING_SIZE)
+         return integerTypeMap[width].bitWidth;
+     return width;
+  }
+  std::string getBitWidthString() const;
 
   /// Return a bitmask with ones set for all of the bits that can be set by an
   /// unsigned version of this type. This is 0xFF for i8, 0xFFFF for i16, etc.
