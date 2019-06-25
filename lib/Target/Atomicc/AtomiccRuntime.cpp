@@ -127,6 +127,7 @@ nitem->dump();
                 }
             case Instruction::Add:
                 // these come from the loop expansion
+#if 0 // need to preserve component values so that generic processing is correct
                 if (auto lhs = dyn_cast<ConstantInt>(II->getOperand(0)))
                 if (auto rhs = dyn_cast<ConstantInt>(II->getOperand(1))) {
                     auto newItem = ConstantInt::get(II->getType(), lhs->getZExtValue() + rhs->getZExtValue());
@@ -134,6 +135,7 @@ nitem->dump();
                     recursiveDelete(II);
                     goto restart;
                 }
+#endif
                 break;
             };
             IIb = PI;

@@ -888,6 +888,7 @@ private:
 public:
   Value *CreateAdd(Value *LHS, Value *RHS, const Twine &Name = "",
                    bool HasNUW = false, bool HasNSW = false) {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateAdd(LC, RC, HasNUW, HasNSW), Name);
@@ -910,6 +911,7 @@ public:
   }
   Value *CreateSub(Value *LHS, Value *RHS, const Twine &Name = "",
                    bool HasNUW = false, bool HasNSW = false) {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateSub(LC, RC, HasNUW, HasNSW), Name);
@@ -932,6 +934,7 @@ public:
   }
   Value *CreateMul(Value *LHS, Value *RHS, const Twine &Name = "",
                    bool HasNUW = false, bool HasNSW = false) {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateMul(LC, RC, HasNUW, HasNSW), Name);
@@ -954,6 +957,7 @@ public:
   }
   Value *CreateUDiv(Value *LHS, Value *RHS, const Twine &Name = "",
                     bool isExact = false) {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateUDiv(LC, RC, isExact), Name);
@@ -966,6 +970,7 @@ public:
   }
   Value *CreateSDiv(Value *LHS, Value *RHS, const Twine &Name = "",
                     bool isExact = false) {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateSDiv(LC, RC, isExact), Name);
@@ -985,12 +990,14 @@ public:
                                       FPMathTag, FMF), Name);
   }
   Value *CreateURem(Value *LHS, Value *RHS, const Twine &Name = "") {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateURem(LC, RC), Name);
     return Insert(BinaryOperator::CreateURem(LHS, RHS), Name);
   }
   Value *CreateSRem(Value *LHS, Value *RHS, const Twine &Name = "") {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateSRem(LC, RC), Name);
@@ -1007,6 +1014,7 @@ public:
 
   Value *CreateShl(Value *LHS, Value *RHS, const Twine &Name = "",
                    bool HasNUW = false, bool HasNSW = false) {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateShl(LC, RC, HasNUW, HasNSW), Name);
@@ -1026,6 +1034,7 @@ public:
 
   Value *CreateLShr(Value *LHS, Value *RHS, const Twine &Name = "",
                     bool isExact = false) {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateLShr(LC, RC, isExact), Name);
@@ -1044,6 +1053,7 @@ public:
 
   Value *CreateAShr(Value *LHS, Value *RHS, const Twine &Name = "",
                     bool isExact = false) {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateAShr(LC, RC, isExact), Name);
@@ -1061,6 +1071,7 @@ public:
   }
 
   Value *CreateAnd(Value *LHS, Value *RHS, const Twine &Name = "") {
+if (0)
     if (Constant *RC = dyn_cast<Constant>(RHS)) {
       if (isa<ConstantInt>(RC) && cast<ConstantInt>(RC)->isMinusOne())
         return LHS;  // LHS & -1 -> LHS
@@ -1077,6 +1088,7 @@ public:
   }
 
   Value *CreateOr(Value *LHS, Value *RHS, const Twine &Name = "") {
+if (0)
     if (Constant *RC = dyn_cast<Constant>(RHS)) {
       if (RC->isNullValue())
         return LHS;  // LHS | 0 -> LHS
@@ -1093,6 +1105,7 @@ public:
   }
 
   Value *CreateXor(Value *LHS, Value *RHS, const Twine &Name = "") {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateXor(LC, RC), Name);
@@ -1108,6 +1121,7 @@ public:
   Value *CreateBinOp(Instruction::BinaryOps Opc,
                      Value *LHS, Value *RHS, const Twine &Name = "",
                      MDNode *FPMathTag = nullptr) {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateBinOp(Opc, LC, RC), Name);
@@ -1119,6 +1133,7 @@ public:
 
   Value *CreateNeg(Value *V, const Twine &Name = "",
                    bool HasNUW = false, bool HasNSW = false) {
+if (0)
     if (Constant *VC = dyn_cast<Constant>(V))
       return Insert(Folder.CreateNeg(VC, HasNUW, HasNSW), Name);
     BinaryOperator *BO = Insert(BinaryOperator::CreateNeg(V), Name);
@@ -1140,6 +1155,7 @@ public:
                                       FPMathTag, FMF), Name);
   }
   Value *CreateNot(Value *V, const Twine &Name = "") {
+if (0)
     if (Constant *VC = dyn_cast<Constant>(V))
       return Insert(Folder.CreateNot(VC), Name);
     return Insert(BinaryOperator::CreateNot(V), Name);
@@ -1633,6 +1649,7 @@ public:
 
   Value *CreateICmp(CmpInst::Predicate P, Value *LHS, Value *RHS,
                     const Twine &Name = "") {
+if (0)
     if (Constant *LC = dyn_cast<Constant>(LHS))
       if (Constant *RC = dyn_cast<Constant>(RHS))
         return Insert(Folder.CreateICmp(P, LC, RC), Name);

@@ -499,7 +499,9 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         std::string val = printOperand(*AI);
         return val.substr(1, val.length() - 2);
     }
-    if (calledName == "__bitconcat" || calledName == "__bitsubstr" || calledName == "__bitsubstrl") {
+    if (calledName == "__bitsubstrl")
+        calledName = "__bitsubstr";
+    if (calledName == "__bitconcat" || calledName == "__bitsubstr") {
         std::string val;
         for (; AI != AE; ++AI) {
             val += sep + printOperand(*AI);
@@ -1114,8 +1116,10 @@ static std::string processMethod(std::string methodName, const Function *func,
             case Instruction::Call: { // can have value
                 const Function *fcall = getCallee(II);
                 std::string calledName = fcall->getName();
+                if (calledName == "__bitsubstrl")
+                    calledName = "__bitsubstr";
                 if (calledName == "__ValidReadyRuntime"
-                 || calledName == "__bitconcat" || calledName == "__bitsubstr" || calledName == "__bitsubstrl")
+                 || calledName == "__bitconcat" || calledName == "__bitsubstr")
                     break;                    // value picked up in expression
                 if (calledName == "__generateFor") {
                     mlines.push_back("GENERATE " + tempCond + ":" + printCall(II, true));

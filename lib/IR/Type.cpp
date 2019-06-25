@@ -270,9 +270,7 @@ if(NumBits < MIN_INT_BITS) printf("[%s:%d] %s = %d\n", __FUNCTION__, __LINE__, "
 unsigned IntegerType::integerMapIndex = HAS_STRING_SIZE;
 std::map<unsigned, IntegerType::IntegerExtraInfo> IntegerType::integerTypeMap;
 IntegerType *IntegerType::get(LLVMContext &C, unsigned NumBits, std::string NumBitsString) {
-printf("[%s:%d] setstring %d -> %s\n", __FUNCTION__, __LINE__, NumBits, NumBitsString.c_str());
     for (auto item: integerTypeMap) {
-printf("[%s:%d] search '%s' next '%s' index %x\n", __FUNCTION__, __LINE__, NumBitsString.c_str(), item.second.bitWidthString.c_str(), item.first);
         if (item.second.bitWidthString == NumBitsString)
             return item.second.type;
     }
@@ -280,7 +278,6 @@ printf("[%s:%d] search '%s' next '%s' index %x\n", __FUNCTION__, __LINE__, NumBi
     integerTypeMap[integerMapIndex].type = get(C, integerMapIndex);
     integerTypeMap[integerMapIndex].bitWidth = NumBits;
     integerTypeMap[integerMapIndex].bitWidthString = NumBitsString;
-printf("[%s:%d] new '%s' num %x index %x\n", __FUNCTION__, __LINE__, NumBitsString.c_str(), NumBits, integerMapIndex);
     return integerTypeMap[integerMapIndex].type;
 }
 std::string IntegerType::getBitWidthString() const {
