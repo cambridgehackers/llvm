@@ -19,6 +19,7 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
+static std::map<const Function *, bool> actionFunction;
 static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
@@ -102,7 +103,7 @@ bool isInterface(const StructType *STy)
 
 bool isActionMethod(const Function *func)
 {
-    return (func->getReturnType() == Type::getVoidTy(func->getContext()));
+    return (func->getReturnType() == Type::getVoidTy(func->getContext()) || actionFunction[func]);
 }
 
 static void checkClass(const StructType *STy, const StructType *ActSTy)
@@ -270,8 +271,16 @@ ClassMethodTable *getClass(const StructType *STy)
         nextInterface:;
             }
             else if (idx >= 0) {
-                if (Function *func = functionMap[ret.substr(0, idx)])
-                    pushWork(table, func, ret.substr(idx+1));
+                std::string fname = ret.substr(0, idx);
+                std::string mName = ret.substr(idx+1);
+                int action = mName.find(":action");
+                if (action > 0)
+                    mName = mName.substr(0, action);
+                if (Function *func = functionMap[fname]) {
+                    pushWork(table, func, mName);
+                    if (action > 0)
+                        actionFunction[func] = true;
+                }
                 }
             last_subs = subs;
         }
@@ -1202,7 +1211,7 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         }
         if (sep != " ( ")
             headerLine += " )";
-        if (!isActionMethod(func))
+        if (func->getReturnType() != Type::getVoidTy(func->getContext()))
             headerLine += " " + typeName(func->getReturnType());
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";
