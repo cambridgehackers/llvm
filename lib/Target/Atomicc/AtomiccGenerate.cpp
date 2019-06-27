@@ -1074,6 +1074,8 @@ static std::string processMethod(std::string methodName, const Function *func,
            std::list<std::string> &mlines, std::list<std::string> &malines)
 {
     std::map<std::string, const Type *> allocaList;
+    std::string savedGlobalMethodName = globalMethodName;
+    globalMethodName = methodName;
     std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
         if (II) {
         if (II->getOpcode() == Instruction::Alloca)
@@ -1082,9 +1084,10 @@ static std::string processMethod(std::string methodName, const Function *func,
             findAlloca(dyn_cast<Instruction>(II->getOperand(i)));
         }
     };
-    globalMethodName = methodName;
     // Set up condition expressions for all BasicBlocks 
-    processBlockConditions(func);
+    if (methodName != "") // don't need to clear/setup for __generateFor subcalls
+                          // (destroys block condition setup for calling function)
+        processBlockConditions(func);
     NextAnonValueNumber = 0;
     /* Gather data for top level instructions in each basic block. */
     std::string retGuard, valsep;
@@ -1147,6 +1150,7 @@ static std::string processMethod(std::string methodName, const Function *func,
     }
     for (auto item: allocaList)
         malines.push_back("ALLOCA " + typeName(item.second) + " " + item.first);
+    globalMethodName = savedGlobalMethodName; // make sure this is not destroyed by recursive calls (from __generateFor)
     return retGuard;
 }
 

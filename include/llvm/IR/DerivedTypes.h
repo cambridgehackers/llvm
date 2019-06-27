@@ -52,7 +52,6 @@ protected:
   } IntegerExtraInfo;
   static unsigned integerMapIndex;
   static std::map<unsigned, IntegerExtraInfo> integerTypeMap;
-  static std::map<unsigned, IntegerType *> normalizeMap;
 
 public:
   /// This enum is just used to hold constants we need for IntegerType.
