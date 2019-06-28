@@ -83,6 +83,19 @@ const char *intmapLookup(INTMAP_TYPE *map, int value)
 
 static bool isAlloca(const Value *arg)
 {
+    if (auto Icast = dyn_cast_or_null<Instruction>(arg)) {
+        switch (Icast->getOpcode()) {
+        case Instruction::SExt:
+        case Instruction::FPTrunc: case Instruction::FPExt:
+        case Instruction::FPToUI: case Instruction::FPToSI:
+        case Instruction::UIToFP: case Instruction::SIToFP:
+        case Instruction::IntToPtr: case Instruction::PtrToInt:
+        case Instruction::AddrSpaceCast:
+        case Instruction::Trunc: case Instruction::ZExt:
+        case Instruction::Load:
+            return isAlloca(Icast->getOperand(0));
+        }
+    }
     if (const GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
         arg = dyn_cast<Instruction>(IG->getPointerOperand());
     if (const CastInst *IG = dyn_cast_or_null<CastInst>(arg))
@@ -91,7 +104,18 @@ static bool isAlloca(const Value *arg)
         arg = dyn_cast<Instruction>(IG->getPointerOperand());
     if (const Instruction *source = dyn_cast_or_null<Instruction>(arg))
     if (source->getOpcode() == Instruction::Alloca)
-            return true;
+        return true;
+    if (auto AR = dyn_cast_or_null<Argument>(arg))
+        return true;
+    if (auto ICL = dyn_cast_or_null<CallInst>(arg)) {
+        const Function *func = ICL->getCalledFunction();
+        std::string calledName = func->getName();
+        const Instruction *II = dyn_cast<Instruction>(arg);
+        CallSite CS(const_cast<Instruction *>(II));
+        CallSite::arg_iterator AI = CS.arg_begin();
+        if (calledName == "__bitsubstrl" || calledName == "__bitsubstr" && AI != CS.arg_end())
+            return isAlloca(*AI);
+    }
     return false;
 }
 
