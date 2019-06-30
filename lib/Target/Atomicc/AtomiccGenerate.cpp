@@ -94,28 +94,27 @@ static bool isAlloca(const Value *arg)
         case Instruction::Trunc: case Instruction::ZExt:
         case Instruction::Load:
             return isAlloca(Icast->getOperand(0));
+        case Instruction::GetElementPtr:
+            return isAlloca(cast<GetElementPtrInst>(arg)->getPointerOperand());
+        case Instruction::Alloca:
+            return true;
+        case Instruction::Call: {
+            const Function *func = cast<CallInst>(arg)->getCalledFunction();
+            std::string calledName = func->getName();
+            const Instruction *II = dyn_cast<Instruction>(arg);
+            CallSite CS(const_cast<Instruction *>(II));
+            CallSite::arg_iterator AI = CS.arg_begin();
+            if ((calledName == "__bitsubstrl" || calledName == "__bitsubstr") && AI != CS.arg_end())
+                return isAlloca(*AI);
+            break;
+            }
         }
     }
-    if (const GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
-        arg = dyn_cast<Instruction>(IG->getPointerOperand());
     if (const CastInst *IG = dyn_cast_or_null<CastInst>(arg))
-        arg = dyn_cast<Instruction>(IG->getOperand(0));
-    if (const GetElementPtrInst *IG = dyn_cast_or_null<GetElementPtrInst>(arg))
-        arg = dyn_cast<Instruction>(IG->getPointerOperand());
-    if (const Instruction *source = dyn_cast_or_null<Instruction>(arg))
-    if (source->getOpcode() == Instruction::Alloca)
-        return true;
+        return isAlloca(IG->getOperand(0));
     if (auto AR = dyn_cast_or_null<Argument>(arg))
+    if (AR->getName() != "this")
         return true;
-    if (auto ICL = dyn_cast_or_null<CallInst>(arg)) {
-        const Function *func = ICL->getCalledFunction();
-        std::string calledName = func->getName();
-        const Instruction *II = dyn_cast<Instruction>(arg);
-        CallSite CS(const_cast<Instruction *>(II));
-        CallSite::arg_iterator AI = CS.arg_begin();
-        if (calledName == "__bitsubstrl" || calledName == "__bitsubstr" && AI != CS.arg_end())
-            return isAlloca(*AI);
-    }
     return false;
 }
 
