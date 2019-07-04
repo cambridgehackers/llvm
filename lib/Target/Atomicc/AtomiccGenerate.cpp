@@ -533,7 +533,7 @@ static std::string printCall(const Instruction *I, bool useParams = false)
     }
     if (calledName == "__bitsubstrl")
         calledName = "__bitsubstr";
-    if (calledName == "__bitconcat" || calledName == "__bitsubstr") {
+    if (calledName == "__bitconcat" || calledName == "__bitsubstr" || calledName == "__reduce") {
         std::string val;
         for (; AI != AE; ++AI) {
             val += sep + printOperand(*AI);
@@ -1101,8 +1101,11 @@ static std::string processMethod(std::string methodName, const Function *func,
     globalMethodName = methodName;
     std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
         if (II) {
-        if (II->getOpcode() == Instruction::Alloca)
-            allocaList[GetValueName(II)] = II->getType();
+        if (II->getOpcode() == Instruction::Alloca) {
+            std::string name = GetValueName(II);
+            if (!endswith(name, "$this") && name.find("$__inst$Genvar") == std::string::npos)
+                allocaList[name] = II->getType();
+        }
         else for (unsigned i = 0; i < II->getNumOperands(); i++)
             findAlloca(dyn_cast<Instruction>(II->getOperand(i)));
         }
@@ -1127,6 +1130,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 std::string localCond = thisPHI ? "" : tempCond;
                 const StoreInst *SI = cast<StoreInst>(II);
                 std::string value = printOperand(SI->getOperand(0));
+                findAlloca(dyn_cast<Instruction>(SI->getOperand(0)));
                 findAlloca(dyn_cast<Instruction>(SI->getPointerOperand()));
                 std::string dest = printOperand(SI->getPointerOperand());
                 std::string alloc = "STORE ";
@@ -1146,6 +1150,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 if (tempCond != "")
                     retGuard += tempCond + " ? ";
                 valsep = " : ";
+                findAlloca(dyn_cast<Instruction>(II->getOperand(0)));
                 retGuard += parenOperand(II->getOperand(0));
                 break;
             case Instruction::Call: { // can have value
@@ -1154,7 +1159,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 if (calledName == "__bitsubstrl")
                     calledName = "__bitsubstr";
                 if (calledName == "__ValidReadyRuntime"
-                 || calledName == "__bitconcat" || calledName == "__bitsubstr")
+                 || calledName == "__bitconcat" || calledName == "__bitsubstr" || calledName == "__reduce")
                     break;                    // value picked up in expression
                 if (calledName == "__generateFor") {
                     mlines.push_back("GENERATE " + tempCond + ":" + printCall(II, true));
