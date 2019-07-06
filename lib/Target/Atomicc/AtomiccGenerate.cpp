@@ -1098,12 +1098,21 @@ static std::string processMethod(std::string methodName, const Function *func,
 {
     std::map<std::string, const Type *> allocaList;
     std::string savedGlobalMethodName = globalMethodName;
+    if (endswith(methodName, "__ENA"))
+        methodName = methodName.substr(0, methodName.length() - 5);
     globalMethodName = methodName;
+    std::map<std::string, int> argumentName;
+    for (auto item = func->arg_begin(), eitem = func->arg_end(); item != eitem; item++) {
+        std::string name = item->getName();
+        if (name != "")
+            argumentName[methodName + "$" + name] = 1;
+    }
     std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
         if (II) {
         if (II->getOpcode() == Instruction::Alloca) {
             std::string name = GetValueName(II);
-            if (!endswith(name, "$this") && name.find("$__inst$Genvar") == std::string::npos)
+            if (!endswith(name, "$this") && name.find("$__inst$Genvar") == std::string::npos
+             && !argumentName[name])
                 allocaList[name] = II->getType();
         }
         else for (unsigned i = 0; i < II->getNumOperands(); i++)
@@ -1137,9 +1146,12 @@ static std::string processMethod(std::string methodName, const Function *func,
                 bool isInter = false;
                 if (auto IG = dyn_cast<GetElementPtrInst>(SI->getPointerOperand()))
                     isInter = isInterface(dyn_cast<StructType>(IG->getSourceElementType()));
-                if (isInter || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand()))
+                if (isInter || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand())) {
                     alloc = "LET " + typeName(cast<PointerType>(
                       SI->getPointerOperand()->getType())->getElementType()) + " ";
+                    if (dest == value)  // when 'alloca' item matches parameter name
+                        break;
+                }
                 mlines.push_back(alloc + localCond + ":" + dest + " = " + value);
                 break;
                 }
