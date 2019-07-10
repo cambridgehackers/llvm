@@ -533,7 +533,7 @@ static std::string printCall(const Instruction *I, bool useParams = false)
     }
     if (calledName == "__bitsubstrl")
         calledName = "__bitsubstr";
-    if (calledName == "__bitconcat" || calledName == "__bitsubstr" || calledName == "__reduce") {
+    if (calledName == "__bitconcat" || calledName == "__bitsubstr" || calledName == "__reduce" || calledName == "__finish") {
         std::string val;
         for (; AI != AE; ++AI) {
             val += sep + printOperand(*AI);

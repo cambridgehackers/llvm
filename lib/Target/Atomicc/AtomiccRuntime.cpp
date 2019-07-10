@@ -100,6 +100,7 @@ II->dump();
                     }
                     }
                 }
+                if (II->getNumOperands() >= 2)
                 for (unsigned int i = 0; i < II->getNumOperands() - 2; i++) {
                     if (Instruction *val = remapValue[II->getOperand(i)]) {
 if (trace) {
