@@ -52,11 +52,16 @@ typedef struct {
     std::string params;
 } FieldNameInfo;
 
+typedef struct {
+    std::string name;
+    const Function *func;
+} ClassMethodInfo;
+
 class ClassMethodTable {
 public:
     const StructType                  *STy;
     std::map<int, FieldNameInfo>      fieldName;
-    std::map<std::string, const Function *> methods;
+    std::list<ClassMethodInfo>        methods;
     std::map<int, const Type *>       replaceType;
     std::map<int, uint64_t>           replaceCount;
     std::list<std::string>            softwareName;

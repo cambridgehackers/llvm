@@ -339,9 +339,9 @@ static std::string GetValueName(const Value *Operand)
         if (auto arg = dyn_cast<Argument>(Operand)) {
             const Function *func = arg->getParent();
             for (auto item: getClass(findThisArgument(func))->methods)
-                if (!startswith(item.first, "FOR$"))
-                if (item.second == func) {
-                    Name = item.first.substr(0, item.first.length() - 5) + MODULE_SEPARATOR + Name;
+                if (!startswith(item.name, "FOR$"))
+                if (item.func == func) {
+                    Name = item.name.substr(0, item.name.length() - 5) + MODULE_SEPARATOR + Name;
                     break;
                 }
         }
@@ -491,15 +491,15 @@ std::string getMethodName(const Function *func)
 {
     if (ClassMethodTable *targetTable = getFunctionTable(func))
         for (auto item: targetTable->methods)
-            if (item.second == func)
-                return item.first;
+            if (item.func == func)
+                return item.name;
     std::string fname = func->getName();
     if (fname == "printf")
         return "";
 #if 0
     if (ClassMethodTable *targetTable = getFunctionTable(func))
         for (auto item: targetTable->methods)
-printf("[%s:%d] LOOKINGFOR %p itemfirst %s sec %p\n", __FUNCTION__, __LINE__, func, item.first.c_str(), item.second);
+printf("[%s:%d] LOOKINGFOR %p itemfirst %s sec %p\n", __FUNCTION__, __LINE__, func, item.name.c_str(), item.func);
 func->dump();
 #endif
     return "";
@@ -1224,8 +1224,8 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         processField(table, OStr);
     for (auto FI : table->methods) {
         std::list<std::string> mlines, malines;
-        std::string methodName = FI.first;
-        const Function *func = FI.second;
+        std::string methodName = FI.name;
+        const Function *func = FI.func;
         if (!func) {
             printf("[%s:%d] name %s missing func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), (void *)func);
             continue;
@@ -1237,9 +1237,10 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         if (trace_function || trace_call)
             printf("PROCESSING %s %s\n", func->getName().str().c_str(), methodName.c_str());
         if (isModule)
-        if (auto rfunc = table->methods[rdyName]) {
+        for(auto ritem: table->methods)
+        if (ritem.name == rdyName) {
             std::list<std::string> mrlines;
-            rdyGuard = processMethod(rdyName, rfunc, mrlines, mrlines);
+            rdyGuard = processMethod(rdyName, ritem.func, mrlines, mrlines);
             if (rdyGuard == "1")
                 rdyGuard = "";
         }

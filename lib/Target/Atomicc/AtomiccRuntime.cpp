@@ -232,7 +232,7 @@ void pushWork(ClassMethodTable *table, Function *func, std::string mName)
         printf("[%s:%d] mname %s funcname %s\n", __FUNCTION__, __LINE__, mName.c_str(), func->getName().str().c_str());
         func->dump();
     }
-    table->methods[mName] = func;
+    table->methods.push_back(ClassMethodInfo{mName, func});
     // inline intra-class method call bodies
     processMethodInlining(func, func);
 }
@@ -313,8 +313,15 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
     std::string enaName = tempName;
     int counter = 100;
     // if necessary to avoid conflicts, generate unique rule names
-    while (table->methods[enaName + "__ENA"])
-        enaName = tempName + "$" + utostr(counter++);
+    while(1) {
+next:
+        for(auto item: table->methods)
+            if (item.name == enaName + "__ENA") {
+                enaName = tempName + "$" + utostr(counter++);
+                goto next;
+            }
+        break;
+    }
     Function *enaFunc = fixupFunction(bcap, aenaFunc);
     if (trace_pair)
         printf("[%s:%d] name %s size %ld ena %s\n", __FUNCTION__, __LINE__, enaName.c_str(), aenaFunc->arg_size(), enaFunc->getName().str().c_str());
