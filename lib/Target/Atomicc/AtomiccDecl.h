@@ -110,3 +110,4 @@ bool isInterface(const StructType *STy);
 void generateIR(std::string OutputDir);
 int checkDerived(const Type *A, const Type *B);
 const Function *getCallee(const Instruction *I);
+std::string baseMethodName(std::string pname);

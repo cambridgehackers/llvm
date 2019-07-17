@@ -340,8 +340,8 @@ static std::string GetValueName(const Value *Operand)
             const Function *func = arg->getParent();
             for (auto item: getClass(findThisArgument(func))->methods)
                 if (!startswith(item.name, "FOR$"))
-                if (item.func == func) {
-                    Name = item.name.substr(0, item.name.length() - 5) + MODULE_SEPARATOR + Name;
+                if (item.func == func) { // prepend argument name with function name
+                    Name = baseMethodName(item.name) + MODULE_SEPARATOR + Name;
                     break;
                 }
         }
@@ -1088,18 +1088,14 @@ static void processField(ClassMethodTable *table, FILE *OStr)
 
 std::string getRdyName(std::string basename)
 {
-    std::string rdyName = basename;
-    if (endswith(rdyName, "__ENA"))
-        rdyName = rdyName.substr(0, rdyName.length()-5);
-    return rdyName + "__RDY";
+    return baseMethodName(basename) + "__RDY";
 }
 static std::string processMethod(std::string methodName, const Function *func,
            std::list<std::string> &mlines, std::list<std::string> &malines)
 {
     std::map<std::string, const Type *> allocaList;
     std::string savedGlobalMethodName = globalMethodName;
-    if (endswith(methodName, "__ENA"))
-        methodName = methodName.substr(0, methodName.length() - 5);
+    methodName = baseMethodName(methodName);
     globalMethodName = methodName;
     std::map<std::string, int> argumentName;
     for (auto item = func->arg_begin(), eitem = func->arg_end(); item != eitem; item++) {
