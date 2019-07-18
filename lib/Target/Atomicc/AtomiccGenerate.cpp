@@ -1128,6 +1128,9 @@ static std::string processMethod(std::string methodName, const Function *func,
         for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE; IIb++) {
             const Instruction *II = &*IIb;
             switch(II->getOpcode()) {
+            case Instruction::Alloca:
+                findAlloca(II);
+                break;
             case Instruction::PHI:
                 thisPHI = true;
                 break;
