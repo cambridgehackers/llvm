@@ -117,6 +117,15 @@ typedef struct {
 } GenerateForItem;
 
 typedef struct {
+    ACCExpr *cond;
+    std::string var;
+    ACCExpr *init;
+    ACCExpr *limit;
+    ACCExpr *incr;
+    ACCExpr *sub;
+} InstantiateForItem;
+
+typedef struct {
     ACCExpr                   *guard;
     std::string                name;
     bool                       rule;
@@ -128,6 +137,7 @@ typedef struct {
     std::string                type;
     std::list<ParamElement>    params;
     std::list<GenerateForItem> generateFor;
+    std::list<InstantiateForItem> instantiateFor;
     std::map<std::string, AllocaItem> alloca;
     MetaRef                    meta[MetaMax];
 } MethodInfo;

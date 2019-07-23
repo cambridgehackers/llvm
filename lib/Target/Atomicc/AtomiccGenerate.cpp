@@ -541,7 +541,7 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         }
         return calledName + "{" + val + "}";
     }
-    if (calledName == "__generateFor") {
+    if (calledName == "__generateFor" || calledName == "__instantiateFor") {
         bool foundGenvar = false;
         for (; AI != AE; ++AI) { // first param processed as pcalledFunction
             if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(*AI)) {
@@ -1000,12 +1000,14 @@ legacy_phi:
             /* handle expressions */
             ERRORIF(isa<UndefValue>(CPV) && CPV->getType()->isSingleValueType()); /* handle 'undefined' */
             if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(CPV)) {
-                //cbuffer += "(";
                 int op = CE->getOpcode();
+                Value *opd = CE->getOperand(0);
+                //if (op == Instruction::PtrToInt) {
+                    //const Function *func = dyn_cast<Function>(opd);
+                    //cbuffer += func->getName().str();
                 assert (op == Instruction::GetElementPtr);
                 // used for character string args to printf()
-                cbuffer += printGEPExpression(CE->getOperand(0), gep_type_begin(CPV), gep_type_end(CPV));
-// +  ")";
+                cbuffer += printGEPExpression(opd, gep_type_begin(CPV), gep_type_end(CPV));
             }
             else if (const ConstantInt *CI = dyn_cast<ConstantInt>(CPV)) {
                 char temp[100];
@@ -1174,6 +1176,10 @@ static std::string processMethod(std::string methodName, const Function *func,
                     break;                    // value picked up in expression
                 if (calledName == "__generateFor") {
                     mlines.push_back("GENERATE " + tempCond + ":" + printCall(II, true));
+                    break;
+                }
+                if (calledName == "__instantiateFor") {
+                    mlines.push_back("INSTANTIATE " + tempCond + ":" + printCall(II, true));
                     break;
                 }
                 if (calledName == "printf") {
