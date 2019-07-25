@@ -1064,19 +1064,22 @@ static void processField(ClassMethodTable *table, FILE *OStr)
                 processField(getClass(iSTy), OStr);
             continue;
         }
+        std::string temp;
+        if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
+            temp += "/Ptr";
+            auto Ty = PTy->getElementType();
+            if (const StructType *STy = dyn_cast<StructType>(Ty))
+                element = Ty;
+            else if (const ArrayType *STy = dyn_cast<ArrayType>(Ty))
+                element = Ty;
+        }
         if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
             assert(vecCount == -1 && "both vecCount and array count are not allowed");
             vecCount = ATy->getNumElements();
             element = ATy->getElementType();
         }
-        std::string temp;
-        if (isa<PointerType>(element))
-            temp += "/Ptr";
         if (fitem.options != "")
             temp += "/" + fitem.options;
-        if (const PointerType *PTy = dyn_cast<PointerType>(element))
-        if (const StructType *STy = dyn_cast<StructType>(PTy->getElementType()))
-            element = STy;
         if (vecCount != -1)
             temp += "/Count " + utostr(vecCount) + " ";
         if (isInterface(dyn_cast<StructType>(element)))
