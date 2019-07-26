@@ -254,7 +254,7 @@ ClassMethodTable *getClass(const StructType *STy)
                     target = target.substr(8);
                 }
                 std::string targetItem = target, targetInterface;
-                idx = targetItem.find("$");
+                idx = targetItem.find(MODULE_SEPARATOR);
                 if (idx > 0) {
                     targetInterface = targetItem.substr(idx+1);
                     targetItem = targetItem.substr(0, idx);
@@ -1106,7 +1106,7 @@ static std::string processMethod(std::string methodName, const Function *func,
     for (auto item = func->arg_begin(), eitem = func->arg_end(); item != eitem; item++) {
         std::string name = item->getName();
         if (name != "")
-            argumentName[methodName + "$" + name] = 1;
+            argumentName[methodName + MODULE_SEPARATOR + name] = 1; // prepend argument name with function name
     }
     std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
         if (II) {
