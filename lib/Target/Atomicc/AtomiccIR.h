@@ -123,6 +123,7 @@ typedef struct {
     ACCExpr *limit;
     ACCExpr *incr;
     ACCExpr *sub;
+    std::string body;
 } InstantiateForItem;
 
 typedef struct {
