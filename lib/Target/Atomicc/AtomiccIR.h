@@ -128,6 +128,8 @@ typedef struct {
 
 typedef struct {
     ACCExpr                   *guard;
+    ACCExpr                   *subscript;
+    std::string                generateSection;
     std::string                name;
     bool                       rule;
     bool                       action;
