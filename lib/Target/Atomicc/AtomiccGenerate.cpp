@@ -1002,12 +1002,25 @@ legacy_phi:
             if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(CPV)) {
                 int op = CE->getOpcode();
                 Value *opd = CE->getOperand(0);
-                //if (op == Instruction::PtrToInt) {
-                    //const Function *func = dyn_cast<Function>(opd);
+                if (op == Instruction::PtrToInt) {
+                    //used for printing guard exprs to 'instantiate for' items
+                    const Function *func = dyn_cast<Function>(opd);
                     //cbuffer += func->getName().str();
-                assert (op == Instruction::GetElementPtr);
-                // used for character string args to printf()
-                cbuffer += printGEPExpression(opd, gep_type_begin(CPV), gep_type_end(CPV));
+                    std::list<std::string> mlines;
+                    std::list<std::string> malines;
+                    std::string ret = processMethod("", func, mlines, malines);
+printf("[%s:%d] FFOFOFOF ret %s\n", __FUNCTION__, __LINE__, ret.c_str());
+                    cbuffer += ret;
+                }
+                else if (op == Instruction::GetElementPtr) {
+                    // used for character string args to printf()
+                    cbuffer += printGEPExpression(opd, gep_type_begin(CPV), gep_type_end(CPV));
+                }
+                else {
+                    printf("[%s:%d] unknown Constant type\n", __FUNCTION__, __LINE__);
+                    CE->dump();
+                    assert (false);
+                }
             }
             else if (const ConstantInt *CI = dyn_cast<ConstantInt>(CPV)) {
                 char temp[100];
