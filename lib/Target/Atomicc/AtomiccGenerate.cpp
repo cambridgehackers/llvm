@@ -542,21 +542,12 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         return calledName + "{" + val + "}";
     }
     if (calledName == "__generateFor" || calledName == "__instantiateFor") {
-        bool foundGenvar = false;
-        std::string stringParam;
         for (; AI != AE; ++AI) { // first param processed as pcalledFunction
             if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(*AI)) {
                 int op = CE->getOpcode();
                 Value *opd = CE->getOperand(0);
                 if (op == Instruction::PtrToInt) {
                 auto func = cast<Function>(opd);
-                if (!foundGenvar) {
-                    auto AII = func->arg_begin();
-                    AII++;
-                    vout += AII->getName().str();
-                    foundGenvar = true;
-                    vout += "," + stringParam;
-                }
                 std::list<std::string> mlines, malines;
                 std::string ret = processMethod("", func, mlines, malines);
                 if (ret != "")
@@ -567,7 +558,7 @@ static std::string printCall(const Instruction *I, bool useParams = false)
                 else if (op == Instruction::GetElementPtr) {
                     // used for character string arg
                     std::string ret = printGEPExpression(opd, gep_type_begin(CE), gep_type_end(CE));
-                    stringParam = ret.substr(2, ret.length()-3); // remove leading/trailing '"'
+                    vout += ret.substr(1, ret.length()-2); // remove leading/trailing '"'
                 }
                 else {
                     printf("[%s:%d]\n", __FUNCTION__, __LINE__);
