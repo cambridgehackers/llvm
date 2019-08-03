@@ -50,6 +50,7 @@ typedef struct {
     std::string name;
     std::string options;
     std::string params;
+    std::string templateOptions;
 } FieldNameInfo;
 
 typedef struct {

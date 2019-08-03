@@ -228,10 +228,16 @@ ClassMethodTable *getClass(const StructType *STy)
             idx = ret.find(':');
 //printf("[%s:%d] sequence %d ret %s idx %d\n", __FUNCTION__, __LINE__, processSequence, ret.c_str(), idx);
             if (processSequence == 0) {
-                std::string params;
+                std::string params, templateOptions;
                 int lt = ret.find('<');
                 if (lt >= 0) {
                     params = ret.substr(lt);
+                    ret = ret.substr(0, lt);
+                    idx = ret.find(':');
+                }
+                lt = ret.find('#');
+                if (lt >= 0) {
+                    templateOptions = ret.substr(lt);
                     ret = ret.substr(0, lt);
                     idx = ret.find(':');
                 }
@@ -241,7 +247,7 @@ ClassMethodTable *getClass(const StructType *STy)
                     options = ret.substr(idx+1);
                     name = ret.substr(0, idx);
                 }
-                table->fieldName[fieldSub++] = FieldNameInfo{name, options, params};
+                table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, templateOptions};
             }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
