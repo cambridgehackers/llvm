@@ -289,14 +289,17 @@ extern "C" Function *fixupFunction(uint64_t *bcap, Function *argFunc)
 /*
  * Allocated memory region management
  */
-extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType *STy, uint64_t vecCount)
+extern "C" void *llvm_translate_malloc(size_t size, Type *type, const StructType *STy, int64_t vecCount)
 {
     size_t newsize = size * 2 + MAX_BASIC_BLOCK_FLAGS * sizeof(int) + GIANT_SIZE;
     void *ptr = malloc(newsize);
+    std::string vecCountStr;
+    if (vecCount != -1)
+        vecCountStr = utostr(vecCount);
     memset(ptr, 0x5a, newsize);
     if (trace_malloc)
         printf("[%s:%d] %ld = %p type %p sty %p vecCount %ld\n", __FUNCTION__, __LINE__, size, (void *)ptr, (void *)type, (void *)STy, (long)vecCount);
-    memoryRegion.push_back(MEMORY_REGION{ptr, newsize, type, STy, vecCount});
+    memoryRegion.push_back(MEMORY_REGION{ptr, newsize, type, STy, vecCountStr});
     return ptr;
 }
 

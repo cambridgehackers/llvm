@@ -184,9 +184,9 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
         return;
     addressTypeAlreadyProcessed[MAPSEEN_TYPE{addr, Ty}] = 1;
     if (trace_map)
-        printf("%s: addr %p TID %d Ty %p name %s\n", __FUNCTION__, addr, Ty->getTypeID(), Ty, aname.c_str());
+        printf("%s: addr %p TID %d Ty %p name %s\n", __FUNCTION__, (void *)addr, Ty->getTypeID(), (void *)Ty, aname.c_str());
     if (validateAddress(3010, addr))
-        printf("%s: bad addr %p TID %d Ty %p name %s\n", __FUNCTION__, addr, Ty->getTypeID(), Ty, aname.c_str());
+        printf("%s: bad addr %p TID %d Ty %p name %s\n", __FUNCTION__, (void *)addr, Ty->getTypeID(), (void *)Ty, aname.c_str());
     switch (Ty->getTypeID()) {
     case Type::StructTyID: {
         StructType *STy = cast<StructType>(Ty);
@@ -215,7 +215,7 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                         getClass(STy)->replaceType[Idx] = info.type;
                         getClass(STy)->replaceCount[Idx] = info.vecCount;
                         //if (trace_map)
-                            printf("%s: pointerFound %p info.STy %s count %d\n", __FUNCTION__, p, info.STy->getName().str().c_str(), (int)info.vecCount);
+                            printf("%s: pointerFound %p info.STy %s count %s\n", __FUNCTION__, p, info.STy->getName().str().c_str(), info.vecCount.c_str());
                         if (STy == info.STy) {
                             inlineReferences(Mod, STy, Idx, info.type);
                             getClass(STy)->replaceType[Idx] = cast<PointerType>(info.type)->getElementType();
@@ -224,7 +224,7 @@ static void mapType(Module *Mod, char *addr, Type *Ty, std::string aname)
                     }
                     else {
                         if (trace_map)
-                            printf("%s: notderived %p info.STy %p %s\n", __FUNCTION__, p, info.STy, info.STy?info.STy->getName().str().c_str():"null");
+                            printf("%s: notderived %p info.STy %p %s\n", __FUNCTION__, (void *)p, (void *)info.STy, info.STy?info.STy->getName().str().c_str():"null");
                     }
                     }
                 }
@@ -261,7 +261,7 @@ void constructAddressMap(Module *Mod)
         void *addr = EE->getPointerToGlobal(&*MI);
         Type *Ty = MI->getType()->getElementType();
         memoryRegion.push_back(MEMORY_REGION{addr,
-            EE->getDataLayout().getTypeAllocSize(Ty), MI->getType(), NULL, 0});
+            EE->getDataLayout().getTypeAllocSize(Ty), MI->getType(), NULL, ""});
         mapType(Mod, (char *)addr, Ty, MI->getName());
     }
     if (trace_dump_malloc)

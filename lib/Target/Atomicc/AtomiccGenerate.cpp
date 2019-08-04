@@ -228,7 +228,7 @@ ClassMethodTable *getClass(const StructType *STy)
             idx = ret.find(':');
 //printf("[%s:%d] sequence %d ret %s idx %d\n", __FUNCTION__, __LINE__, processSequence, ret.c_str(), idx);
             if (processSequence == 0) {
-                std::string params, templateOptions;
+                std::string params, templateOptions, bitSize, arrayDim;
                 int lt = ret.find('<');
                 if (lt >= 0) {
                     params = ret.substr(lt);
@@ -237,8 +237,16 @@ ClassMethodTable *getClass(const StructType *STy)
                 }
                 lt = ret.find('#');
                 if (lt >= 0) {
-                    templateOptions = ret.substr(lt);
+                    bitSize = ret.substr(lt);
                     ret = ret.substr(0, lt);
+                    if ((lt = bitSize.find(':')) >= 0) {
+                        arrayDim = bitSize.substr(lt+1);
+                        bitSize = bitSize.substr(0, lt);
+                    }
+                    if ((lt = arrayDim.find(':')) >= 0) {
+                        templateOptions = arrayDim.substr(lt+1);
+                        arrayDim = arrayDim.substr(0, lt);
+                    }
                     idx = ret.find(':');
                 }
                 std::string options;
@@ -247,7 +255,7 @@ ClassMethodTable *getClass(const StructType *STy)
                     options = ret.substr(idx+1);
                     name = ret.substr(0, idx);
                 }
-                table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, templateOptions};
+                table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, bitSize, arrayDim, templateOptions};
             }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
@@ -1078,7 +1086,7 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         auto fitem = table->fieldName[Idx];
         std::string fldName = fitem.name;
         const Type *element = *I;
-        int64_t vecCount = -1;
+        std::string vecCount;
         if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = table->replaceCount[Idx];
@@ -1098,18 +1106,54 @@ static void processField(ClassMethodTable *table, FILE *OStr)
                 element = Ty;
         }
         if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
-            assert(vecCount == -1 && "both vecCount and array count are not allowed");
-            vecCount = ATy->getNumElements();
+            assert(vecCount == "" && "both vecCount and array count are not allowed");
+            vecCount = utostr(ATy->getNumElements());
             element = ATy->getElementType();
+        }
+        if (vecCount != "" && fitem.arrayDim != "") {
+printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(), fitem.arrayDim.c_str());
+            vecCount = fitem.arrayDim;
         }
         if (fitem.options != "")
             temp += "/" + fitem.options;
-        if (vecCount != -1)
-            temp += "/Count " + utostr(vecCount) + " ";
+        if (vecCount != "")
+            temp += "/Count " + vecCount + " ";
+        std::string elementName = typeName(element);
+        if (fitem.templateOptions != "") {
+printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elementName.c_str(), fitem.templateOptions.c_str());
+            std::string name, remain = fitem.templateOptions;
+            int ind = remain.find(":");
+            if (ind > 0) {
+                name = remain.substr(0, ind);
+                remain = remain.substr(ind+1);
+            }
+            name += "(";
+            if (!startswith(elementName, name)) {
+                printf("[%s:%d] bad class name %s remain %s original %s\n", __FUNCTION__, __LINE__, elementName.c_str(), remain.c_str(), fitem.templateOptions.c_str());
+                exit(-1);
+            }
+            std::string param = elementName.substr(name.length());
+            param = param.substr(0, param.length()-1);
+            while ((ind = param.find("=")) > 0) {
+                name += param.substr(0, ind+1);
+                param = param.substr(ind+1);
+                ind = remain.find(":");
+                std::string next;
+                if (ind > 0) {
+                    next = remain.substr(ind+1);
+                    remain = remain.substr(0, ind);
+                }
+                name += remain;
+                remain = next;
+            }
+            name += ")";
+            //elementName = name;
+printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
+        }
         if (isInterface(dyn_cast<StructType>(element)))
-            fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), typeName(element).c_str(), fldName.c_str());
+            fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
         else if (fldName != "__defaultClock" && fldName != "__defaultnReset")
-            fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), typeName(element).c_str(), fldName.c_str());
+            fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
         if (fitem.params != "")
             fprintf(OStr, "    PARAMS %s %s\n", fldName.c_str(), fitem.params.c_str());
     }

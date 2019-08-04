@@ -50,6 +50,8 @@ typedef struct {
     std::string name;
     std::string options;
     std::string params;
+    std::string bitSize;
+    std::string arrayDim;
     std::string templateOptions;
 } FieldNameInfo;
 
@@ -64,7 +66,7 @@ public:
     std::map<int, FieldNameInfo>      fieldName;
     std::list<ClassMethodInfo>        methods;
     std::map<int, const Type *>       replaceType;
-    std::map<int, uint64_t>           replaceCount;
+    std::map<int, std::string>        replaceCount;
     std::list<std::string>            softwareName;
     std::map<std::string, bool>       ruleFunctions;
     ModuleIR* IR;
@@ -76,7 +78,7 @@ typedef  struct {
     size_t size;
     Type *type;
     const StructType *STy;
-    uint64_t   vecCount;
+    std::string vecCount;
 } MEMORY_REGION;
 
 typedef std::map<std::string, int> StringMapType;
