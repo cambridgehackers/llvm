@@ -20,6 +20,7 @@ using namespace llvm;
 #include "AtomiccDecl.h"
 
 static std::map<const Function *, bool> actionFunction;
+static std::map<const Function *, std::string> methodTemplateOptions;
 static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
@@ -35,7 +36,7 @@ static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 std::map<std::string, Function *> functionMap;
 Module *globalMod;
 static std::string processMethod(std::string methodName, const Function *func,
-           std::list<std::string> &mlines, std::list<std::string> &malines);
+           std::list<std::string> &mlines, std::list<std::string> &malines, std::string localOptions);
 
 static INTMAP_TYPE predText[] = {
     {FCmpInst::FCMP_FALSE, "false"}, {FCmpInst::FCMP_OEQ, "oeq"},
@@ -228,7 +229,7 @@ ClassMethodTable *getClass(const StructType *STy)
             idx = ret.find(':');
 //printf("[%s:%d] sequence %d ret %s idx %d\n", __FUNCTION__, __LINE__, processSequence, ret.c_str(), idx);
             if (processSequence == 0) {
-                std::string params, templateOptions, bitSize, arrayDim;
+                std::string params, templateOptions;
                 int lt = ret.find('<');
                 if (lt >= 0) {
                     params = ret.substr(lt);
@@ -237,16 +238,8 @@ ClassMethodTable *getClass(const StructType *STy)
                 }
                 lt = ret.find('#');
                 if (lt >= 0) {
-                    bitSize = ret.substr(lt);
+                    templateOptions = ret.substr(lt+1);
                     ret = ret.substr(0, lt);
-                    if ((lt = bitSize.find(':')) >= 0) {
-                        arrayDim = bitSize.substr(lt+1);
-                        bitSize = bitSize.substr(0, lt);
-                    }
-                    if ((lt = arrayDim.find(':')) >= 0) {
-                        templateOptions = arrayDim.substr(lt+1);
-                        arrayDim = arrayDim.substr(0, lt);
-                    }
                     idx = ret.find(':');
                 }
                 std::string options;
@@ -255,7 +248,7 @@ ClassMethodTable *getClass(const StructType *STy)
                     options = ret.substr(idx+1);
                     name = ret.substr(0, idx);
                 }
-                table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, bitSize, arrayDim, templateOptions};
+                table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, templateOptions};
             }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
@@ -307,13 +300,20 @@ ClassMethodTable *getClass(const StructType *STy)
                 }
         nextInterface:;
             }
-            else if (idx >= 0) {
+            else if (idx >= 0) { // processSequence == 1 -> methods
                 std::string fname = ret.substr(0, idx);
                 std::string mName = ret.substr(idx+1);
+                std::string templateOptions, localOptions;
                 int action = mName.find(":action");
                 if (action > 0)
                     mName = mName.substr(0, action);
+                int ind = mName.find("#");
+                if (ind > 0) {
+                    templateOptions = mName.substr(ind+1);
+                    mName = mName.substr(0, ind);
+                }
                 if (Function *func = functionMap[fname]) {
+                    methodTemplateOptions[func] = templateOptions;
                     pushWork(table, func, mName);
                     if (action > 0)
                         actionFunction[func] = true;
@@ -563,7 +563,7 @@ static std::string printCall(const Instruction *I, bool useParams = false)
                 if (op == Instruction::PtrToInt) {
                 auto func = cast<Function>(opd);
                 std::list<std::string> mlines, malines;
-                std::string ret = processMethod("", func, mlines, malines);
+                std::string ret = processMethod("", func, mlines, malines, "");
                 if (ret != "")
                     vout += "," + ret;
                 else
@@ -760,23 +760,52 @@ static void processBlockConditions(const Function *currentFunction)
     }
 }
 
-static std::string typeName(const Type *Ty)
+static std::string extractOptions(std::string ret, std::string &bitSize, std::string &arrayDim)
 {
+std::string orig = ret;
+    int lt;
+    std::string templateOptions;
+    bitSize = ret;
+    if ((lt = bitSize.find(':')) >= 0) {
+        arrayDim = bitSize.substr(lt+1);
+        bitSize = bitSize.substr(0, lt);
+    }
+    if ((lt = arrayDim.find(':')) >= 0) {
+        templateOptions = arrayDim.substr(lt+1);
+        arrayDim = arrayDim.substr(0, lt);
+    }
+    return templateOptions;
+}
+
+static std::string typeName(const Type *Ty, std::string templateOptions = "")
+{
+     std::string bitSize, arrayDim;
+     std::string templOptions = extractOptions(templateOptions, bitSize, arrayDim);
+//if (templateOptions != "")
+//printf("[%s:%d]TEMPPEPEPE %s bit %s arr %s templ %s typeid %d\n", __FUNCTION__, __LINE__, templateOptions.c_str(), bitSize.c_str(), arrayDim.c_str(), templOptions.c_str(), Ty->getTypeID());
      switch (Ty->getTypeID()) {
      case Type::VoidTyID:
          return "";
      case Type::IntegerTyID:
-         return "Bit(" + cast<IntegerType>(Ty)->getBitWidthString() + ")";
+         if (bitSize == "")
+             bitSize = cast<IntegerType>(Ty)->getBitWidthString();
+         return "Bit(" + bitSize + ")";
      case Type::FloatTyID:
          return "FLOAT";
-     case Type::StructTyID:
-         return getClass(cast<StructType>(Ty))->IR->name;
+     case Type::StructTyID: {
+         std::string ret = getClass(cast<StructType>(Ty))->IR->name;
+         if (templOptions != "")
+             printf("[%s:%d] classname %s template %s\n", __FUNCTION__, __LINE__, ret.c_str(), templOptions.c_str());
+         return ret;
+     }
      case Type::ArrayTyID: {
          const ArrayType *ATy = cast<ArrayType>(Ty);
-         return "ARRAY_" + utostr(ATy->getNumElements()) + "_" + typeName(ATy->getElementType());
+         if (arrayDim == "")
+             arrayDim = utostr(ATy->getNumElements());
+         return "ARRAY_" + arrayDim + "_" + typeName(ATy->getElementType(), templateOptions);
          }
      case Type::PointerTyID:
-         return typeName(cast<PointerType>(Ty)->getElementType());
+         return typeName(cast<PointerType>(Ty)->getElementType(), templateOptions);
      default:
          printf("[%s:%d] unhandled ID %d\n", __FUNCTION__, __LINE__, Ty->getTypeID());
          Ty->dump();
@@ -1027,8 +1056,7 @@ legacy_phi:
                     //cbuffer += func->getName().str();
                     std::list<std::string> mlines;
                     std::list<std::string> malines;
-                    std::string ret = processMethod("", func, mlines, malines);
-printf("[%s:%d] FFOFOFOF ret %s\n", __FUNCTION__, __LINE__, ret.c_str());
+                    std::string ret = processMethod("", func, mlines, malines, "");
                     cbuffer += ret;
                 }
                 else if (op == Instruction::GetElementPtr) {
@@ -1085,6 +1113,8 @@ static void processField(ClassMethodTable *table, FILE *OStr)
     for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
         auto fitem = table->fieldName[Idx];
         std::string fldName = fitem.name;
+        std::string bitSize, arrayDim;
+        std::string templateOptions = extractOptions(fitem.templateOptions, bitSize, arrayDim);
         const Type *element = *I;
         std::string vecCount;
         if (const Type *newType = table->replaceType[Idx]) {
@@ -1110,18 +1140,18 @@ static void processField(ClassMethodTable *table, FILE *OStr)
             vecCount = utostr(ATy->getNumElements());
             element = ATy->getElementType();
         }
-        if (vecCount != "" && fitem.arrayDim != "") {
-printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(), fitem.arrayDim.c_str());
-            vecCount = fitem.arrayDim;
+        if (vecCount != "" && arrayDim != "") {
+printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(), arrayDim.c_str());
+            vecCount = arrayDim;
         }
         if (fitem.options != "")
             temp += "/" + fitem.options;
         if (vecCount != "")
             temp += "/Count " + vecCount + " ";
         std::string elementName = typeName(element);
-        if (fitem.templateOptions != "") {
-printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elementName.c_str(), fitem.templateOptions.c_str());
-            std::string name, remain = fitem.templateOptions;
+        if (templateOptions != "") {
+printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elementName.c_str(), templateOptions.c_str());
+            std::string name, remain = templateOptions;
             int ind = remain.find(":");
             if (ind > 0) {
                 name = remain.substr(0, ind);
@@ -1129,7 +1159,7 @@ printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elemen
             }
             name += "(";
             if (!startswith(elementName, name)) {
-                printf("[%s:%d] bad class name %s remain %s original %s\n", __FUNCTION__, __LINE__, elementName.c_str(), remain.c_str(), fitem.templateOptions.c_str());
+                printf("[%s:%d] bad class name %s remain %s original %s\n", __FUNCTION__, __LINE__, elementName.c_str(), remain.c_str(), templateOptions.c_str());
                 exit(-1);
             }
             std::string param = elementName.substr(name.length());
@@ -1164,13 +1194,34 @@ std::string getRdyName(std::string basename)
     return baseMethodName(basename) + "__RDY";
 }
 static std::string processMethod(std::string methodName, const Function *func,
-           std::list<std::string> &mlines, std::list<std::string> &malines)
+           std::list<std::string> &mlines, std::list<std::string> &malines, std::string localOptions)
 {
     std::map<std::string, const Type *> allocaList;
     std::string savedGlobalMethodName = globalMethodName;
     methodName = baseMethodName(methodName);
     globalMethodName = methodName;
     std::map<std::string, int> argumentName;
+    std::map<std::string, std::string> localTemplate;
+    int ind = localOptions.find("#");
+    if (ind >= 0) {
+        std::string tempBuf = localOptions.substr(ind+1);
+        if (tempBuf[0] != ';') {
+            printf("[%s:%d] ERROR Start %s tempBuf %s\n", __FUNCTION__, __LINE__, methodName.c_str(), tempBuf.c_str());
+        }
+        tempBuf = tempBuf.substr(1);
+        while (tempBuf.length()) {
+            ind = tempBuf.find(";");
+            std::string name = tempBuf.substr(0, ind);
+            std::string templ = tempBuf.substr(ind+1);
+            tempBuf = "";
+            ind = templ.find(";");
+            if (ind >= 0) {
+                tempBuf = templ.substr(ind+1);
+                templ = templ.substr(0, ind);
+            }
+            localTemplate[methodName + MODULE_SEPARATOR + name] = templ;
+        }
+    }
     for (auto item = func->arg_begin(), eitem = func->arg_end(); item != eitem; item++) {
         std::string name = item->getName();
         if (name != "")
@@ -1265,7 +1316,7 @@ static std::string processMethod(std::string methodName, const Function *func,
         }
     }
     for (auto item: allocaList)
-        malines.push_back("ALLOCA " + typeName(item.second) + " " + item.first);
+        malines.push_back("ALLOCA " + typeName(item.second, localTemplate[item.first]) + " " + item.first);
     globalMethodName = savedGlobalMethodName; // make sure this is not destroyed by recursive calls (from __generateFor)
     return retGuard;
 }
@@ -1316,24 +1367,43 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         for(auto ritem: table->methods)
         if (ritem.name == rdyName) {
             std::list<std::string> mrlines;
-            rdyGuard = processMethod(rdyName, ritem.func, mrlines, mrlines);
+            rdyGuard = processMethod(rdyName, ritem.func, mrlines, mrlines, methodTemplateOptions[ritem.func]);
             if (rdyGuard == "1")
                 rdyGuard = "";
         }
-        std::string retGuard = processMethod(methodName, func, mlines, malines);
+        std::string retGuard = processMethod(methodName, func, mlines, malines, methodTemplateOptions[func]);
         if (!isModule)
             retGuard = "";
         std::string headerLine = methodName;
         auto AI = func->arg_begin(), AE = func->arg_end();
         std::string sep = " ( ";
+        std::string returnOption = methodTemplateOptions[func];
+        int ind = returnOption.find("#");
+        if (ind >= 0) {
+            //localOptions = returnOption.substr(ind+1);
+            returnOption = returnOption.substr(0, ind);
+        }
+        std::string templateOptions;
+        ind = returnOption.find(";");
+        if (ind >= 0) {
+            templateOptions = returnOption.substr(ind+1);
+            returnOption = returnOption.substr(0, ind);
+        }
         for (AI++; AI != AE; ++AI) {
-            headerLine += sep + typeName(AI->getType()) + " " + AI->getName().str();
+            std::string thisOption = templateOptions;
+            ind = thisOption.find(";");
+            templateOptions = "";
+            if (ind >= 0) {
+                templateOptions = thisOption.substr(ind+1);
+                thisOption = thisOption.substr(0, ind);
+            }
+            headerLine += sep + typeName(AI->getType(), thisOption) + " " + AI->getName().str();
             sep = " , ";
         }
         if (sep != " ( ")
             headerLine += " )";
         if (func->getReturnType() != Type::getVoidTy(func->getContext()))
-            headerLine += " " + typeName(func->getReturnType());
+            headerLine += " " + typeName(func->getReturnType(), returnOption);
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";
         if (rdyGuard != "")

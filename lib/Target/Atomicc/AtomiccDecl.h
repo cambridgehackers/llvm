@@ -50,8 +50,6 @@ typedef struct {
     std::string name;
     std::string options;
     std::string params;
-    std::string bitSize;
-    std::string arrayDim;
     std::string templateOptions;
 } FieldNameInfo;
 
