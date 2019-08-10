@@ -555,6 +555,9 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         }
         return calledName + "{" + val + "}";
     }
+    if (calledName == "llvm.clog2.i32") {
+        return "__clog2{" + printOperand(*AI) + "}";
+    }
     if (calledName == "__generateFor" || calledName == "__instantiateFor") {
         for (; AI != AE; ++AI) { // first param processed as pcalledFunction
             if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(*AI)) {
