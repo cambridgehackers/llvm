@@ -119,10 +119,16 @@ static bool isAlloca(const Value *arg)
     return false;
 }
 
-bool isInterface(const StructType *STy)
+static bool isInterface(const Type *Ty)
 {
+    if (auto STy = dyn_cast<StructType>(Ty))
     return STy && !STy->isLiteral() && !STy->getName().empty()
        && startswith(STy->getName(), "ainterface.");
+    if (auto ATy = dyn_cast<ArrayType>(Ty))
+        return isInterface(ATy->getElementType());
+    if (auto PTy = dyn_cast<PointerType>(Ty))
+        return isInterface(PTy->getElementType());
+    return false;
 }
 
 bool isActionMethod(const Function *func)
@@ -267,37 +273,46 @@ ClassMethodTable *getClass(const StructType *STy)
                     targetItem = targetItem.substr(0, idx);
                 }
                 int Idx = 0;
-                //printf("[%s:%d] CONNECT %s = %s target %s tif %s\n", __FUNCTION__, __LINE__, target.c_str(), source.c_str(), targetItem.c_str(), targetInterface.c_str());
+static bool traceConnect = true;
+                if (traceConnect)
+                printf("[%s:%d] CONNECT %s = %s target %s tif %s\n", __FUNCTION__, __LINE__, target.c_str(), source.c_str(), targetItem.c_str(), targetInterface.c_str());
                 for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
                     Type *telement = *I;
-                    if (const PointerType *PTy = dyn_cast<PointerType>(telement))
+                    if (auto PTy = dyn_cast<PointerType>(telement))
                         telement = PTy->getElementType();
+                    if (auto ATy = dyn_cast<ArrayType>(telement))
+                        telement = ATy->getElementType();
                     if (const StructType *STyE = dyn_cast<StructType>(telement))
                     if (targetItem == table->fieldName[Idx].name) {
                         auto tableE = getClass(STyE);
-//printf("[%s:%d] found targetitem %s\n", __FUNCTION__, __LINE__, targetItem.c_str());
+                        if (traceConnect)
+                            printf("[%s:%d] found targetitem %s\n", __FUNCTION__, __LINE__, targetItem.c_str());
                         int Idx = 0;
                         if (targetInterface == "") {
-//printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
+                            if (traceConnect)
+                                printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
                             IR->interfaceConnect.push_back(InterfaceConnectType{target, source, tableE->IR->name, isForward});
                             goto nextInterface;
                         }
                         else
                         for (auto I = STyE->element_begin(), E = STyE->element_end(); I != E; ++I, Idx++) {
                             std::string elementName = tableE->fieldName[Idx].name;
-//printf("[%s:%d] targetif %s name %s\n", __FUNCTION__, __LINE__, targetInterface.c_str(), elementName.c_str());
+                            if (traceConnect)
+                                printf("[%s:%d] targetif %s name %s\n", __FUNCTION__, __LINE__, targetInterface.c_str(), elementName.c_str());
                             Type *element = *I;
                             if (const PointerType *PTy = dyn_cast<PointerType>(element))
                                 element = PTy->getElementType();
                             if (const StructType *STyI = dyn_cast<StructType>(element))
                             if (targetInterface == elementName) {
-//printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
+                                if (traceConnect)
+                                    printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
                                 IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyI)->IR->name, isForward});
                                 goto nextInterface;
                             }
                         }
                     }
                 }
+                printf("[%s:%d] Error: interface not found %s\n", __FUNCTION__, __LINE__, targetItem.c_str());
         nextInterface:;
             }
             else if (idx >= 0) { // processSequence == 1 -> methods
@@ -436,7 +451,7 @@ static int nesting = 0;
     bool processingInterface = false;
     if (auto IG = dyn_cast<GetElementPtrInst>(Ptr))
     if (auto PTy = dyn_cast<PointerType>(IG->getPointerOperand()->getType()))
-        processingInterface = isInterface(dyn_cast<StructType>(PTy->getElementType()));
+        processingInterface = isInterface(PTy->getElementType());
     bool removeSubscript = false;
     if (cbuffer == "_") { // optimization for verilog port names
         cbuffer = "";
@@ -1183,7 +1198,7 @@ printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elemen
             //elementName = name;
 printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
         }
-        if (isInterface(dyn_cast<StructType>(element)))
+        if (isInterface(element))
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
         else if (fldName != "__defaultClock" && fldName != "__defaultnReset")
             fprintf(OStr, "    FIELD%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
@@ -1271,7 +1286,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 std::string alloc = "STORE ";
                 bool isInter = false;
                 if (auto IG = dyn_cast<GetElementPtrInst>(SI->getPointerOperand()))
-                    isInter = isInterface(dyn_cast<StructType>(IG->getSourceElementType()));
+                    isInter = isInterface(IG->getSourceElementType());
                 if (isInter || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand())) {
                     alloc = "LET " + typeName(cast<PointerType>(
                       SI->getPointerOperand()->getType())->getElementType()) + " ";

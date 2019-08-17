@@ -61,8 +61,8 @@ typedef struct ACCExpr {
 } ACCExpr;
 
 typedef struct {
-    std::string target;
-    std::string source;
+    ACCExpr *target;
+    ACCExpr *source;
     std::string type;
     bool        isForward;
 } InterfaceConnectType;

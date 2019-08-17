@@ -2092,6 +2092,13 @@ void BinaryOperator::AssertOK() {
 BinaryOperator *BinaryOperator::Create(BinaryOps Op, Value *S1, Value *S2,
                                        const Twine &Name,
                                        Instruction *InsertBefore) {
+  if(S1->getType() != S2->getType()) {
+printf("[%s:%d] %s\n", __FUNCTION__, __LINE__, "Cannot create binary operator with two operands of differing type!");
+S1->dump();
+S2->dump();
+S1->getType()->dump();
+S2->getType()->dump();
+  }
   assert(S1->getType() == S2->getType() &&
          "Cannot create binary operator with two operands of differing type!");
   return new BinaryOperator(Op, S1, S2, S1->getType(), Name, InsertBefore);

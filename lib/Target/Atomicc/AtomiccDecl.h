@@ -106,7 +106,6 @@ void pushWork(ClassMethodTable *table, Function *func, std::string mName);
 void dumpMemoryRegions(int arg);
 ClassMethodTable *getClass(const StructType *STy);
 bool isActionMethod(const Function *func);
-bool isInterface(const StructType *STy);
 
 void generateIR(std::string OutputDir);
 int checkDerived(const Type *A, const Type *B);
