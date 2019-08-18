@@ -187,9 +187,7 @@ ClassMethodTable *getClass(const StructType *STy)
         ClassMethodTable *table = new ClassMethodTable;
         classCreate[STy] = table;
         classCreate[STy]->STy = STy;
-        ModuleIR *IR = new ModuleIR;
-        table->IR = IR;
-        IR->name = legacygetStructName(STy);
+        table->name = legacygetStructName(STy);
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
         int processSequence = 0; // fields
@@ -207,7 +205,7 @@ ClassMethodTable *getClass(const StructType *STy)
                     ret = ret.substr(0,idx);
                 idx = ret.find(':');
                 std::string typName = ret.substr(idx+1);
-                IR->unionList.push_back(UnionItem{ret.substr(0, idx), typName});
+                table->unionList.push_back(GenUnionItem{ret.substr(0, idx), typName});
                 last_subs = subs;
             }
         }
@@ -291,7 +289,7 @@ static bool traceConnect = true;
                         if (targetInterface == "") {
                             if (traceConnect)
                                 printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
-                            IR->interfaceConnect.push_back(InterfaceConnectType{target, source, tableE->IR->name, isForward});
+                            table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, tableE->name, isForward});
                             goto nextInterface;
                         }
                         else
@@ -306,7 +304,7 @@ static bool traceConnect = true;
                             if (targetInterface == elementName) {
                                 if (traceConnect)
                                     printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
-                                IR->interfaceConnect.push_back(InterfaceConnectType{target, source, getClass(STyI)->IR->name, isForward});
+                                table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, getClass(STyI)->name, isForward});
                                 goto nextInterface;
                             }
                         }
@@ -752,7 +750,7 @@ static void processBlockConditions(const Function *currentFunction)
                     int64_t val = CI->getCaseValue()->getZExtValue();
                     printf("[%s:%d] [%d] = %s\n", __FUNCTION__, __LINE__, (int)val, caseBB?caseBB->getName().str().c_str():"NONE");
                     //if (getCondStr(caseBB, true) == "") { // 'true' condition
-                        std::string sval = autostr(val);
+                        std::string sval = utostr(val);
                         std::string cond = parenOperand(SI->getCondition());
                         setCondition(caseBB, false, "(" + cond + " == " + sval + ")", &*BBI);
                         defaultCond += sep + "(" + cond + " == " + sval + ")";
@@ -811,7 +809,7 @@ static std::string typeName(const Type *Ty, std::string templateOptions = "")
      case Type::FloatTyID:
          return "FLOAT";
      case Type::StructTyID: {
-         std::string ret = getClass(cast<StructType>(Ty))->IR->name;
+         std::string ret = getClass(cast<StructType>(Ty))->name;
          if (templOptions != "")
              printf("[%s:%d] classname %s template %s\n", __FUNCTION__, __LINE__, ret.c_str(), templOptions.c_str());
          return ret;
@@ -939,7 +937,7 @@ std::string printOperand(const Value *Operand)
                 oSTy = dyn_cast<StructType>(oPTy->getElementType()); 
             if (!derived && oSTy) {
                 ClassMethodTable *table = getClass(oSTy);
-                for (auto item: table->IR->unionList) {
+                for (auto item: table->unionList) {
                     printf("BBBBBBBB %s    UNION %s %s\n", ctype.c_str(), item.type.c_str(), item.name.c_str());
                     if (item.type == ctype) {
                         vout += operand + MODULE_SEPARATOR + item.name;
@@ -1342,7 +1340,7 @@ static std::string processMethod(std::string methodName, const Function *func,
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     bool isModule = startswith(table->STy->getName(), "module");
-printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), table->IR->name.c_str());
+printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), table->name.c_str());
     const char *header = "MODULE";
     if (isInterface(table->STy))
         header = "INTERFACE";
@@ -1354,16 +1352,16 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         else
             header = "STRUCT";
     }
-    fprintf(OStr, "%s %s {\n", header, table->IR->name.c_str());
+    fprintf(OStr, "%s %s {\n", header, table->name.c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
-    for (auto item: table->IR->priority)
+    for (auto item: table->priority)
         fprintf(OStr, "    PRIORITY %s %s\n", item.first.c_str(), item.second.c_str());
-    for (auto item: table->IR->interfaceConnect)
+    for (auto item: table->interfaceConnect)
         fprintf(OStr, "    INTERFACECONNECT%s %s %s %s\n", item.isForward ? "/Forward" : "", item.target.c_str(), item.source.c_str(), item.type.c_str());
-    for (auto item: table->IR->unionList)
+    for (auto item: table->unionList)
         fprintf(OStr, "    UNION %s %s\n", item.type.c_str(), item.name.c_str());
-    if (table->IR->unionList.size())
+    if (table->unionList.size())
         fprintf(OStr, "    FIELD Bit(%ld) DATA\n", (long)sizeType(table->STy));
     else
         processField(table, OStr);
@@ -1459,7 +1457,7 @@ void generateIR(std::string OutputDir)
               : (!strncmp(sname.c_str(), "ainterface.", 11)) ? '5'
               : (!strncmp(sname.c_str(), "serialize.", 10))  ? '6'
               : (!strncmp(sname.c_str(), "emodule.", 8))     ? '7'
-              : '9') + getClass(current.first)->IR->name;
+              : '9') + getClass(current.first)->name;
         if (strncmp(sname.c_str(), "class.std::", 11) // don't generate anything for std classes
          && strncmp(sname.c_str(), "struct.std::", 12))
             structAlpha[sortName] = current.first;

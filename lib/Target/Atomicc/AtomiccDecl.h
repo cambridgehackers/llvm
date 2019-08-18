@@ -27,8 +27,6 @@
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/Instructions.h"
 
-#include "AtomiccIR.h"
-
 #define MAX_BASIC_BLOCK_FLAGS 0x10
 #define MAX_CHAR_BUFFER 1000
 #define BOGUS_POINTER ((void *)0x5a5a5a5a5a5a5a5a)
@@ -40,6 +38,7 @@
       }}
 
 #define GIANT_SIZE 1024
+#define MODULE_SEPARATOR "$"
 
 typedef struct {
     int value;
@@ -58,6 +57,18 @@ typedef struct {
     const Function *func;
 } ClassMethodInfo;
 
+typedef struct {
+    std::string target;
+    std::string source;
+    std::string type;
+    bool        isForward;
+} GenInterfaceConnectType;
+
+typedef struct {
+    std::string name;
+    std::string type;
+} GenUnionItem;
+
 class ClassMethodTable {
 public:
     const StructType                  *STy;
@@ -67,7 +78,10 @@ public:
     std::map<int, std::string>        replaceCount;
     std::list<std::string>            softwareName;
     std::map<std::string, bool>       ruleFunctions;
-    ModuleIR* IR;
+    std::string                       name;
+    std::list<GenInterfaceConnectType>   interfaceConnect;
+    std::list<GenUnionItem>              unionList;
+    std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     ClassMethodTable() {}
 };
 
@@ -111,3 +125,6 @@ void generateIR(std::string OutputDir);
 int checkDerived(const Type *A, const Type *B);
 const Function *getCallee(const Instruction *I);
 std::string baseMethodName(std::string pname);
+
+bool endswith(std::string str, std::string suffix);
+bool startswith(std::string str, std::string suffix);

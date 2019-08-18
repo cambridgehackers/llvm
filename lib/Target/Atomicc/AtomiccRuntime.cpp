@@ -344,5 +344,5 @@ extern "C" void atomiccSchedulePriority(const char *rule, const char *priority, 
     ClassMethodTable *table = getClass(STy);
     printf("%s: %s %s %p\n", __FUNCTION__, rule, priority, (void *)STy);
     STy->dump();
-    table->IR->priority[rule] = priority;
+    table->priority[rule] = priority;
 }

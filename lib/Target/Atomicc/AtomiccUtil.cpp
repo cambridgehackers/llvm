@@ -130,3 +130,14 @@ std::string baseMethodName(std::string pname)
         pname = pname.substr(0, pname.length()-5);
     return pname;
 }
+
+bool endswith(std::string str, std::string suffix)
+{
+    int skipl = str.length() - suffix.length();
+    return skipl >= 0 && str.substr(skipl) == suffix;
+}
+
+bool startswith(std::string str, std::string suffix)
+{
+    return str.substr(0, suffix.length()) == suffix;
+}
