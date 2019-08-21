@@ -122,8 +122,8 @@ static bool isAlloca(const Value *arg)
 static bool isInterface(const Type *Ty)
 {
     if (auto STy = dyn_cast<StructType>(Ty))
-    return STy && !STy->isLiteral() && !STy->getName().empty()
-       && startswith(STy->getName(), "ainterface.");
+    if (!STy->isLiteral() && !STy->getName().empty())
+        return startswith(STy->getName(), "ainterface.");
     if (auto ATy = dyn_cast<ArrayType>(Ty))
         return isInterface(ATy->getElementType());
     if (auto PTy = dyn_cast<PointerType>(Ty))
@@ -1284,7 +1284,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 std::string alloc = "STORE ";
                 bool isInter = false;
                 if (auto IG = dyn_cast<GetElementPtrInst>(SI->getPointerOperand()))
-                    isInter = isInterface(IG->getSourceElementType());
+                    isInter = isInterface(IG->getType()) || isInterface(IG->getSourceElementType());
                 if (isInter || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand())) {
                     alloc = "LET " + typeName(cast<PointerType>(
                       SI->getPointerOperand()->getType())->getElementType()) + " ";
