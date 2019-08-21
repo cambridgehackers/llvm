@@ -437,7 +437,7 @@ static int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I,
 /*
  * Generate a string for the value represented by a GEP DAG
  */
-static std::string printGEPExpression(const Value *Ptr, gep_type_iterator I, gep_type_iterator E)
+static std::string printGEPExpression(const GetElementPtrInst *ref, const Value *Ptr, gep_type_iterator I, gep_type_iterator E)
 {
 static int errorLimit = 5;
 static int nesting = 0;
@@ -472,6 +472,7 @@ static int nesting = 0;
     if (const Constant *FirstOp = dyn_cast<Constant>(I.getOperand()))
     if (FirstOp->isNullValue() && std::next(I) != E)
         ++I;  // Skip the zero index if there are more items. (????)
+int traceindex = 0;
     for (; I != E; ++I) {
         if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
@@ -495,10 +496,23 @@ static int nesting = 0;
             if (trace_gep)
                 printf("[%s:%d] nest %d cbuffer %s\n", __FUNCTION__, __LINE__, nesting, cbuffer.c_str());
             std::string op = printOperand(I.getOperand());
-            if (!removeSubscript || op != "0")
+            if (!removeSubscript) {
+                bool skip = false;
+                int len = -1;
+                if (auto ITy = dyn_cast<IntegerType>(I.getOperand()->getType()))
+                    len = ITy->getBitWidth();
+                skip = (traceindex == 0 && len == 32 && op == "0"); // skip over pointer
+if (traceindex == 0 && len == 32) {
+printf("[%s:%d] SUBBEEEZZZZZZZZZZZZZZZZZ index %d '%s' op %s len %d\n", __FUNCTION__, __LINE__, traceindex, cbuffer.c_str(), op.c_str(), len);
+I.getOperand()->dump();
+ref->dump();
+}
+                if (!skip)
                 cbuffer += "[" + op + "]";
+            }
             processingInterface = false;
         }
+traceindex++;
     }
     if (trace_gep /*|| Total == -1*/)
 if (Total != -1 || errorLimit-- > 0)
@@ -587,7 +601,7 @@ static std::string printCall(const Instruction *I, bool useParams = false)
                 }
                 else if (op == Instruction::GetElementPtr) {
                     // used for character string arg
-                    std::string ret = printGEPExpression(opd, gep_type_begin(CE), gep_type_end(CE));
+                    std::string ret = printGEPExpression(dyn_cast<GetElementPtrInst>(CE), opd, gep_type_begin(CE), gep_type_end(CE));
                     vout += ret.substr(1, ret.length()-2); // remove leading/trailing '"'
                 }
                 else {
@@ -879,7 +893,7 @@ std::string printOperand(const Value *Operand)
             break;
         case Instruction::GetElementPtr: {
             const GetElementPtrInst *IG = dyn_cast<GetElementPtrInst>(I);
-            vout = printGEPExpression(IG->getPointerOperand(), gep_type_begin(IG), gep_type_end(IG));
+            vout = printGEPExpression(IG, IG->getPointerOperand(), gep_type_begin(IG), gep_type_end(IG));
             break;
             }
         case Instruction::Load:
@@ -1077,7 +1091,7 @@ legacy_phi:
                 }
                 else if (op == Instruction::GetElementPtr) {
                     // used for character string args to printf()
-                    cbuffer += printGEPExpression(opd, gep_type_begin(CE), gep_type_end(CE));
+                    cbuffer += printGEPExpression(dyn_cast<GetElementPtrInst>(CE), opd, gep_type_begin(CE), gep_type_end(CE));
                 }
                 else {
                     printf("[%s:%d] unknown Constant type\n", __FUNCTION__, __LINE__);
