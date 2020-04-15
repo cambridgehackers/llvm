@@ -192,6 +192,11 @@ sourceTmp->getType()->dump();
     }
 }
 
+static void processMemset(CallInst *II)
+{
+    recursiveDelete(II);
+}
+
 /*
  * Perform any processing needed on the IR before execution.
  * This includes:
@@ -225,6 +230,7 @@ void preprocessModule(Module *Mod)
         // remap all calls to 'malloc' and 'new' to our runtime.
         {"_Znwm", processMalloc}, {"_Znam", processMalloc}, {"malloc", processMalloc},
         {"llvm.memcpy.p0i8.p0i8.i64", processMemcpy},
+        {"llvm.memset.p0i8.i64", processMemset},
         {"_ZL20atomiccNewArrayCountm", processMSize},
         {"atomiccSchedulePriority", processPriority},
         {NULL, NULL}};

@@ -331,6 +331,8 @@ static bool traceConnect = true;
                     if (action > 0)
                         actionFunction[func] = true;
                 }
+                else
+                    printf("[%s:%d]FFFFFFFFFFFFF table %s mname %s fname %s map %p\n", __FUNCTION__, __LINE__, table->name.c_str(), mName.c_str(), fname.c_str(), functionMap[fname]);
                 }
             last_subs = subs;
         }
@@ -594,10 +596,12 @@ static std::string printCall(const Instruction *I, bool useParams = false)
                 auto func = cast<Function>(opd);
                 std::list<std::string> mlines, malines;
                 std::string ret = processMethod("", func, mlines, malines, "");
+                std::string methName = getMethodName(func);
+                assert(methName != "");
                 if (ret != "")
                     vout += "," + ret;
                 else
-                    vout += "," + getMethodName(func);
+                    vout += "," + methName;
                 }
                 else if (op == Instruction::GetElementPtr) {
                     // used for character string arg
@@ -1143,6 +1147,8 @@ static void processField(ClassMethodTable *table, FILE *OStr)
     for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
         auto fitem = table->fieldName[Idx];
         std::string fldName = fitem.name;
+        if (fldName == "_")
+            continue;
         std::string bitSize, arrayDim;
         std::string templateOptions = extractOptions(fitem.templateOptions, bitSize, arrayDim);
         const Type *element = *I;
@@ -1153,6 +1159,7 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         }
         if (fldName == "") {
             if (auto iSTy = dyn_cast<StructType>(element))
+            if (!isInterface(iSTy))
                 processField(getClass(iSTy), OStr);
             continue;
         }
@@ -1210,6 +1217,9 @@ printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elemen
             //elementName = name;
 printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
         }
+#define BOGUS_FORCE_DECLARATION_FIELD "$UNUSED$FIELD$FORCE$ALLOC$"
+        if (endswith(fldName, BOGUS_FORCE_DECLARATION_FIELD))
+            continue;
         if (isInterface(element))
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
         else if (fldName != "__defaultClock" && fldName != "__defaultnReset")
@@ -1353,8 +1363,9 @@ static std::string processMethod(std::string methodName, const Function *func,
 
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
+    std::string interfaceName;
     bool isModule = startswith(table->STy->getName(), "module");
-printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName().str().c_str(), table->name.c_str());
+printf("[%s:%d]MODULE Ty %p %s -> %s\n", __FUNCTION__, __LINE__, table->STy, table->STy->getName().str().c_str(), table->name.c_str());
     const char *header = "MODULE";
     if (isInterface(table->STy))
         header = "INTERFACE";
@@ -1366,7 +1377,70 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
         else
             header = "STRUCT";
     }
-    fprintf(OStr, "%s %s {\n", header, table->name.c_str());
+#if 1
+{
+    // generate local state element declarations
+    int Idx = 0;
+    for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
+        auto fitem = table->fieldName[Idx];
+        if (fitem.name != "")
+            continue;
+        std::string bitSize, arrayDim;
+        std::string templateOptions = extractOptions(fitem.templateOptions, bitSize, arrayDim);
+        const Type *element = *I;
+        std::string vecCount;
+        if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
+            assert(vecCount == "" && "both vecCount and array count are not allowed");
+            vecCount = utostr(ATy->getNumElements());
+            element = ATy->getElementType();
+        }
+        if (vecCount != "" && arrayDim != "") {
+printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(), arrayDim.c_str());
+            vecCount = arrayDim;
+        }
+        std::string elementName = typeName(element);
+        if (templateOptions != "") {
+printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elementName.c_str(), templateOptions.c_str());
+            std::string name, remain = templateOptions;
+            int ind = remain.find(":");
+            if (ind > 0) {
+                name = remain.substr(0, ind);
+                remain = remain.substr(ind+1);
+            }
+            name += "(";
+            if (!startswith(elementName, name)) {
+                printf("[%s:%d] bad class name %s remain %s original %s\n", __FUNCTION__, __LINE__, elementName.c_str(), remain.c_str(), templateOptions.c_str());
+                exit(-1);
+            }
+            std::string param = elementName.substr(name.length());
+            param = param.substr(0, param.length()-1);
+            while ((ind = param.find("=")) > 0) {
+                name += param.substr(0, ind+1);
+                param = param.substr(ind+1);
+                ind = remain.find(":");
+                std::string next;
+                if (ind > 0) {
+                    next = remain.substr(ind+1);
+                    remain = remain.substr(0, ind);
+                }
+                name += remain;
+                remain = next;
+            }
+            name += ")";
+            //elementName = name;
+printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
+        }
+        if (isInterface(element))
+            interfaceName = elementName;
+    }
+    if (!isInterface(table->STy))
+    if (interfaceName == "") {
+printf("[%s:%d] interface name missing from module '%s'\n", __FUNCTION__, __LINE__, table->name.c_str());
+table->STy->dump();
+    }
+}
+#endif
+    fprintf(OStr, "%s %s %s {\n", header, table->name.c_str(), interfaceName.c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
     for (auto item: table->priority)
@@ -1452,7 +1526,7 @@ printf("[%s:%d]MODULE %s -> %s\n", __FUNCTION__, __LINE__, table->STy->getName()
              fprintf(OStr, "        %s\n", line.c_str());
         for (auto line: mlines)
              fprintf(OStr, "        %s\n", line.c_str());
-        if (mlines.size())
+        if (mlines.size() + malines.size())
             fprintf(OStr, "    }\n");
     }
     fprintf(OStr, "}\n");
