@@ -73,12 +73,14 @@ class ClassMethodTable {
 public:
     const StructType                  *STy;
     std::map<int, FieldNameInfo>      fieldName;
+    std::map<std::string, FieldNameInfo> interfaces;
     std::list<ClassMethodInfo>        methods;
     std::map<int, const Type *>       replaceType;
     std::map<int, std::string>        replaceCount;
     std::list<std::string>            softwareName;
     std::map<std::string, bool>       ruleFunctions;
     std::string                       name;
+    std::string                       interfaceName;
     std::list<GenInterfaceConnectType>   interfaceConnect;
     std::list<GenUnionItem>              unionList;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc

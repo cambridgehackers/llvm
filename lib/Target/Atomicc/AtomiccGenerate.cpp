@@ -26,6 +26,7 @@ static int trace_call;//=1;
 static int trace_gep;//=1;
 static int trace_operand;//=1;
 static int trace_blockCond;//= 1;
+static bool traceConnect;// = true;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
 static std::string globalMethodName;
@@ -180,6 +181,31 @@ printf("[%s:%d] NAME '%s'\n", __FUNCTION__, __LINE__, temp.c_str());
     return "l_unnamed_" + utostr(UnnamedStructIDs[STy]);
 }
 
+static void buildInterfaceList(ClassMethodTable *master, ClassMethodTable *table, std::string prefix, bool top)
+{
+    int Idx = 0;
+    for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
+        Type *telement = *I;
+        if (auto PTy = dyn_cast<PointerType>(telement))
+            telement = PTy->getElementType();
+        if (auto ATy = dyn_cast<ArrayType>(telement))
+            telement = ATy->getElementType();
+        if (const StructType *STyE = dyn_cast<StructType>(telement)) {
+            auto tableE = getClass(STyE);
+            bool isInter = isInterface(STyE);
+            std::string fname = prefix;
+printf("[%s:%d] [%d] top %d isifc %d prefix '%s' name '%s' type '%s'\n", __FUNCTION__, __LINE__, Idx, top, isInter, prefix.c_str(), table->fieldName[Idx].name.c_str(), tableE->name.c_str());
+            if (prefix != "" && table->fieldName[Idx].name != "")
+                fname += MODULE_SEPARATOR;
+            fname += table->fieldName[Idx].name;
+            if (isInter)
+                master->interfaces[fname] = FieldNameInfo{tableE->name, "", "", ""};
+            if (top || isInter)
+                buildInterfaceList(master, tableE, fname, top && isInter);
+        }
+    }
+}
+
 ClassMethodTable *getClass(const StructType *STy)
 {
     int fieldSub = 0;
@@ -223,6 +249,7 @@ ClassMethodTable *getClass(const StructType *STy)
                 last_subs++;
             }
             if (STy->structFieldMap[last_subs] == '@') {
+                buildInterfaceList(table, table, "", true);
                 processSequence = 3; // interface connect
                 last_subs++;
             }
@@ -264,54 +291,22 @@ ClassMethodTable *getClass(const StructType *STy)
                     isForward = false;
                     target = target.substr(8);
                 }
-                std::string targetItem = target, targetInterface;
-                idx = targetItem.find(MODULE_SEPARATOR);
-                if (idx > 0) {
-                    targetInterface = targetItem.substr(idx+1);
-                    targetItem = targetItem.substr(0, idx);
+                if (target.substr(0, 8) == "*(this->" && target.substr(target.length()-1) == ")")
+                    target = target.substr(8, target.length() - 9);
+                if (traceConnect) {
+                    printf("[%s:%d] CONNECT %s = %s \n", __FUNCTION__, __LINE__, target.c_str(), source.c_str());
+                    for (auto item: table->interfaces)
+                        printf("[%s:%d]interfacetable [%s] = %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.name.c_str());
                 }
-                int Idx = 0;
-static bool traceConnect = true;
-                if (traceConnect)
-                printf("[%s:%d] CONNECT %s = %s target %s tif %s\n", __FUNCTION__, __LINE__, target.c_str(), source.c_str(), targetItem.c_str(), targetInterface.c_str());
-                for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
-                    Type *telement = *I;
-                    if (auto PTy = dyn_cast<PointerType>(telement))
-                        telement = PTy->getElementType();
-                    if (auto ATy = dyn_cast<ArrayType>(telement))
-                        telement = ATy->getElementType();
-                    if (const StructType *STyE = dyn_cast<StructType>(telement))
-                    if (targetItem == table->fieldName[Idx].name) {
-                        auto tableE = getClass(STyE);
-                        if (traceConnect)
-                            printf("[%s:%d] found targetitem %s\n", __FUNCTION__, __LINE__, targetItem.c_str());
-                        int Idx = 0;
-                        if (targetInterface == "") {
-                            if (traceConnect)
-                                printf("[%s:%d] targetlocal\n", __FUNCTION__, __LINE__);
-                            table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, tableE->name, isForward});
-                            goto nextInterface;
-                        }
-                        else
-                        for (auto I = STyE->element_begin(), E = STyE->element_end(); I != E; ++I, Idx++) {
-                            std::string elementName = tableE->fieldName[Idx].name;
-                            if (traceConnect)
-                                printf("[%s:%d] targetif %s name %s\n", __FUNCTION__, __LINE__, targetInterface.c_str(), elementName.c_str());
-                            Type *element = *I;
-                            if (const PointerType *PTy = dyn_cast<PointerType>(element))
-                                element = PTy->getElementType();
-                            if (const StructType *STyI = dyn_cast<StructType>(element))
-                            if (targetInterface == elementName) {
-                                if (traceConnect)
-                                    printf("[%s:%d] FOUND sname %s\n", __FUNCTION__, __LINE__, STyI->getName().str().c_str());
-                                table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, getClass(STyI)->name, isForward});
-                                goto nextInterface;
-                            }
-                        }
-                    }
+                std::string tname = table->interfaces[target].name;
+                if (tname != "") {
+                    if (traceConnect)
+                        printf("[%s:%d] '%s' found '%s'\n", __FUNCTION__, __LINE__, target.c_str(), tname.c_str());
+                    table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, tname, isForward});
                 }
-                printf("[%s:%d] Error: interface not found %s\n", __FUNCTION__, __LINE__, targetItem.c_str());
-        nextInterface:;
+                else {
+                    printf("[%s:%d] Error: interface not found %s\n", __FUNCTION__, __LINE__, target.c_str());
+                }
             }
             else if (idx >= 0) { // processSequence == 1 -> methods
                 std::string fname = ret.substr(0, idx);
@@ -1147,8 +1142,8 @@ static void processField(ClassMethodTable *table, FILE *OStr)
     for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
         auto fitem = table->fieldName[Idx];
         std::string fldName = fitem.name;
-        if (fldName == "_")
-            continue;
+        //if (fldName == "_")
+            //continue;
         std::string bitSize, arrayDim;
         std::string templateOptions = extractOptions(fitem.templateOptions, bitSize, arrayDim);
         const Type *element = *I;
@@ -1434,6 +1429,7 @@ printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_s
             interfaceName = elementName;
     }
     if (!isInterface(table->STy))
+    if (!table->STy->getName().startswith("struct."))
     if (interfaceName == "") {
 printf("[%s:%d] interface name missing from module '%s'\n", __FUNCTION__, __LINE__, table->name.c_str());
 table->STy->dump();
