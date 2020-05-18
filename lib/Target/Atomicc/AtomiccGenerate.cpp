@@ -1135,7 +1135,7 @@ legacy_phi:
  * Walk all BasicBlocks for a Function, generating strings for Instructions
  * that are not inlinable.
  */
-static void processField(ClassMethodTable *table, FILE *OStr)
+static void processField(ClassMethodTable *table, FILE *OStr, bool inInterface)
 {
     // generate local state element declarations
     int Idx = 0;
@@ -1148,6 +1148,7 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         std::string templateOptions = extractOptions(fitem.templateOptions, bitSize, arrayDim);
         const Type *element = *I;
         std::string vecCount;
+        if (!inInterface)
         if (const Type *newType = table->replaceType[Idx]) {
             element = newType;
             vecCount = table->replaceCount[Idx];
@@ -1155,7 +1156,7 @@ static void processField(ClassMethodTable *table, FILE *OStr)
         if (fldName == "") {
             if (auto iSTy = dyn_cast<StructType>(element))
             if (!isInterface(iSTy))
-                processField(getClass(iSTy), OStr);
+                processField(getClass(iSTy), OStr, inInterface);
             continue;
         }
         std::string temp;
@@ -1360,9 +1361,10 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     std::string interfaceName;
     bool isModule = startswith(table->STy->getName(), "module");
+    bool inInterface = isInterface(table->STy);
 printf("[%s:%d]MODULE Ty %p %s -> %s\n", __FUNCTION__, __LINE__, table->STy, table->STy->getName().str().c_str(), table->name.c_str());
     const char *header = "MODULE";
-    if (isInterface(table->STy))
+    if (inInterface)
         header = "INTERFACE";
     else if (!isModule) {
         if (table->STy->getName().substr(0, 7) == "emodule")
@@ -1448,7 +1450,7 @@ table->STy->dump();
     if (table->unionList.size())
         fprintf(OStr, "    FIELD Bit(%ld) DATA\n", (long)sizeType(table->STy));
     else
-        processField(table, OStr);
+        processField(table, OStr, inInterface);
     for (auto FI : table->methods) {
         std::list<std::string> mlines, malines;
         std::string methodName = FI.name;
