@@ -476,7 +476,7 @@ int traceindex = 0;
             ClassMethodTable *table = getClass(STy);
             std::string fname = table->fieldName[foffset].name;
             if (fname == "_")   // optimization for verilog port references
-                fname = "";
+                fname = MODULE_SEPARATOR;
             else if (cbuffer != "" && !processingInterface)  // optimization for verilog port references
                 fname = MODULE_SEPARATOR + fname;
             if (trace_gep)
