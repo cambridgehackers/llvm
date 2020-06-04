@@ -1029,8 +1029,7 @@ finish:;
                     val += (isLAnd ? " && " : " || ");
                 }
                 else {
-                    printf("[%s:%d] block doesnt end in brcond\n", __FUNCTION__, __LINE__);
-                    RI->dump();
+                    goto legacy_phi;
                 }
             }
             val += parenOperand(topVal);
