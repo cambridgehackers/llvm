@@ -642,7 +642,9 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         exit(-1);
     }
     else {
-        vout = pcalledFunction + MODULE_SEPARATOR + fname;
+        if (pcalledFunction.substr(pcalledFunction.length() - 1) != MODULE_SEPARATOR)
+            pcalledFunction += MODULE_SEPARATOR;
+        vout = pcalledFunction + fname;
     if (useParams) {
         vout += "{";
         for (; AI != AE; ++AI) { // first param processed as pcalledFunction
