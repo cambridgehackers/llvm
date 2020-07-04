@@ -89,6 +89,7 @@ private:
   } U;
 
   unsigned BitWidth; ///< The number of bits in this APInt.
+  bool     isSigned;
 
   friend struct DenseMapAPIntKeyInfo;
 
@@ -269,7 +270,7 @@ public:
   /// \param val the initial value of the APInt
   /// \param isSigned how to treat signedness of val
   APInt(unsigned numBits, uint64_t val, bool isSigned = false)
-      : BitWidth(numBits) {
+      : BitWidth(numBits), isSigned(isSigned) {
     assert(BitWidth && "bitwidth too small");
     if (isSingleWord()) {
       U.VAL = val;
@@ -942,7 +943,9 @@ public:
   void ashrInPlace(unsigned ShiftAmt) {
     assert(ShiftAmt <= BitWidth && "Invalid shift amount");
     if (isSingleWord()) {
-      int64_t SExtVAL = SignExtend64(U.VAL, BitWidth);
+      int64_t SExtVAL = U.VAL;
+      if (isSigned)
+          SExtVAL = SignExtend64(U.VAL, BitWidth);
       if (ShiftAmt == BitWidth)
         U.VAL = SExtVAL >> (APINT_BITS_PER_WORD - 1); // Fill with sign bit.
       else
@@ -1552,8 +1555,12 @@ public:
   /// int64_t. The bit width must be <= 64 or the value must fit within an
   /// int64_t. Otherwise an assertion will result.
   int64_t getSExtValue() const {
-    if (isSingleWord())
-      return SignExtend64(U.VAL, BitWidth);
+    if (isSingleWord()) {
+      if (isSigned)
+          return SignExtend64(U.VAL, BitWidth);
+      else
+          return U.VAL;
+    }
     assert(getMinSignedBits() <= 64 && "Too many bits for int64_t");
     return int64_t(U.pVal[0]);
   }
