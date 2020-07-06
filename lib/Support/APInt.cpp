@@ -106,18 +106,18 @@ void APInt::initFromArray(ArrayRef<uint64_t> bigVal) {
   clearUnusedBits();
 }
 
-APInt::APInt(unsigned numBits, ArrayRef<uint64_t> bigVal)
-  : BitWidth(numBits) {
+APInt::APInt(unsigned numBits, ArrayRef<uint64_t> bigVal, bool isSigned)
+  : BitWidth(numBits), valueSigned(isSigned) {
   initFromArray(bigVal);
 }
 
-APInt::APInt(unsigned numBits, unsigned numWords, const uint64_t bigVal[])
-  : BitWidth(numBits) {
+APInt::APInt(unsigned numBits, unsigned numWords, const uint64_t bigVal[], bool isSigned)
+  : BitWidth(numBits), valueSigned(isSigned) {
   initFromArray(makeArrayRef(bigVal, numWords));
 }
 
-APInt::APInt(unsigned numbits, StringRef Str, uint8_t radix)
-  : BitWidth(numbits) {
+APInt::APInt(unsigned numbits, StringRef Str, uint8_t radix, bool isSigned)
+  : BitWidth(numbits), valueSigned(isSigned) {
   assert(BitWidth && "Bitwidth too small");
   fromString(numbits, Str, radix);
 }
@@ -820,9 +820,9 @@ APInt APInt::trunc(unsigned width) const {
   assert(width && "Can't truncate to 0 bits");
 
   if (width <= APINT_BITS_PER_WORD)
-    return APInt(width, getRawData()[0]);
+    return APInt(width, getRawData()[0], valueSigned);
 
-  APInt Result(getMemory(getNumWords(width)), width);
+  APInt Result(getMemory(getNumWords(width)), width, valueSigned);
 
   // Copy full words.
   unsigned i;
@@ -842,9 +842,9 @@ APInt APInt::sext(unsigned Width) const {
   assert(Width > BitWidth && "Invalid APInt SignExtend request");
 
   if (Width <= APINT_BITS_PER_WORD)
-    return APInt(Width, SignExtend64(U.VAL, BitWidth));
+    return APInt(Width, SignExtend64(U.VAL, BitWidth), true);
 
-  APInt Result(getMemory(getNumWords(Width)), Width);
+  APInt Result(getMemory(getNumWords(Width)), Width, true);
 
   // Copy words.
   std::memcpy(Result.U.pVal, getRawData(), getNumWords() * APINT_WORD_SIZE);

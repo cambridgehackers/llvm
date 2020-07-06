@@ -89,7 +89,6 @@ private:
   } U;
 
   unsigned BitWidth; ///< The number of bits in this APInt.
-  bool     isSigned;
 
   friend struct DenseMapAPIntKeyInfo;
 
@@ -99,7 +98,7 @@ private:
   ///
   /// This constructor is used only internally for speed of construction of
   /// temporaries. It is unsafe for general use so it is not public.
-  APInt(uint64_t *val, unsigned bits) : BitWidth(bits) {
+  APInt(uint64_t *val, unsigned bits, bool isSigned = false) : BitWidth(bits), valueSigned(isSigned) {
     U.pVal = val;
   }
 
@@ -256,6 +255,7 @@ private:
   int compareSigned(const APInt &RHS) const LLVM_READONLY;
 
 public:
+  bool     valueSigned;
   /// \name Constructors
   /// @{
 
@@ -270,7 +270,7 @@ public:
   /// \param val the initial value of the APInt
   /// \param isSigned how to treat signedness of val
   APInt(unsigned numBits, uint64_t val, bool isSigned = false)
-      : BitWidth(numBits), isSigned(isSigned) {
+      : BitWidth(numBits), valueSigned(isSigned) {
     assert(BitWidth && "bitwidth too small");
     if (isSingleWord()) {
       U.VAL = val;
@@ -287,7 +287,7 @@ public:
   ///
   /// \param numBits the bit width of the constructed APInt
   /// \param bigVal a sequence of words to form the initial value of the APInt
-  APInt(unsigned numBits, ArrayRef<uint64_t> bigVal);
+  APInt(unsigned numBits, ArrayRef<uint64_t> bigVal, bool isSigned = false);
 
   /// Equivalent to APInt(numBits, ArrayRef<uint64_t>(bigVal, numWords)), but
   /// deprecated because this constructor is prone to ambiguity with the
@@ -296,7 +296,7 @@ public:
   /// If this overload is ever deleted, care should be taken to prevent calls
   /// from being incorrectly captured by the APInt(unsigned, uint64_t, bool)
   /// constructor.
-  APInt(unsigned numBits, unsigned numWords, const uint64_t bigVal[]);
+  APInt(unsigned numBits, unsigned numWords, const uint64_t bigVal[], bool isSigned = false);
 
   /// \brief Construct an APInt from a string representation.
   ///
@@ -309,11 +309,11 @@ public:
   /// \param numBits the bit width of the constructed APInt
   /// \param str the string to be interpreted
   /// \param radix the radix to use for the conversion
-  APInt(unsigned numBits, StringRef str, uint8_t radix);
+  APInt(unsigned numBits, StringRef str, uint8_t radix, bool isSigned = false);
 
   /// Simply makes *this a copy of that.
   /// @brief Copy Constructor.
-  APInt(const APInt &that) : BitWidth(that.BitWidth) {
+  APInt(const APInt &that) : BitWidth(that.BitWidth), valueSigned(that.valueSigned) {
     if (isSingleWord())
       U.VAL = that.U.VAL;
     else
@@ -321,7 +321,7 @@ public:
   }
 
   /// \brief Move Constructor.
-  APInt(APInt &&that) : BitWidth(that.BitWidth) {
+  APInt(APInt &&that) : BitWidth(that.BitWidth), valueSigned(that.valueSigned) {
     memcpy(&U, &that.U, sizeof(U));
     that.BitWidth = 0;
   }
@@ -337,7 +337,7 @@ public:
   ///
   /// This is useful for object deserialization (pair this with the static
   ///  method Read).
-  explicit APInt() : BitWidth(1) { U.VAL = 0; }
+  explicit APInt() : BitWidth(1), valueSigned(false) { U.VAL = 0; }
 
   /// \brief Returns whether this instance allocated memory.
   bool needsCleanup() const { return !isSingleWord(); }
@@ -944,7 +944,7 @@ public:
     assert(ShiftAmt <= BitWidth && "Invalid shift amount");
     if (isSingleWord()) {
       int64_t SExtVAL = U.VAL;
-      if (isSigned)
+      if (valueSigned)
           SExtVAL = SignExtend64(U.VAL, BitWidth);
       if (ShiftAmt == BitWidth)
         U.VAL = SExtVAL >> (APINT_BITS_PER_WORD - 1); // Fill with sign bit.
@@ -1556,10 +1556,10 @@ public:
   /// int64_t. Otherwise an assertion will result.
   int64_t getSExtValue() const {
     if (isSingleWord()) {
-      if (isSigned)
-          return SignExtend64(U.VAL, BitWidth);
-      else
-          return U.VAL;
+      int64_t SExtVAL = U.VAL;
+      if (valueSigned)
+          SExtVAL = SignExtend64(U.VAL, BitWidth);
+      return SExtVAL;
     }
     assert(getMinSignedBits() <= 64 && "Too many bits for int64_t");
     return int64_t(U.pVal[0]);

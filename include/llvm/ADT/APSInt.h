@@ -29,10 +29,10 @@ public:
   /// APSInt ctor - Create an APSInt with the specified width, default to
   /// unsigned.
   explicit APSInt(uint32_t BitWidth, bool isUnsigned = true)
-   : APInt(BitWidth, 0), IsUnsigned(isUnsigned) {}
+   : APInt(BitWidth, 0), IsUnsigned(isUnsigned) {valueSigned = !IsUnsigned; }
 
   explicit APSInt(APInt I, bool isUnsigned = true)
-   : APInt(std::move(I)), IsUnsigned(isUnsigned) {}
+   : APInt(std::move(I)), IsUnsigned(isUnsigned) {valueSigned = !IsUnsigned; }
 
   /// Construct an APSInt from a string representation.
   ///
@@ -58,8 +58,8 @@ public:
   // Query sign information.
   bool isSigned() const { return !IsUnsigned; }
   bool isUnsigned() const { return IsUnsigned; }
-  void setIsUnsigned(bool Val) { IsUnsigned = Val; }
-  void setIsSigned(bool Val) { IsUnsigned = !Val; }
+  void setIsUnsigned(bool Val) { IsUnsigned = Val; valueSigned = !IsUnsigned; }
+  void setIsSigned(bool Val) { IsUnsigned = !Val; valueSigned = !IsUnsigned; }
 
   /// toString - Append this APSInt to the specified SmallString.
   void toString(SmallVectorImpl<char> &Str, unsigned Radix = 10) const {
