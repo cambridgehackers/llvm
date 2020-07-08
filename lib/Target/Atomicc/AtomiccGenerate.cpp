@@ -169,6 +169,9 @@ static std::string legacygetStructName(const StructType *STy)
                 temp = temp.substr(strlen(*p));
                 if (temp.find(" ") != std::string::npos)
                     return CBEMangle(temp);
+                int ind;
+                while ((ind = temp.find(".")) != -1)
+                    temp = temp.substr(0, ind) + "_OC_" + temp.substr(ind+1);
                 return temp;
             }
             p++;
@@ -194,26 +197,30 @@ static void buildInterfaceList(ClassMethodTable *master, ClassMethodTable *table
             auto tableE = getClass(STyE);
             bool isInter = isInterface(STyE);
             std::string fname = prefix;
-printf("[%s:%d] [%d] top %d isifc %d prefix '%s' name '%s' type '%s'\n", __FUNCTION__, __LINE__, Idx, top, isInter, prefix.c_str(), table->fieldName[Idx].name.c_str(), tableE->name.c_str());
+            if (traceConnect)
+                printf("[%s:%d] [%d] top %d isifc %d prefix '%s' name '%s' type '%s'\n", __FUNCTION__, __LINE__, Idx, top, isInter, prefix.c_str(), table->fieldName[Idx].name.c_str(), tableE->name.c_str());
             if (prefix != "" && table->fieldName[Idx].name != "")
                 fname += MODULE_SEPARATOR;
             fname += table->fieldName[Idx].name;
             if (isInter)
-                master->interfaces[fname] = FieldNameInfo{tableE->name, "", "", ""};
+                master->interfaces[fname] = FieldNameInfo{tableE->name, "", "", "", ""};
             if (top || isInter)
                 buildInterfaceList(master, tableE, fname, top && isInter);
         }
     }
 }
 
+std::map<std::string, const StructType *> structNameMap;
 ClassMethodTable *getClass(const StructType *STy)
 {
     int fieldSub = 0;
     if (!classCreate[STy]) {
         ClassMethodTable *table = new ClassMethodTable;
         classCreate[STy] = table;
-        classCreate[STy]->STy = STy;
+        table->STy = STy;
+        table->remapSTy = nullptr;
         table->name = legacygetStructName(STy);
+        structNameMap[STy->getName().str()] = STy;
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
         int processSequence = 0; // fields
@@ -253,6 +260,10 @@ ClassMethodTable *getClass(const StructType *STy)
                 processSequence = 3; // interface connect
                 last_subs++;
             }
+            if (STy->structFieldMap[last_subs] == '%') {
+                processSequence = 4; // structTy remap
+                last_subs++;
+            }
             std::string ret = STy->structFieldMap.substr(last_subs);
             int idx = ret.find(',');
             if (idx >= 0)
@@ -260,7 +271,7 @@ ClassMethodTable *getClass(const StructType *STy)
             idx = ret.find(':');
 //printf("[%s:%d] sequence %d ret %s idx %d\n", __FUNCTION__, __LINE__, processSequence, ret.c_str(), idx);
             if (processSequence == 0) {
-                std::string params, templateOptions;
+                std::string params, templateOptions, vecCount;
                 int lt = ret.find('<');
                 if (lt >= 0) {
                     params = ret.substr(lt);
@@ -279,7 +290,7 @@ ClassMethodTable *getClass(const StructType *STy)
                     options = ret.substr(idx+1);
                     name = ret.substr(0, idx);
                 }
-                table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, templateOptions};
+                table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, templateOptions, vecCount};
             }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
@@ -298,15 +309,29 @@ ClassMethodTable *getClass(const StructType *STy)
                     for (auto item: table->interfaces)
                         printf("[%s:%d]interfacetable [%s] = %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.name.c_str());
                 }
-                std::string tname = table->interfaces[target].name;
-                if (tname != "") {
+                std::string sub, targetBase = target;
+                int ind = targetBase.find("[");
+                if (ind > 0) {
+                    sub = targetBase.substr(ind);
+                    targetBase = targetBase.substr(0, ind);
+                }
+                auto tifc = table->interfaces.find(targetBase);
+                if (tifc != table->interfaces.end()) {
+                    std::string tname = tifc->second.name;
                     if (traceConnect)
                         printf("[%s:%d] '%s' found '%s'\n", __FUNCTION__, __LINE__, target.c_str(), tname.c_str());
                     table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, tname, isForward});
                 }
                 else {
                     printf("[%s:%d] Error: interface not found %s\n", __FUNCTION__, __LINE__, target.c_str());
+                    for (auto item: table->interfaces)
+                        printf("        Available: [%s] = %s\n", item.first.c_str(), item.second.name.c_str());
                 }
+            }
+            else if (processSequence == 4) {
+const StructType *newSTy = structNameMap[ret];
+printf("[%s:%d] REMAPAPAPAPAPAPA %s new %p\n", __FUNCTION__, __LINE__, ret.c_str(), newSTy);
+                table->remapSTy = newSTy;
             }
             else if (idx >= 0) { // processSequence == 1 -> methods
                 std::string fname = ret.substr(0, idx);
@@ -333,7 +358,10 @@ ClassMethodTable *getClass(const StructType *STy)
         }
         checkClass(STy, STy);
     }
-    return classCreate[STy];
+    auto table = classCreate[STy];
+    if (table->remapSTy)
+        return classCreate[table->remapSTy];
+    return table;
 }
 
 /*
@@ -1545,6 +1573,7 @@ void generateIR(std::string OutputDir)
               : (!strncmp(sname.c_str(), "serialize.", 10))  ? '6'
               : (!strncmp(sname.c_str(), "emodule.", 8))     ? '7'
               : '9') + getClass(current.first)->name;
+        if (!current.second->remapSTy)
         if (strncmp(sname.c_str(), "class.std::", 11) // don't generate anything for std classes
          && strncmp(sname.c_str(), "struct.std::", 12))
             structAlpha[sortName] = current.first;

@@ -50,6 +50,7 @@ typedef struct {
     std::string options;
     std::string params;
     std::string templateOptions;
+    std::string vecCount;
 } FieldNameInfo;
 
 typedef struct {
@@ -72,6 +73,7 @@ typedef struct {
 class ClassMethodTable {
 public:
     const StructType                  *STy;
+    const StructType                  *remapSTy;
     std::map<int, FieldNameInfo>      fieldName;
     std::map<std::string, FieldNameInfo> interfaces;
     std::list<ClassMethodInfo>        methods;
