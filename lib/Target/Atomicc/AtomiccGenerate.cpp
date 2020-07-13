@@ -1243,7 +1243,8 @@ printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elemen
 printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
         }
 #define BOGUS_FORCE_DECLARATION_FIELD "$UNUSED$FIELD$FORCE$ALLOC$"
-        if (endswith(fldName, BOGUS_FORCE_DECLARATION_FIELD))
+#define CONNECT_PREFIX "___CONNECT__"
+        if (endswith(fldName, BOGUS_FORCE_DECLARATION_FIELD) || startswith(fldName, CONNECT_PREFIX))
             continue;
         if (isInterface(element))
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
