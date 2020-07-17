@@ -210,6 +210,35 @@ static void buildInterfaceList(ClassMethodTable *master, ClassMethodTable *table
     }
 }
 
+static void classConnectInterface(ClassMethodTable *table, std::string target, std::string source, bool isForward)
+{
+    if (target.substr(0, 8) == "*(this->" && target.substr(target.length()-1) == ")")
+        target = target.substr(8, target.length() - 9);
+    if (traceConnect) {
+        printf("[%s:%d] CONNECT %s = %s \n", __FUNCTION__, __LINE__, target.c_str(), source.c_str());
+        for (auto item: table->interfaces)
+            printf("[%s:%d]interfacetable [%s] = %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.name.c_str());
+    }
+    std::string sub, targetBase = target;
+    int ind = targetBase.find("[");
+    if (ind > 0) {
+        sub = targetBase.substr(ind);
+        targetBase = targetBase.substr(0, ind);
+    }
+    auto tifc = table->interfaces.find(targetBase);
+    if (tifc != table->interfaces.end()) {
+        std::string tname = tifc->second.name;
+        //if (traceConnect)
+            printf("[%s:%d] '%s' found '%s'\n", __FUNCTION__, __LINE__, target.c_str(), tname.c_str());
+        table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, tname, isForward});
+    }
+    else {
+        printf("[%s:%d] Error: interface not found %s\n", __FUNCTION__, __LINE__, target.c_str());
+        for (auto item: table->interfaces)
+            printf("        Available: [%s] = %s\n", item.first.c_str(), item.second.name.c_str());
+    }
+}
+
 std::map<std::string, const StructType *> structNameMap;
 ClassMethodTable *getClass(const StructType *STy)
 {
@@ -302,31 +331,7 @@ ClassMethodTable *getClass(const StructType *STy)
                     isForward = false;
                     target = target.substr(8);
                 }
-                if (target.substr(0, 8) == "*(this->" && target.substr(target.length()-1) == ")")
-                    target = target.substr(8, target.length() - 9);
-                if (traceConnect) {
-                    printf("[%s:%d] CONNECT %s = %s \n", __FUNCTION__, __LINE__, target.c_str(), source.c_str());
-                    for (auto item: table->interfaces)
-                        printf("[%s:%d]interfacetable [%s] = %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.name.c_str());
-                }
-                std::string sub, targetBase = target;
-                int ind = targetBase.find("[");
-                if (ind > 0) {
-                    sub = targetBase.substr(ind);
-                    targetBase = targetBase.substr(0, ind);
-                }
-                auto tifc = table->interfaces.find(targetBase);
-                if (tifc != table->interfaces.end()) {
-                    std::string tname = tifc->second.name;
-                    if (traceConnect)
-                        printf("[%s:%d] '%s' found '%s'\n", __FUNCTION__, __LINE__, target.c_str(), tname.c_str());
-                    table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, tname, isForward});
-                }
-                else {
-                    printf("[%s:%d] Error: interface not found %s\n", __FUNCTION__, __LINE__, target.c_str());
-                    for (auto item: table->interfaces)
-                        printf("        Available: [%s] = %s\n", item.first.c_str(), item.second.name.c_str());
-                }
+                classConnectInterface(table, target, source, isForward);
             }
             else if (processSequence == 4) {
 const StructType *newSTy = structNameMap[ret];
@@ -1259,6 +1264,16 @@ std::string getRdyName(std::string basename)
 {
     return baseMethodName(basename) + "__RDY";
 }
+std::string getInterfaceName(const Value *val)
+{
+    if (auto ins = dyn_cast<Instruction>(val)) {
+        auto Ty = ins->getOperand(0)->getType();
+        while (auto PTy = dyn_cast<PointerType>(Ty))
+            Ty = PTy->getElementType();
+        return legacygetStructName(dyn_cast<StructType>(Ty));
+    }
+    return "";
+}
 static std::string processMethod(std::string methodName, const Function *func,
            std::list<std::string> &mlines, std::list<std::string> &malines, std::string localOptions)
 {
@@ -1372,6 +1387,24 @@ static std::string processMethod(std::string methodName, const Function *func,
                 }
                 if (calledName == "printf") {
                     mlines.push_back("PRINTF " + tempCond + ":" + printCall(II, true));
+                    break;
+                }
+                if (calledName == "__connectInterface") {
+                    const Function *F = II->getParent()->getParent();
+                    auto *farg = F->arg_begin();
+                    std::string target = printOperand(II->getOperand(0));
+                    std::string source = printOperand(II->getOperand(1));
+                    if (auto PT = dyn_cast<PointerType>(farg->getType()))
+                    if (auto STy = dyn_cast<StructType>(PT->getElementType())) {
+                        std::string type = getInterfaceName(II->getOperand(0));
+                        if (type == "")
+                            type = getInterfaceName(II->getOperand(1));
+                        //classConnectInterface(getClass(STy), target, source, false);
+                        bool isForward = false;
+                        mlines.push_back("INTERFACECONNECT" +
+                            std::string(isForward ? "/Forward" : "") + " " +
+                            target + " " + source + " " + type);
+                    }
                     break;
                 }
                 std::string temp = (isActionMethod(fcall) ? "/Action " : " ") + tempCond;
