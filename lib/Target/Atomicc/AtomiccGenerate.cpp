@@ -519,6 +519,9 @@ int traceindex = 0;
                 if (fname != "" && fname.substr(0,1) == MODULE_SEPARATOR)
                     fname = fname.substr(1);
             }
+printf("[%s:%d]DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD '%s' fname '%s'\n", __FUNCTION__, __LINE__, cbuffer.c_str(), fname.c_str());
+            if (cbuffer[cbuffer.length()-1] == ']' && fname[0] == '$')
+                fname = "." + fname.substr(1);                        // TODO: extend/regularize element selection
             cbuffer += fname;
             processingInterface = isInterface(STy);
         }
