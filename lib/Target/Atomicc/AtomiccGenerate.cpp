@@ -335,7 +335,7 @@ ClassMethodTable *getClass(const StructType *STy)
             }
             else if (processSequence == 4) {
 const StructType *newSTy = structNameMap[ret];
-printf("[%s:%d] REMAPAPAPAPAPAPA %s new %p\n", __FUNCTION__, __LINE__, ret.c_str(), newSTy);
+printf("[%s:%d] REMAPAPAPAPAPAPA %s new %p\n", __FUNCTION__, __LINE__, ret.c_str(), (void *)newSTy);
                 table->remapSTy = newSTy;
             }
             else if (idx >= 0) { // processSequence == 1 -> methods
@@ -357,7 +357,7 @@ printf("[%s:%d] REMAPAPAPAPAPAPA %s new %p\n", __FUNCTION__, __LINE__, ret.c_str
                         actionFunction[func] = true;
                 }
                 else
-                    printf("[%s:%d]FFFFFFFFFFFFF table %s mname %s fname %s map %p\n", __FUNCTION__, __LINE__, table->name.c_str(), mName.c_str(), fname.c_str(), functionMap[fname]);
+                    printf("[%s:%d]FFFFFFFFFFFFF table %s mname %s fname %s map %p\n", __FUNCTION__, __LINE__, table->name.c_str(), mName.c_str(), fname.c_str(), (void *)functionMap[fname]);
                 }
             last_subs = subs;
         }
@@ -617,6 +617,9 @@ static std::string printCall(const Instruction *I, bool useParams = false)
     }
     if (calledName == "llvm.clog2.i32") {
         return "__clog2{" + printOperand(*AI) + "}";
+    }
+    if (calledName == "$past") {
+        return "$past{" + printOperand(*AI) + "}";
     }
     if (calledName == "__generateFor" || calledName == "__instantiateFor") {
         for (; AI != AE; ++AI) { // first param processed as pcalledFunction
@@ -1434,7 +1437,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
     std::string interfaceName;
     bool isModule = startswith(table->STy->getName(), "module");
     bool inInterface = isInterface(table->STy);
-printf("[%s:%d]MODULE Ty %p %s -> %s\n", __FUNCTION__, __LINE__, table->STy, table->STy->getName().str().c_str(), table->name.c_str());
+printf("[%s:%d]MODULE Ty %p %s -> %s\n", __FUNCTION__, __LINE__, (void *)table->STy, table->STy->getName().str().c_str(), table->name.c_str());
     const char *header = "MODULE";
     if (inInterface)
         header = "INTERFACE";
