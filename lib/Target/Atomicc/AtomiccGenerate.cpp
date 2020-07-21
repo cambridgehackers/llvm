@@ -1394,7 +1394,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 }
                 if (calledName == "__assert" || calledName == "__assume" || calledName == "__restrict") {
                     std::string val = printOperand(II->getOperand(0));
-                    val = "$" + calledName.substr(2) + "(" + val.substr(1, val.length()-2) + ")";
+                    val = calledName.substr(2) + "(" + val.substr(1, val.length()-2) + ")";
                     mlines.push_back("ASSERT " + tempCond + ":" + val);
                     break;
                 }
