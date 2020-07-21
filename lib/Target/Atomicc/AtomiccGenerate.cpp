@@ -1392,6 +1392,10 @@ static std::string processMethod(std::string methodName, const Function *func,
                     mlines.push_back("PRINTF " + tempCond + ":" + printCall(II, true));
                     break;
                 }
+                if (calledName == "__assert") {
+                    mlines.push_back("ASSERT " + tempCond + ":" + printOperand(II->getOperand(0)));
+                    break;
+                }
                 if (calledName == "__connectInterface") {
                     const Function *F = II->getParent()->getParent();
                     auto *farg = F->arg_begin();
