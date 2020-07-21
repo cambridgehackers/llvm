@@ -1392,8 +1392,10 @@ static std::string processMethod(std::string methodName, const Function *func,
                     mlines.push_back("PRINTF " + tempCond + ":" + printCall(II, true));
                     break;
                 }
-                if (calledName == "__assert") {
-                    mlines.push_back("ASSERT " + tempCond + ":" + printOperand(II->getOperand(0)));
+                if (calledName == "__assert" || calledName == "__assume" || calledName == "__restrict") {
+                    std::string val = printOperand(II->getOperand(0));
+                    val = "$" + calledName.substr(2) + "(" + val.substr(1, val.length()-2) + ")";
+                    mlines.push_back("ASSERT " + tempCond + ":" + val);
                     break;
                 }
                 if (calledName == "__connectInterface") {
