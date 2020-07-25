@@ -618,7 +618,7 @@ static std::string printCall(const Instruction *I, bool useParams = false)
     if (calledName == "llvm.clog2.i32") {
         return "__clog2{" + printOperand(*AI) + "}";
     }
-    if (calledName == "$past") {
+    if (calledName == "__past") {
         return "$past{" + printOperand(*AI) + "}";
     }
     if (calledName == "__generateFor" || calledName == "__instantiateFor") {
@@ -1380,7 +1380,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 std::string calledName = fcall->getName();
                 if (calledName == "__bitsubstrl")
                     calledName = "__bitsubstr";
-                if (calledName == "__ValidReadyRuntime"
+                if (calledName == "__ValidReadyRuntime" || calledName == "__past"
                  || calledName == "__bitconcat" || calledName == "__bitsubstr" || calledName == "__reduce")
                     break;                    // value picked up in expression
                 if (calledName == "__generateFor") {
@@ -1396,8 +1396,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                     break;
                 }
                 if (calledName == "__assert" || calledName == "__assume" || calledName == "__restrict") {
-                    std::string val = printOperand(II->getOperand(0));
-                    val = calledName.substr(2) + "(" + val.substr(1, val.length()-2) + ")";
+                    std::string val = calledName.substr(2) + "(" + printOperand(II->getOperand(0)) + ")";
                     mlines.push_back("ASSERT " + tempCond + ":" + val);
                     break;
                 }
