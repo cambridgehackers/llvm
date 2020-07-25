@@ -141,3 +141,20 @@ bool startswith(std::string str, std::string suffix)
 {
     return str.substr(0, suffix.length()) == suffix;
 }
+
+/*
+ * Recursively delete an Instruction and operands (if they become unused)
+ */
+void recursiveDelete(Value *V) //nee: RecursivelyDeleteTriviallyDeadInstructions
+{
+    Instruction *I = dyn_cast<Instruction>(V);
+    if (!I)
+        return;
+    for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i) {
+        Value *OpV = I->getOperand(i);
+        I->setOperand(i, nullptr);
+        if (OpV && OpV->use_empty())
+            recursiveDelete(OpV);
+    }
+    I->eraseFromParent();
+}

@@ -76,7 +76,6 @@ char *getExecutionFilename(char *buf, int buflen)
 		    endptr2 = strstr(filename, "\n");
 		    if (endptr2)
 			*endptr2 = 0;
-		    fprintf(stderr, "buffer %s\n", filename);
 		    goto endloop;
 		}
 	    }

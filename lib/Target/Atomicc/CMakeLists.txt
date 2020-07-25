@@ -1,6 +1,5 @@
 add_llvm_target(AtomiccCodeGen
   Atomicc.cpp
-  AtomiccClone.cpp
   AtomiccGenerate.cpp
   AtomiccMap.cpp
   AtomiccPreprocess.cpp
