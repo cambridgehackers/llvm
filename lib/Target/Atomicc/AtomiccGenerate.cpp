@@ -61,11 +61,6 @@ static INTMAP_TYPE opcodeMap[] = {
     {Instruction::URem, "%"}, {Instruction::SRem, "%"}, {Instruction::FRem, "%"},
     {Instruction::And, "&"}, {Instruction::Or, "|"}, {Instruction::Xor, "^"},
     {Instruction::Shl, "<<"}, {Instruction::LShr, ">>"}, {Instruction::AShr, " >> "}, {}};
-typedef struct {
-    bool invert;
-    std::string cond;
-    const BasicBlock *from;
-} BlockCondItem;
 
 /*
  * Utility functions
@@ -519,7 +514,7 @@ int traceindex = 0;
                 if (fname != "" && fname.substr(0,1) == MODULE_SEPARATOR)
                     fname = fname.substr(1);
             }
-printf("[%s:%d]DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD '%s' fname '%s'\n", __FUNCTION__, __LINE__, cbuffer.c_str(), fname.c_str());
+//printf("[%s:%d]DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD '%s' fname '%s'\n", __FUNCTION__, __LINE__, cbuffer.c_str(), fname.c_str());
             if (cbuffer[cbuffer.length()-1] == ']' && fname[0] == '$')
                 fname = "." + fname.substr(1);                        // TODO: extend/regularize element selection
             cbuffer += fname;
@@ -683,6 +678,8 @@ static std::string printCall(const Instruction *I, bool useParams = false)
     else {
         if (pcalledFunction.substr(pcalledFunction.length() - 1) != MODULE_SEPARATOR)
             pcalledFunction += MODULE_SEPARATOR;
+        if (pcalledFunction == "this$")
+            pcalledFunction = "";
         vout = pcalledFunction + fname;
     if (useParams) {
         vout += "{";
@@ -701,80 +698,110 @@ std::string parenOperand(const Value *Operand)
     return "(" + printOperand(Operand) + ")";
 }
 
-static std::map<const BasicBlock *, std::list<BlockCondItem>> blockCondition;
-static std::map<const BasicBlock *, std::string> blockStr;
-static std::map<const BasicBlock *, bool> getCondStrCheck;
+static int valueIndex;
+static std::map<std::string, int> value2index;
+static std::map<int, std::string> index2value;
+typedef struct {
+    bool         invert;
+    int          cond;
+} CondLocal;
 
-static std::string getCondStr(const BasicBlock *bb, bool initCheck = false)
+static std::map<std::string, std::map<std::string, std::list<CondLocal>>> blockCondition;
+typedef struct {
+    std::string value;
+    bool        force;
+    bool        hasRecursion;
+} CondStrInfo;
+std::map<std::string, CondStrInfo> condStr;
+static bool inProcess;
+
+#define BLOCK_NAME "BasicBlockCond_"
+static std::string getCondSpelling(const BasicBlock *bb)
 {
-    if (initCheck)
-        getCondStrCheck.clear();
-    if (getCondStrCheck[bb]) {
-        std::string name;
-        if (bb->hasName())
-            name = bb->getName();
-        printf("%s: ERROR: loop in block cycle %s\n", __FUNCTION__, name.c_str());
-        return "";
-    }
-    getCondStrCheck[bb] = true;
-    auto bptr = blockStr.find(bb);
-    if (bptr != blockStr.end())
-        return bptr->second;
-    std::string exprTop;
-    if (blockCondition[bb].size() == 1) {
-        BlockCondItem &BC = blockCondition[bb].front();
-        if (!blockCondition[BC.from].size()) {
-            if (!BC.invert)
-                exprTop = BC.cond;
-            else
-                exprTop = "(" + BC.cond + " ^ 1)";
-            goto retLabel;
-        }
-    }
-    for (auto item: blockCondition[bb]) {
-        std::string thisTerm = item.cond;
-        if (item.invert)
-            // Since we are 'AND'ing conditions together, remove inversions
-            thisTerm = "(" + thisTerm + " ^ 1)";
-        std::string condStr = getCondStr(item.from);
-//printf("[%s:%d] %p bef term '%s' cond '%s' top %s\n", __FUNCTION__, __LINE__, bb, thisTerm.c_str(), condStr.c_str(), exprTop.c_str());
-        if (condStr == "( 1 )")
-            condStr = "";
-        if (condStr != "") {
-            if (thisTerm == "( 1 )")
-                thisTerm = condStr;
-            else
-{
-//printf("[%s:%d] %p conddddddddddddddddddand '%s' '%s'\n", __FUNCTION__, __LINE__, bb, thisTerm.c_str(), condStr.c_str());
-                // if BB where 'If' statement existed had a condition, 'AND' it in
-                thisTerm = "(" + thisTerm + " & " + condStr + ")";
-}
-        }
-        if ("(" + thisTerm + " ^ 1)" == exprTop || "(" + exprTop + " ^ 1)" == thisTerm)
-            thisTerm = "";
-        else if (exprTop != "")  // 'OR' together all paths of getting to this BB
-{
-//printf("[%s:%d] %p conddddddddddddddddddor '%s' '%s'\n", __FUNCTION__, __LINE__, bb, thisTerm.c_str(), exprTop.c_str());
-            thisTerm = "(" + thisTerm + " | " + exprTop + ")";
-}
-        exprTop = thisTerm;
-    }
-retLabel:
-    if (exprTop == "( 1 )")
-        exprTop = "";
-    blockStr[bb] = exprTop;
-    return exprTop;
+    return CBEMangle(BLOCK_NAME + bb->getParent()->getName().str() + "_" + bb->getName().str());
 }
 
-static void processBlockConditions(const Function *currentFunction)
+static std::string getCondStr(std::string block)
+{
+    if (inProcess)
+        return block;
+    std::string thisName = block;
+    bool hasRecursion = false;
+    if (condStr.find(thisName) == condStr.end()) {
+        int ind = 0;
+        std::list<std::string> alternatives;
+        for (auto info: blockCondition[block]) {
+        for (auto local: info.second) {
+            std::string fromVal = getCondStr(info.first);
+            std::string mycond = info.first;
+            if (fromVal == "")
+                mycond = "";
+            else if (!condStr[mycond].hasRecursion && fromVal.length() < 50) {
+                mycond = fromVal;
+            }
+            else if (condStr.find(fromVal) == condStr.end())
+                mycond = getCondStr(info.first);
+            else {
+                hasRecursion = true;
+                condStr[mycond].force = true;
+            }
+            std::string condPrefix;
+            if (index2value[local.cond] != ""// && info.cond != "( 1 )"
+) {
+                condPrefix = index2value[local.cond];
+                if (local.invert)
+                    condPrefix = "!" + condPrefix;
+                if (mycond != "") {
+                    condPrefix = "(" + condPrefix + " & ";
+                    mycond += ")";
+                }
+            }
+            else if (local.invert) {
+                printf("[%s:%d] ERROR: invert without cond %s\n", __FUNCTION__, __LINE__, index2value[local.cond].c_str());
+                exit(-1);
+            }
+            condPrefix += mycond;
+            if (condPrefix != "")
+                alternatives.push_back(condPrefix);
+            ind++;
+        }
+        }
+        std::string cond, sep;
+        for (auto item: alternatives) {
+            cond += sep + item;
+            sep = " | ";
+        }
+        if (alternatives.size() > 1)
+            cond = "(" + cond + ")";
+        condStr[thisName] = CondStrInfo{cond, false, hasRecursion};
+    }
+    return condStr[thisName].value;
+}
+
+static void processBlockConditions(const Function *currentFunction, std::list<std::string> &mlines)
 {
     blockCondition.clear();
-    blockStr.clear();
+    condStr.clear();
+    valueIndex = 0;
+    value2index.clear();
+    index2value.clear();
+    value2index[""] = valueIndex;     // index 0 -> null string
+    index2value[valueIndex++] = "";
+    inProcess = true;
     for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
         auto setCondition = [&](const BasicBlock *bb, bool invert, std::string val, const BasicBlock *from) -> void {
             // each element in list is a valid path to get to the target BasicBlock.
             // therefore the 'execute guard' for the BB is the 'OR' of all elements in the list.
-            blockCondition[bb].push_back(BlockCondItem{invert, val, &*BBI});
+            auto ifind = value2index.find(val);
+            int ind;
+            if (ifind != value2index.end())
+                ind = ifind->second;
+            else {
+                ind = valueIndex++;
+                value2index[val] = ind;
+                index2value[ind] = val;
+            }
+            blockCondition[getCondSpelling(bb)][getCondSpelling(&*BBI)].push_back({invert, ind});
         };
         for (auto IIb = BBI->begin(), IE = BBI->end(); IIb != IE; IIb++) {
             const Instruction *II = &*IIb;
@@ -793,7 +820,7 @@ static void processBlockConditions(const Function *currentFunction)
                     }
                 }
                 else
-                    setCondition(BI->getSuccessor(0), false, "( 1 )", &*BBI);
+                    setCondition(BI->getSuccessor(0), false, "", &*BBI);
                 break;
                 }
             case Instruction::Switch: {
@@ -803,7 +830,7 @@ static void processBlockConditions(const Function *currentFunction)
                     const BasicBlock *caseBB = CI->getCaseSuccessor();
                     int64_t val = CI->getCaseValue()->getZExtValue();
                     printf("[%s:%d] [%d] = %s\n", __FUNCTION__, __LINE__, (int)val, caseBB?caseBB->getName().str().c_str():"NONE");
-                    //if (getCondStr(caseBB, true) == "") { // 'true' condition
+                    //if (getCondStr(getCondSpelling(caseBB)) == "") { // 'true' condition
                         std::string sval = utostr(val);
                         std::string cond = parenOperand(SI->getCondition());
                         setCondition(caseBB, false, "(" + cond + " == " + sval + ")", &*BBI);
@@ -818,14 +845,79 @@ static void processBlockConditions(const Function *currentFunction)
             }
         }
     }
+    bool changed = true;
+    while (changed) {
+        changed = false;
+    for (auto item = blockCondition.begin(), itemEnd = blockCondition.end(); item != itemEnd; item++) {
+        auto prev = item->second;
+        item->second.clear();
+        for (auto rules: prev) {
+            std::string block = rules.first;
+            if (block != "") {
+                if (blockCondition[block].size() == 0) {
+                    block = "";
+                    changed = true;
+                }
+                if (rules.second.size() == 1) {
+                    auto binfo = blockCondition[block];
+                    if (binfo.size() == 1)
+                    for (auto bnext: binfo)
+                    if (bnext.first == "" && bnext.second.size() == 1) {
+                        auto front = rules.second.front();
+                        auto bfront = bnext.second.front();
+                        if (front.cond == bfront.cond && (front.invert == bfront.invert)) {
+                             block = "";   // referenced block condition didn't add anything
+                             changed = true;
+                        }
+                    }
+                }
+            }
+            if (rules.second.size() == 2) {
+                auto front = rules.second.front();
+                auto back = rules.second.back();
+                if (front.cond == back.cond && (front.invert != back.invert)) {
+                     item->second[block].push_back({0, 0});
+                     changed = true;
+                     continue;
+                }
+            }
+            for (auto info: rules.second) {
+                if (info.cond == 0) { // value is ""
+                    for (auto sub: blockCondition[block])
+                    for (auto vitem: sub.second)
+                        item->second[sub.first].push_back(vitem);
+                    changed = true;
+                }
+                else
+                    item->second[block].push_back(info);
+            }
+        }
+    }
+    }
     if (trace_blockCond && blockCondition.size()) {
         printf("%s: blockconditions: %s\n", __FUNCTION__, currentFunction->getName().str().c_str());
         for (auto item: blockCondition) {
-            printf("     block %s = %p\n", item.first->getName().str().c_str(), (void *)item.first);
-            for (auto info: item.second) {
-                printf("        invert %d cond %s from %p\n", info.invert, info.cond.c_str(), (void *)info.from);
+            if (item.second.size()) {
+                printf("     block %s:", item.first.c_str());
+                if (item.second.size() > 1)
+                    printf("\n");
             }
-            printf("        condition: %s\n", getCondStr(item.first, true).c_str());
+            for (auto rules: item.second) {
+                for (auto info: rules.second) {
+                    printf("\tinvert %d cond %s%s%s\n", info.invert,
+                        index2value[info.cond].c_str(), (rules.first != "") ? " from " : "",
+                        rules.first.c_str());
+                }
+            }
+        }
+    }
+    for (auto info: blockCondition)
+        getCondStr(info.first);
+    inProcess = false;
+    for (auto item: condStr) {
+        if (item.second.value != "" && item.second.force) {
+        mlines.push_back("ALLOCA Bit(1) " + item.first);
+        mlines.push_back("LET Bit(1) :" + item.first + " = " + item.second.value);
         }
     }
 }
@@ -1074,7 +1166,7 @@ finish:;
                 }
             }
             val += parenOperand(topVal);
-            std::string cStr = getCondStr(startBlock, true);
+            std::string cStr = getCondStr(getCondSpelling(startBlock));
             vout += val;
             break;
             }
@@ -1083,7 +1175,7 @@ legacy_phi:
             std::string sep;
             for (unsigned opIndex = 0; opIndex < Eop; opIndex++) {
                 BasicBlock *inBlock = PN->getIncomingBlock(opIndex);
-                std::string cStr = getCondStr(inBlock, true);
+                std::string cStr = getCondStr(getCondSpelling(inBlock));
                 std::string val = parenOperand(PN->getIncomingValue(opIndex));
                 if (cStr == "")
                     cStr = "__default";
@@ -1329,12 +1421,12 @@ static std::string processMethod(std::string methodName, const Function *func,
     // Set up condition expressions for all BasicBlocks 
     if (methodName != "") // don't need to clear/setup for __generateFor subcalls
                           // (destroys block condition setup for calling function)
-        processBlockConditions(func);
+        processBlockConditions(func, mlines);
     NextAnonValueNumber = 0;
     /* Gather data for top level instructions in each basic block. */
     std::string retGuard, valsep;
     for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
-        std::string tempCond = getCondStr(&*BI, true);
+        std::string tempCond = getCondStr(getCondSpelling(&*BI));
         bool thisPHI = false;
         for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE; IIb++) {
             const Instruction *II = &*IIb;
@@ -1369,9 +1461,11 @@ static std::string processMethod(std::string methodName, const Function *func,
                 if (!II->getNumOperands())
                     break;
                 retGuard += valsep;
-                if (tempCond != "")
+                valsep = "";
+                if (tempCond != "") {
                     retGuard += tempCond + " ? ";
-                valsep = " : ";
+                    valsep = " : ";
+                }
                 findAlloca(dyn_cast<Instruction>(II->getOperand(0)));
                 retGuard += parenOperand(II->getOperand(0));
                 break;
@@ -1428,6 +1522,8 @@ static std::string processMethod(std::string methodName, const Function *func,
     for (auto item: allocaList)
         malines.push_back("ALLOCA " + typeName(item.second, localTemplate[item.first]) + " " + item.first);
     globalMethodName = savedGlobalMethodName; // make sure this is not destroyed by recursive calls (from __generateFor)
+    if (valsep != "")
+        retGuard += " : 0";
     return retGuard;
 }
 
