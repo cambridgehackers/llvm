@@ -1372,9 +1372,28 @@ std::string getInterfaceName(const Value *val)
     }
     return "";
 }
+
+static bool checkShared(ClassMethodTable *table, std::string name)
+{
+    for (auto finfo: table->fieldName)
+        if (name == finfo.second.name)
+            return finfo.second.options == "shared";
+    return false;
+}
+static bool hasShared(ClassMethodTable *table, const Value *operand)
+{
+    std::string dest = printOperand(operand);
+    if (auto ins = dyn_cast<Instruction>(operand))
+    for (unsigned i = 0; i < ins->getNumOperands(); i++) {
+        if (checkShared(table, printOperand(ins->getOperand(i))))
+            return true;
+    }
+    return checkShared(table, dest);
+}
 static std::string processMethod(std::string methodName, const Function *func,
            std::list<std::string> &mlines, std::list<std::string> &malines, std::string localOptions)
 {
+    ClassMethodTable *table = getFunctionTable(func);
     std::map<std::string, const Type *> allocaList;
     std::string savedGlobalMethodName = globalMethodName;
     methodName = baseMethodName(methodName);
@@ -1448,7 +1467,7 @@ static std::string processMethod(std::string methodName, const Function *func,
                 bool isInter = false;
                 if (auto IG = dyn_cast<GetElementPtrInst>(SI->getPointerOperand()))
                     isInter = isInterface(IG->getType()) || isInterface(IG->getSourceElementType());
-                if (isInter || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand())) {
+                if (isInter || hasShared(table, SI->getPointerOperand()) || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand())) {
                     alloc = "LET " + typeName(cast<PointerType>(
                       SI->getPointerOperand()->getType())->getElementType()) + " ";
                     if (dest == value)  // when 'alloca' item matches parameter name
