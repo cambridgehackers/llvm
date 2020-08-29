@@ -459,6 +459,26 @@ static int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I,
     return Total;
 }
 
+void appendNameComponent(std::string &cbuffer, std::string &fname)
+{
+            if (cbuffer[cbuffer.length()-1] == ']' && fname[0] == '$') {
+                int level = 0;
+                int ind = cbuffer.length()-2;
+                while (ind > 0 && (cbuffer[ind] != '[' || level > 0)) {
+                    if (cbuffer[ind] == ']')
+                        level++;
+                    else if (cbuffer[ind] == '[')
+                        level--;
+                    ind--;
+                }
+                assert(ind > 0);
+                fname += cbuffer.substr(ind);
+                cbuffer = cbuffer.substr(0, ind);
+                //fname = "." + fname.substr(1);                        // TODO: extend/regularize element selection
+            }
+            cbuffer += fname;
+}
+
 /*
  * Generate a string for the value represented by a GEP DAG
  */
@@ -515,9 +535,7 @@ int traceindex = 0;
                     fname = fname.substr(1);
             }
 //printf("[%s:%d]DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD '%s' fname '%s'\n", __FUNCTION__, __LINE__, cbuffer.c_str(), fname.c_str());
-            if (cbuffer[cbuffer.length()-1] == ']' && fname[0] == '$')
-                fname = "." + fname.substr(1);                        // TODO: extend/regularize element selection
-            cbuffer += fname;
+            appendNameComponent(cbuffer, fname);
             processingInterface = isInterface(STy);
         }
         else {
@@ -676,19 +694,22 @@ static std::string printCall(const Instruction *I, bool useParams = false)
         exit(-1);
     }
     else {
+        // TODO: fixup this goofy code!
         if (pcalledFunction.substr(pcalledFunction.length() - 1) != MODULE_SEPARATOR)
             pcalledFunction += MODULE_SEPARATOR;
         if (pcalledFunction == "this$")
             pcalledFunction = "";
+        else if (pcalledFunction[pcalledFunction.length()-2] == ']')
+            pcalledFunction = pcalledFunction.substr(0, pcalledFunction.length()-1) + ".";
         vout = pcalledFunction + fname;
-    if (useParams) {
-        vout += "{";
-        for (; AI != AE; ++AI) { // first param processed as pcalledFunction
-            vout += sep + printOperand(*AI);
-            sep = ",";
+        if (useParams) {
+            vout += "{";
+            for (; AI != AE; ++AI) { // first param processed as pcalledFunction
+                vout += sep + printOperand(*AI);
+                sep = ",";
+            }
+            vout += "}";
         }
-        vout += "}";
-    }
     }
     return vout;
 }
