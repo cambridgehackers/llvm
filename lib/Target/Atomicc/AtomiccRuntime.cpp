@@ -320,7 +320,7 @@ extern "C" void addBaseRule(const char *name, uint64_t *bcap, Function *ardyFunc
 next:
         for(auto item: table->methods)
             if (item.name == enaName + "__ENA") {
-                enaName = tempName + MODULE_SEPARATOR + utostr(counter++);
+                enaName = tempName + DOLLAR + utostr(counter++);
                 goto next;
             }
         break;

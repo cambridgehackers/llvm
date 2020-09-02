@@ -19,6 +19,10 @@ using namespace llvm;
 
 #include "AtomiccDecl.h"
 
+#define BOGUS_FORCE_DECLARATION_FIELD "$UNUSED$FIELD$FORCE$ALLOC$"
+#define BOGUS_VERILOG "$UNUSED$FIELD$VERILOG$"
+#define CONNECT_PREFIX "___CONNECT__"
+
 static std::map<const Function *, bool> actionFunction;
 static std::map<const Function *, std::string> methodTemplateOptions;
 static int trace_function;//=1;
@@ -117,12 +121,12 @@ static bool isAlloca(const Value *arg)
 
 static bool isInterface(const Type *Ty)
 {
-    if (auto STy = dyn_cast<StructType>(Ty))
+    if (auto STy = dyn_cast_or_null<StructType>(Ty))
     if (!STy->isLiteral() && !STy->getName().empty())
         return startswith(STy->getName(), "ainterface.");
-    if (auto ATy = dyn_cast<ArrayType>(Ty))
+    if (auto ATy = dyn_cast_or_null<ArrayType>(Ty))
         return isInterface(ATy->getElementType());
-    if (auto PTy = dyn_cast<PointerType>(Ty))
+    if (auto PTy = dyn_cast_or_null<PointerType>(Ty))
         return isInterface(PTy->getElementType());
     return false;
 }
@@ -165,7 +169,7 @@ static std::string legacygetStructName(const StructType *STy)
                 if (temp.find(" ") != std::string::npos)
                     return CBEMangle(temp);
                 int ind;
-                while ((ind = temp.find(".")) != -1)
+                while ((ind = temp.find(PERIOD)) != -1)
                     temp = temp.substr(0, ind) + "_OC_" + temp.substr(ind+1);
                 return temp;
             }
@@ -195,7 +199,7 @@ static void buildInterfaceList(ClassMethodTable *master, ClassMethodTable *table
             if (traceConnect)
                 printf("[%s:%d] [%d] top %d isifc %d prefix '%s' name '%s' type '%s'\n", __FUNCTION__, __LINE__, Idx, top, isInter, prefix.c_str(), table->fieldName[Idx].name.c_str(), tableE->name.c_str());
             if (prefix != "" && table->fieldName[Idx].name != "")
-                fname += MODULE_SEPARATOR;
+                fname += DOLLAR;
             fname += table->fieldName[Idx].name;
             if (isInter)
                 master->interfaces[fname] = FieldNameInfo{tableE->name, "", "", "", ""};
@@ -315,6 +319,8 @@ ClassMethodTable *getClass(const StructType *STy)
                     name = ret.substr(0, idx);
                 }
                 table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, templateOptions, vecCount};
+                if (endswith(name, BOGUS_VERILOG))
+                    table->isVerilog = true;
             }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
@@ -380,7 +386,7 @@ static std::string GetValueName(const Value *Operand)
     if (const Instruction *source = dyn_cast_or_null<Instruction>(Operand))
     if (source->getOpcode() == Instruction::Alloca && globalMethodName != "")
         // Make the names unique across all methods in a class
-        Name = globalMethodName + MODULE_SEPARATOR + Name;
+        Name = globalMethodName + DOLLAR + Name;
     if (Name.empty()) { // Assign unique names to local temporaries.
         unsigned &No = AnonValueNumbers[Operand];
         if (No == 0)
@@ -393,7 +399,7 @@ static std::string GetValueName(const Value *Operand)
             for (auto item: getClass(findThisArgument(func))->methods)
                 if (!startswith(item.name, "FOR$"))
                 if (item.func == func) { // prepend argument name with function name
-                    Name = baseMethodName(item.name) + MODULE_SEPARATOR + Name;
+                    Name = baseMethodName(item.name) + DOLLAR + Name;
                     break;
                 }
         }
@@ -402,7 +408,7 @@ static std::string GetValueName(const Value *Operand)
     std::string VarName;
     for (auto charp = Name.begin(), E = Name.end(); charp != E; ++charp) {
         char ch = *charp;
-        if (isalnum(ch) || ch == '_' || ch == '$')
+        if (isalnum(ch) || ch == '_' || ch == DOLLAR[0])
             VarName += ch;
         else {
             char buffer[5];
@@ -461,22 +467,24 @@ static int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I,
 
 void appendNameComponent(std::string &cbuffer, std::string &fname)
 {
-            if (cbuffer[cbuffer.length()-1] == ']' && fname[0] == '$') {
-                int level = 0;
-                int ind = cbuffer.length()-2;
-                while (ind > 0 && (cbuffer[ind] != '[' || level > 0)) {
-                    if (cbuffer[ind] == ']')
-                        level++;
-                    else if (cbuffer[ind] == '[')
-                        level--;
-                    ind--;
-                }
-                assert(ind > 0);
-                fname += cbuffer.substr(ind);
-                cbuffer = cbuffer.substr(0, ind);
-                //fname = "." + fname.substr(1);                        // TODO: extend/regularize element selection
-            }
-            cbuffer += fname;
+    if (cbuffer[cbuffer.length()-1] == DOLLAR[0])
+        cbuffer = cbuffer.substr(0,cbuffer.length()-1);
+    if (cbuffer[cbuffer.length()-1] == ']' && fname[0] == DOLLAR[0]) {
+        int level = 0;
+        int ind = cbuffer.length()-2;
+        while (ind > 0 && (cbuffer[ind] != '[' || level > 0)) {
+            if (cbuffer[ind] == ']')
+                level++;
+            else if (cbuffer[ind] == '[')
+                level--;
+            ind--;
+        }
+        assert(ind > 0);
+        fname += cbuffer.substr(ind);
+        cbuffer = cbuffer.substr(0, ind);
+        //fname = PERIOD + fname.substr(1);                        // TODO: extend/regularize element selection
+    }
+    cbuffer += fname;
 }
 
 /*
@@ -486,6 +494,7 @@ static std::string printGEPExpression(const GetElementPtrInst *ref, const Value 
 {
 static int errorLimit = 5;
 static int nesting = 0;
+static bool isVerilog = false;
     nesting++;
     VectorType *LastIndexIsVector = 0;
     int64_t Total = getGEPOffset(&LastIndexIsVector, I, E);
@@ -522,16 +531,35 @@ int traceindex = 0;
         if (const StructType *STy = I.getStructTypeOrNull()) {
             uint64_t foffset = cast<ConstantInt>(I.getOperand())->getZExtValue();
             ClassMethodTable *table = getClass(STy);
-            std::string fname = table->fieldName[foffset].name;
+            isVerilog |= table->isVerilog;
+            auto fitem = table->fieldName[foffset];
+            bool nextIsInterface = false;
+            int Idx = 0;
+            for (auto I = STy->element_begin(), E = STy->element_end(); I != E; ++I, Idx++) {
+                if ((int)foffset == Idx) {
+                    nextIsInterface = isInterface(dyn_cast<StructType>(*I));
+                    break;
+                }
+            }
+            std::string fname = fitem.name;
             if (fname == "_")   // optimization for verilog port references
-                fname = MODULE_SEPARATOR;
-            else if (cbuffer != "" && !processingInterface)  // optimization for verilog port references
-                fname = MODULE_SEPARATOR + fname;
+                fname = DOLLAR;
+            else if (cbuffer != "") {
+//printf("[%s:%d] cbuffer %s fname %s processinginterface %d nextint %d isver %d basename %s offset %d\n", __FUNCTION__, __LINE__, cbuffer.c_str(), fname.c_str(), processingInterface, nextIsInterface, isVerilog, table->name.c_str(), (int)foffset);
+                if (!processingInterface)
+                    fname = DOLLAR + fname;
+                else if (!isVerilog) {     // optimization for verilog port references
+                    if (nextIsInterface)
+                        fname = DOLLAR + fname;
+                    else
+                        fname = PERIOD + fname;
+                }
+            }
             if (trace_gep)
                 printf("[%s:%d] nest %d cbuffer %s STy %s fname %s foffset %d, options %s\n", __FUNCTION__, __LINE__, nesting, cbuffer.c_str(), STy->getName().str().c_str(), fname.c_str(), (int) foffset, table->fieldName[foffset].options.c_str());
             if (cbuffer == "this") {
                 cbuffer = "";
-                if (fname != "" && fname.substr(0,1) == MODULE_SEPARATOR)
+                if (fname != "" && fname.substr(0,1) == DOLLAR)
                     fname = fname.substr(1);
             }
 //printf("[%s:%d]DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD '%s' fname '%s'\n", __FUNCTION__, __LINE__, cbuffer.c_str(), fname.c_str());
@@ -564,6 +592,8 @@ traceindex++;
 if (Total != -1 || errorLimit-- > 0)
         printf("%s: END nest %d return '%s'\n", __FUNCTION__, nesting, cbuffer.c_str());
     nesting--;
+    if (!nesting)
+        isVerilog = false;
     return cbuffer;
 }
 
@@ -695,12 +725,12 @@ static std::string printCall(const Instruction *I, bool useParams = false)
     }
     else {
         // TODO: fixup this goofy code!
-        if (pcalledFunction.substr(pcalledFunction.length() - 1) != MODULE_SEPARATOR)
-            pcalledFunction += MODULE_SEPARATOR;
+        if (pcalledFunction.substr(pcalledFunction.length() - 1) != DOLLAR)
+            pcalledFunction += DOLLAR;
         if (pcalledFunction == "this$")
             pcalledFunction = "";
         else if (pcalledFunction[pcalledFunction.length()-2] == ']')
-            pcalledFunction = pcalledFunction.substr(0, pcalledFunction.length()-1) + ".";
+            pcalledFunction = pcalledFunction.substr(0, pcalledFunction.length()-1) + PERIOD;
         vout = pcalledFunction + fname;
         if (useParams) {
             vout += "{";
@@ -1107,7 +1137,7 @@ std::string printOperand(const Value *Operand)
                 for (auto item: table->unionList) {
                     printf("BBBBBBBB %s    UNION %s %s\n", ctype.c_str(), item.type.c_str(), item.name.c_str());
                     if (item.type == ctype) {
-                        vout += operand + MODULE_SEPARATOR + item.name;
+                        vout += operand + DOLLAR + item.name;
                         goto finish;
                     }
                 }
@@ -1366,9 +1396,8 @@ printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elemen
             //elementName = name;
 printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
         }
-#define BOGUS_FORCE_DECLARATION_FIELD "$UNUSED$FIELD$FORCE$ALLOC$"
-#define CONNECT_PREFIX "___CONNECT__"
-        if (endswith(fldName, BOGUS_FORCE_DECLARATION_FIELD) || startswith(fldName, CONNECT_PREFIX))
+        if (endswith(fldName, BOGUS_FORCE_DECLARATION_FIELD) || startswith(fldName, CONNECT_PREFIX)
+         || endswith(fldName, BOGUS_VERILOG))
             continue;
         if (isInterface(element))
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
@@ -1438,13 +1467,13 @@ static std::string processMethod(std::string methodName, const Function *func,
                 tempBuf = templ.substr(ind+1);
                 templ = templ.substr(0, ind);
             }
-            localTemplate[methodName + MODULE_SEPARATOR + name] = templ;
+            localTemplate[methodName + DOLLAR + name] = templ;
         }
     }
     for (auto item = func->arg_begin(), eitem = func->arg_end(); item != eitem; item++) {
         std::string name = item->getName();
         if (name != "")
-            argumentName[methodName + MODULE_SEPARATOR + name] = 1; // prepend argument name with function name
+            argumentName[methodName + DOLLAR + name] = 1; // prepend argument name with function name
     }
     std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
         if (II) {
@@ -1573,7 +1602,7 @@ static void processClass(ClassMethodTable *table, FILE *OStr)
     bool isModule = startswith(table->STy->getName(), "module");
     bool inInterface = isInterface(table->STy);
 printf("[%s:%d]MODULE Ty %p %s -> %s\n", __FUNCTION__, __LINE__, (void *)table->STy, table->STy->getName().str().c_str(), table->name.c_str());
-    const char *header = "MODULE";
+    std::string header = "MODULE";
     if (inInterface)
         header = "INTERFACE";
     else if (!isModule) {
@@ -1637,8 +1666,12 @@ printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elemen
             //elementName = name;
 printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
         }
-        if (isInterface(element))
+        if (isInterface(element)) {
             interfaceName = elementName;
+            if (auto etable = getClass(dyn_cast<StructType>(element)))
+            if (etable->isVerilog)
+                header += "/Verilog";
+        }
     }
     if (!isInterface(table->STy))
     if (!table->STy->getName().startswith("struct."))
@@ -1648,7 +1681,7 @@ table->STy->dump();
     }
 }
 #endif
-    fprintf(OStr, "%s %s %s {\n", header, table->name.c_str(), interfaceName.c_str());
+    fprintf(OStr, "%s %s %s {\n", header.c_str(), table->name.c_str(), interfaceName.c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
     for (auto item: table->priority)

@@ -38,7 +38,8 @@
       }}
 
 #define GIANT_SIZE 1024
-#define MODULE_SEPARATOR "$"
+#define DOLLAR "$"
+#define PERIOD "."
 
 typedef struct {
     int value;
@@ -86,6 +87,7 @@ public:
     std::list<GenInterfaceConnectType>   interfaceConnect;
     std::list<GenUnionItem>              unionList;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
+    bool                              isVerilog;
     ClassMethodTable() {}
 };
 
