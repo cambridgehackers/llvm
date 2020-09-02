@@ -248,6 +248,7 @@ ClassMethodTable *getClass(const StructType *STy)
         table->STy = STy;
         table->remapSTy = nullptr;
         table->name = legacygetStructName(STy);
+        table->isVerilog = false;
         structNameMap[STy->getName().str()] = STy;
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
