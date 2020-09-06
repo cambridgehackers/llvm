@@ -293,6 +293,10 @@ ClassMethodTable *getClass(const StructType *STy)
                 processSequence = 4; // structTy remap
                 last_subs++;
             }
+            if (STy->structFieldMap[last_subs] == '?') {
+                processSequence = 5; // source filename
+                last_subs++;
+            }
             std::string ret = STy->structFieldMap.substr(last_subs);
             int idx = ret.find(',');
             if (idx >= 0)
@@ -320,7 +324,7 @@ ClassMethodTable *getClass(const StructType *STy)
                     name = ret.substr(0, idx);
                 }
                 table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, templateOptions, vecCount};
-                if (endswith(name, BOGUS_VERILOG))
+                if (startswith(name, BOGUS_VERILOG))
                     table->isVerilog = true;
             }
             else if (processSequence == 2)
@@ -339,6 +343,9 @@ ClassMethodTable *getClass(const StructType *STy)
 const StructType *newSTy = structNameMap[ret];
 printf("[%s:%d] REMAPAPAPAPAPAPA %s new %p\n", __FUNCTION__, __LINE__, ret.c_str(), (void *)newSTy);
                 table->remapSTy = newSTy;
+            }
+            else if (processSequence == 5) {
+                table->sourceFilename = ret;
             }
             else if (idx >= 0) { // processSequence == 1 -> methods
                 std::string fname = ret.substr(0, idx);
@@ -1358,7 +1365,7 @@ static void processField(ClassMethodTable *table, FILE *OStr, bool inInterface)
             element = ATy->getElementType();
         }
         if (vecCount != "" && arrayDim != "") {
-printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(), arrayDim.c_str());
+//printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(), arrayDim.c_str());
             vecCount = arrayDim;
         }
         if (fitem.options != "")
@@ -1367,7 +1374,7 @@ printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(
             temp += "/Count " + vecCount + " ";
         std::string elementName = typeName(element);
         if (templateOptions != "") {
-printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elementName.c_str(), templateOptions.c_str());
+//printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elementName.c_str(), templateOptions.c_str());
             std::string name, remain = templateOptions;
             int ind = remain.find(":");
             if (ind > 0) {
@@ -1395,10 +1402,10 @@ printf("[%s:%d] elementname %s templateopt %s\n", __FUNCTION__, __LINE__, elemen
             }
             name += ")";
             //elementName = name;
-printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
+//printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
         }
         if (endswith(fldName, BOGUS_FORCE_DECLARATION_FIELD) || startswith(fldName, CONNECT_PREFIX)
-         || endswith(fldName, BOGUS_VERILOG))
+         || startswith(fldName, BOGUS_VERILOG))
             continue;
         if (isInterface(element))
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
@@ -1597,12 +1604,29 @@ static std::string processMethod(std::string methodName, const Function *func,
     return retGuard;
 }
 
+static std::map<std::string, bool> sourceFileFlag;
+static void addSourceFile(std::string filename)
+{
+    if (endswith(filename, ".cpp") || endswith(filename, ".c++"))
+        sourceFileFlag[filename.substr(0, filename.length()-4)] = true;
+}
+static bool checkImportFilename(std::string filename)
+{
+    if (endswith(filename, ".cpp") || endswith(filename, ".c++"))
+        return false;
+    if (endswith(filename, ".h"))
+        return !sourceFileFlag[filename.substr(0, filename.length()-2)];
+    if (endswith(filename, ".hpp"))
+        return !sourceFileFlag[filename.substr(0, filename.length()-4)];
+    return true;
+}
+
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     std::string interfaceName;
     bool isModule = startswith(table->STy->getName(), "module");
     bool inInterface = isInterface(table->STy);
-printf("[%s:%d]MODULE Ty %p %s -> %s\n", __FUNCTION__, __LINE__, (void *)table->STy, table->STy->getName().str().c_str(), table->name.c_str());
+printf("[%s:%d]MODULE Ty %p %s -> %s filename %s\n", __FUNCTION__, __LINE__, (void *)table->STy, table->STy->getName().str().c_str(), table->name.c_str(), table->sourceFilename.c_str());
     std::string header = "MODULE";
     if (inInterface)
         header = "INTERFACE";
@@ -1682,7 +1706,10 @@ table->STy->dump();
     }
 }
 #endif
+    //if (checkImportFilename(table->sourceFilename))
+        //header += "/Import";
     fprintf(OStr, "%s %s %s {\n", header.c_str(), table->name.c_str(), interfaceName.c_str());
+    fprintf(OStr, "    FILE %s\n", table->sourceFilename.c_str());
     for (auto item: table->softwareName)
         fprintf(OStr, "    SOFTWARE %s\n", item.c_str());
     for (auto item: table->priority)
@@ -1792,6 +1819,7 @@ void generateIR(std::string OutputDir)
         if (strncmp(sname.c_str(), "class.std::", 11) // don't generate anything for std classes
          && strncmp(sname.c_str(), "struct.std::", 12))
             structAlpha[sortName] = current.first;
+        addSourceFile(current.second->sourceFilename);
     }
     FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
     for (auto item : structAlpha)

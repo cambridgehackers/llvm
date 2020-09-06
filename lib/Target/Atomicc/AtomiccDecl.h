@@ -88,6 +88,7 @@ public:
     std::list<GenUnionItem>              unionList;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
     bool                              isVerilog;
+    std::string                       sourceFilename;
     ClassMethodTable() {}
 };
 
