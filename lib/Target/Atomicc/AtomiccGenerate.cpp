@@ -158,7 +158,16 @@ static std::string legacygetStructName(const StructType *STy)
     assert(STy);
     getClass(STy);
     if (!STy->isLiteral() && !STy->getName().empty()) {
-        std::string temp = STy->getName().str();
+        std::string temp = STy->getName().str(), sub;
+        int ind = temp.find("(");
+        int rind = temp.rfind(")");
+        if (ind > 0 && rind > 0 && rind != (int)temp.length()-1) {
+            std::string post = temp.substr(rind+1);
+            if (post[0] == '.') { // also shows up as "struct.(anonymous struct)::EchoIndication_union"
+                sub = temp.substr(ind, rind-ind+1);
+                temp = temp.substr(0, ind);
+            }
+        }
         static const char *prefix[] = {"emodule.", "module.",
             "struct.",
             "ainterface.", "serialize.", "class.", "union.", nullptr};
@@ -171,7 +180,7 @@ static std::string legacygetStructName(const StructType *STy)
                 int ind;
                 while ((ind = temp.find(PERIOD)) != -1)
                     temp = temp.substr(0, ind) + "_OC_" + temp.substr(ind+1);
-                return temp;
+                return temp + sub;
             }
             p++;
         }
@@ -1621,12 +1630,39 @@ static bool checkImportFilename(std::string filename)
     return true;
 }
 
+static std::map<std::string, bool> classDone;
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
+    std::string tname = table->name;
+    bool specialReplace = startswith(tname, "PipeIn(") || startswith(tname, "PipeOut(") || startswith(tname, "PipeInB");
     std::string interfaceName;
+    std::string classKey = tname + "::" + table->STy->structFieldMap;
+    if (classDone[classKey])
+        return;
+    classDone[classKey] = true;
     bool isModule = startswith(table->STy->getName(), "module");
     bool inInterface = isInterface(table->STy);
 printf("[%s:%d]MODULE Ty %p %s -> %s filename %s\n", __FUNCTION__, __LINE__, (void *)table->STy, table->STy->getName().str().c_str(), table->name.c_str(), table->sourceFilename.c_str());
+#if 0
+{
+printf("[%s:%d] %s\n", __FUNCTION__, __LINE__, table->STy->structFieldMap.c_str());
+table->STy->dump();
+    int Idx = 0;
+    for (auto I = table->STy->element_begin(), E = table->STy->element_end(); I != E; ++I, Idx++) {
+        auto fitem = table->fieldName[Idx];
+        const Type *element = *I;
+printf("[%s:%d]field %d name %s\n", __FUNCTION__, __LINE__, Idx, fitem.name.c_str());
+element->dump();
+    }
+    for (auto FI : table->methods) {
+        std::list<std::string> mlines, malines;
+        std::string methodName = FI.name;
+        const Function *func = FI.func;
+printf("[%s:%d]method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), func);
+func->dump();
+    }
+}
+#endif
     std::string header = "MODULE";
     if (inInterface)
         header = "INTERFACE";
@@ -1748,6 +1784,9 @@ table->STy->dump();
         if (!isModule)
             retGuard = "";
         std::string headerLine = methodName;
+        std::string replaceType;
+        if (specialReplace)
+            replaceType = "Bit(width)";
         auto AI = func->arg_begin(), AE = func->arg_end();
         std::string sep = " ( ";
         std::string returnOption = methodTemplateOptions[func];
@@ -1770,13 +1809,23 @@ table->STy->dump();
                 templateOptions = thisOption.substr(ind+1);
                 thisOption = thisOption.substr(0, ind);
             }
-            headerLine += sep + typeName(AI->getType(), thisOption) + " " + AI->getName().str();
+            headerLine += sep;
+            if (replaceType != "")
+                headerLine += replaceType;
+            else
+                headerLine += typeName(AI->getType(), thisOption);
+            headerLine += " " + AI->getName().str();
             sep = " , ";
+            replaceType = "";
         }
         if (sep != " ( ")
             headerLine += " )";
-        if (func->getReturnType() != Type::getVoidTy(func->getContext()))
-            headerLine += " " + typeName(func->getReturnType(), returnOption);
+        if (func->getReturnType() != Type::getVoidTy(func->getContext())) {
+            if (specialReplace)
+                headerLine += " " "Bit(width)";
+            else
+                headerLine += " " + typeName(func->getReturnType(), returnOption);
+        }
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";
         if (rdyGuard != "")
