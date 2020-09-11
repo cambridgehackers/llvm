@@ -401,9 +401,14 @@ static std::string GetValueName(const Value *Operand)
         return CBEMangle(GV->getName());
     std::string Name = Operand->getName();
     if (const Instruction *source = dyn_cast_or_null<Instruction>(Operand))
-    if (source->getOpcode() == Instruction::Alloca && globalMethodName != "")
+    if (source->getOpcode() == Instruction::Alloca && globalMethodName != "") {
         // Make the names unique across all methods in a class
         Name = globalMethodName + DOLLAR + Name;
+        if (endswith(Name, ".addr"))
+            Name = Name.substr(0, Name.length() - 5);
+        else
+            Name = "_" + Name;
+    }
     if (Name.empty()) { // Assign unique names to local temporaries.
         unsigned &No = AnonValueNumbers[Operand];
         if (No == 0)
@@ -420,8 +425,6 @@ static std::string GetValueName(const Value *Operand)
                     break;
                 }
         }
-    if (endswith(Name, ".addr"))
-        Name = Name.substr(0, Name.length() - 5);
     std::string VarName;
     for (auto charp = Name.begin(), E = Name.end(); charp != E; ++charp) {
         char ch = *charp;
