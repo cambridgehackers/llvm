@@ -22,6 +22,7 @@ using namespace llvm;
 #define BOGUS_FORCE_DECLARATION_FIELD "$UNUSED$FIELD$FORCE$ALLOC$"
 #define BOGUS_VERILOG "$UNUSED$FIELD$VERILOG$"
 #define CONNECT_PREFIX "___CONNECT__"
+#define TEMP_NAME      "temp" DOLLAR
 
 static std::map<const Function *, bool> actionFunction;
 static std::map<const Function *, std::string> methodTemplateOptions;
@@ -40,7 +41,7 @@ static unsigned NextAnonValueNumber;
 static DenseMap<const StructType*, unsigned> UnnamedStructIDs;
 std::map<std::string, Function *> functionMap;
 Module *globalMod;
-static std::string processMethod(std::string methodName, const Function *func,
+static std::string processMethod(std::string methodName, Function *func,
            std::list<std::string> &mlines, std::list<std::string> &malines, std::string localOptions);
 
 static INTMAP_TYPE predText[] = {
@@ -1284,7 +1285,7 @@ legacy_phi:
                 Value *opd = CE->getOperand(0);
                 if (op == Instruction::PtrToInt) {
                     //used for printing guard exprs to 'instantiate for' items
-                    const Function *func = dyn_cast<Function>(opd);
+                    Function *func = dyn_cast<Function>(opd);
                     //cbuffer += func->getName().str();
                     std::list<std::string> mlines;
                     std::list<std::string> malines;
@@ -1460,7 +1461,7 @@ static bool hasShared(ClassMethodTable *table, const Value *operand)
     }
     return checkShared(table, dest);
 }
-static std::string processMethod(std::string methodName, const Function *func,
+static std::string processMethod(std::string methodName, Function *func,
            std::list<std::string> &mlines, std::list<std::string> &malines, std::string localOptions)
 {
     ClassMethodTable *table = getFunctionTable(func);
@@ -1469,27 +1470,6 @@ static std::string processMethod(std::string methodName, const Function *func,
     methodName = baseMethodName(methodName);
     globalMethodName = methodName;
     std::map<std::string, int> argumentName;
-    std::map<std::string, std::string> localTemplate;
-    int ind = localOptions.find("#");
-    if (ind >= 0) {
-        std::string tempBuf = localOptions.substr(ind+1);
-        if (tempBuf[0] != ';') {
-            printf("[%s:%d] ERROR Start %s tempBuf %s\n", __FUNCTION__, __LINE__, methodName.c_str(), tempBuf.c_str());
-        }
-        tempBuf = tempBuf.substr(1);
-        while (tempBuf.length()) {
-            ind = tempBuf.find(";");
-            std::string name = tempBuf.substr(0, ind);
-            std::string templ = tempBuf.substr(ind+1);
-            tempBuf = "";
-            ind = templ.find(";");
-            if (ind >= 0) {
-                tempBuf = templ.substr(ind+1);
-                templ = templ.substr(0, ind);
-            }
-            localTemplate[methodName + DOLLAR + name] = templ;
-        }
-    }
     for (auto item = func->arg_begin(), eitem = func->arg_end(); item != eitem; item++) {
         std::string name = item->getName();
         if (name != "")
@@ -1608,6 +1588,27 @@ static std::string processMethod(std::string methodName, const Function *func,
             }
         }
     }
+    std::map<std::string, std::string> localTemplate;
+    int ind = localOptions.find("#");
+    if (ind >= 0) {
+        std::string tempBuf = localOptions.substr(ind+1);
+        if (tempBuf[0] != ';') {
+            printf("[%s:%d] ERROR Start %s tempBuf %s\n", __FUNCTION__, __LINE__, methodName.c_str(), tempBuf.c_str());
+        }
+        tempBuf = tempBuf.substr(1);
+        while (tempBuf.length()) {
+            ind = tempBuf.find(";");
+            std::string name = tempBuf.substr(0, ind);
+            std::string templ = tempBuf.substr(ind+1);
+            tempBuf = "";
+            ind = templ.find(";");
+            if (ind >= 0) {
+                tempBuf = templ.substr(ind+1);
+                templ = templ.substr(0, ind);
+            }
+            localTemplate[methodName + DOLLAR + name] = templ;
+        }
+    }
     for (auto item: allocaList)
         malines.push_back("ALLOCA " + typeName(item.second, localTemplate[item.first]) + " " + item.first);
     globalMethodName = savedGlobalMethodName; // make sure this is not destroyed by recursive calls (from __generateFor)
@@ -1634,10 +1635,15 @@ static bool checkImportFilename(std::string filename)
 }
 
 static std::map<std::string, bool> classDone;
+static bool checkSpecial(std::string tname)
+{
+    return startswith(tname, "PipeIn(") || startswith(tname, "PipeOut(") || startswith(tname, "PipeInB(");
+}
+
 static void processClass(ClassMethodTable *table, FILE *OStr)
 {
     std::string tname = table->name;
-    bool specialReplace = startswith(tname, "PipeIn(") || startswith(tname, "PipeOut(") || startswith(tname, "PipeInB");
+    bool specialReplace = checkSpecial(tname);
     std::string interfaceName;
     std::string classKey = tname + "::" + table->STy->structFieldMap;
     if (classDone[classKey])
@@ -1764,7 +1770,7 @@ table->STy->dump();
     for (auto FI : table->methods) {
         std::list<std::string> mlines, malines;
         std::string methodName = FI.name;
-        const Function *func = FI.func;
+        Function *func = FI.func;
         if (!func) {
             printf("[%s:%d] name %s missing func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), (void *)func);
             continue;
@@ -1775,17 +1781,6 @@ table->STy->dump();
             continue;
         if (trace_function || trace_call)
             printf("PROCESSING %s %s\n", func->getName().str().c_str(), methodName.c_str());
-        if (isModule)
-        for(auto ritem: table->methods)
-        if (ritem.name == rdyName) {
-            std::list<std::string> mrlines;
-            rdyGuard = processMethod(rdyName, ritem.func, mrlines, mrlines, methodTemplateOptions[ritem.func]);
-            if (rdyGuard == "1")
-                rdyGuard = "";
-        }
-        std::string retGuard = processMethod(methodName, func, mlines, malines, methodTemplateOptions[func]);
-        if (!isModule)
-            retGuard = "";
         std::string headerLine = methodName;
         std::string replaceType;
         if (specialReplace)
@@ -1829,6 +1824,52 @@ table->STy->dump();
             else
                 headerLine += " " + typeName(func->getReturnType(), returnOption);
         }
+        if (isModule)
+        for(auto ritem: table->methods)
+        if (ritem.name == rdyName) {
+            std::list<std::string> mrlines;
+            rdyGuard = processMethod(rdyName, ritem.func, mrlines, mrlines, methodTemplateOptions[ritem.func]);
+            if (rdyGuard == "1")
+                rdyGuard = "";
+        }
+        methodName = baseMethodName(methodName);
+        std::string newMethodName = TEMP_NAME + methodName;
+        {
+        std::map<std::string, bool> paramTemp;
+        for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++) {
+            std::string name = AI->getName();
+            if (name != "" && name != "this" && AI->getType()->isAggregateType()) {
+printf("[%s:%d] TEMPPPPPPPPPPPPPPP %s\n", __FUNCTION__, __LINE__, name.c_str());
+AI->getType()->dump();
+                paramTemp[name] = true;
+            }
+        }
+        auto BI = func->begin(); // only search in 'entry:' block
+        if (BI != func->end())
+        for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE; IIb++) {
+            Instruction *II = &*IIb;
+            switch(II->getOpcode()) {
+            case Instruction::Alloca:
+                std::string name = II->getName();
+                if (endswith(name, ".addr") && IIb->uses().begin() != IIb->uses().end()) {
+                    name = name.substr(0, name.length()-5);
+                    auto pinfo = paramTemp.find(name);
+                    if (pinfo != paramTemp.end()) {
+printf("[%s:%d] nameeeeeeeee %s\n", __FUNCTION__, __LINE__, name.c_str());
+                        for (Use &UU : IIb->uses()) {
+                            Instruction *User = cast<Instruction>(UU.getUser());
+printf("[%s:%d]USE\n", __FUNCTION__, __LINE__);
+User->dump();
+                        }
+                        II->setName(TEMP_NAME + name);
+                    }
+                }
+            }
+        }
+        }
+        std::string retGuard = processMethod(methodName, func, mlines, malines, methodTemplateOptions[func]);
+        if (!isModule)
+            retGuard = "";
         if (retGuard != "")
             headerLine += " = (" + retGuard + ")";
         if (rdyGuard != "")

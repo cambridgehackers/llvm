@@ -56,7 +56,7 @@ typedef struct {
 
 typedef struct {
     std::string name;
-    const Function *func;
+    Function *func;
 } ClassMethodInfo;
 
 typedef struct {
