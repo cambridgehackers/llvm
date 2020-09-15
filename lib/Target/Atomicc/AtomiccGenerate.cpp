@@ -23,6 +23,7 @@ using namespace llvm;
 #define BOGUS_VERILOG "$UNUSED$FIELD$VERILOG$"
 #define CONNECT_PREFIX "___CONNECT__"
 #define TEMP_NAME      "temp" DOLLAR
+#define LOCAL_VARIABLE_PREFIX "_"
 
 static std::map<const Function *, bool> actionFunction;
 static std::map<const Function *, std::string> methodTemplateOptions;
@@ -238,7 +239,7 @@ static void classConnectInterface(ClassMethodTable *table, std::string target, s
     if (tifc != table->interfaces.end()) {
         std::string tname = tifc->second.name;
         //if (traceConnect)
-            printf("[%s:%d] '%s' found '%s'\n", __FUNCTION__, __LINE__, target.c_str(), tname.c_str());
+            printf("[%s:%d] '%s' found '%s' targetbase %s\n", __FUNCTION__, __LINE__, target.c_str(), tname.c_str(), targetBase.c_str());
         table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, tname, isForward});
     }
     else {
@@ -404,7 +405,7 @@ static std::string GetValueName(const Value *Operand)
     if (const Instruction *source = dyn_cast_or_null<Instruction>(Operand))
     if (source->getOpcode() == Instruction::Alloca && globalMethodName != "") {
         // Make the names unique across all methods in a class
-        Name = "_" + globalMethodName + DOLLAR + Name;
+        Name = LOCAL_VARIABLE_PREFIX + globalMethodName + DOLLAR + Name;
         if (endswith(Name, ".addr"))
             Name = Name.substr(0, Name.length() - 5);
     }
@@ -1471,7 +1472,7 @@ static std::string processMethod(std::string methodName, Function *func,
     for (auto item = func->arg_begin(), eitem = func->arg_end(); item != eitem; item++) {
         std::string name = item->getName();
         if (name != "")
-            argumentName["_" + methodName + DOLLAR + name] = 1; // prepend argument name with function name
+            argumentName[LOCAL_VARIABLE_PREFIX + methodName + DOLLAR + name] = 1; // prepend argument name with function name
     }
     std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
         if (II) {
