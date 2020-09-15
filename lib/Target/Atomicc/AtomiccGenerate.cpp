@@ -404,11 +404,9 @@ static std::string GetValueName(const Value *Operand)
     if (const Instruction *source = dyn_cast_or_null<Instruction>(Operand))
     if (source->getOpcode() == Instruction::Alloca && globalMethodName != "") {
         // Make the names unique across all methods in a class
-        Name = globalMethodName + DOLLAR + Name;
+        Name = "_" + globalMethodName + DOLLAR + Name;
         if (endswith(Name, ".addr"))
             Name = Name.substr(0, Name.length() - 5);
-        else
-            Name = "_" + Name;
     }
     if (Name.empty()) { // Assign unique names to local temporaries.
         unsigned &No = AnonValueNumbers[Operand];
@@ -1473,7 +1471,7 @@ static std::string processMethod(std::string methodName, Function *func,
     for (auto item = func->arg_begin(), eitem = func->arg_end(); item != eitem; item++) {
         std::string name = item->getName();
         if (name != "")
-            argumentName[methodName + DOLLAR + name] = 1; // prepend argument name with function name
+            argumentName["_" + methodName + DOLLAR + name] = 1; // prepend argument name with function name
     }
     std::function<void(const Instruction *)> findAlloca = [&](const Instruction *II) -> void {
         if (II) {
