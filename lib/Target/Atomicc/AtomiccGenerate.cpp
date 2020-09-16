@@ -31,8 +31,8 @@ static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
 static int trace_operand;//=1;
-static int trace_blockCond;//= 1;
-static bool traceConnect;// = true;
+static int trace_blockCond;//=1;
+static int traceConnect=1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
 static std::string globalMethodName;
@@ -213,10 +213,23 @@ static void buildInterfaceList(ClassMethodTable *master, ClassMethodTable *table
                 fname += DOLLAR;
             fname += table->fieldName[Idx].name;
             if (isInter)
-                master->interfaces[fname] = FieldNameInfo{tableE->name, "", "", "", ""};
+                master->interfaces[fname] = InterfaceTableInfo{Idx, table, tableE->name, STyE};
             if (top || isInter)
                 buildInterfaceList(master, tableE, fname, top && isInter);
         }
+    }
+}
+
+typedef const StructType *ST;
+typedef ClassMethodTable *CMT;
+static void findInterface(ClassMethodTable *table, std::string pattern, std::string &tname, int &index, ST &type, CMT &ttable)
+{
+    auto tifc = table->interfaces.find(pattern);
+    if (tifc != table->interfaces.end()) {
+        tname = tifc->second.name;
+        index = tifc->second.index;
+        type = tifc->second.type;
+        ttable = tifc->second.table;
     }
 }
 
@@ -224,29 +237,54 @@ static void classConnectInterface(ClassMethodTable *table, std::string target, s
 {
     if (target.substr(0, 8) == "*(this->" && target.substr(target.length()-1) == ")")
         target = target.substr(8, target.length() - 9);
+    if (source.substr(0, 8) == "*(this->" && source.substr(source.length()-1) == ")")
+        source = source.substr(8, source.length() - 9);
+    std::string ssub, tsub;
+    int ind = target.find("[");
+    if (ind > 0) {
+        tsub = target.substr(ind);
+        target = target.substr(0, ind);
+    }
+    ind = source.find("[");
+    if (ind > 0) {
+        ssub = source.substr(ind);
+        source = source.substr(0, ind);
+    }
     if (traceConnect) {
         printf("[%s:%d] CONNECT %s = %s \n", __FUNCTION__, __LINE__, target.c_str(), source.c_str());
         for (auto item: table->interfaces)
             printf("[%s:%d]interfacetable [%s] = %s\n", __FUNCTION__, __LINE__, item.first.c_str(), item.second.name.c_str());
     }
-    std::string sub, targetBase = target;
-    int ind = targetBase.find("[");
-    if (ind > 0) {
-        sub = targetBase.substr(ind);
-        targetBase = targetBase.substr(0, ind);
+    int sindex = -1, tindex = -1;
+    std::string stname, ttname;
+    const StructType *stype = nullptr, *ttype = nullptr;
+    ClassMethodTable *stable = nullptr, *ttable = nullptr;
+    findInterface(table, source, stname, sindex, stype, stable);
+    findInterface(table, target, ttname, tindex, ttype, ttable);
+    std::string resultName = ttname;
+    const StructType *resultType = ttype;
+    int resultIndex = sindex;
+    ClassMethodTable *resultTable = stable;
+    if (target.find(DOLLAR) == std::string::npos) {
+        resultName = stname;
+        resultType = stype;
+        resultIndex = tindex;
+        resultTable = ttable;
     }
-    auto tifc = table->interfaces.find(targetBase);
-    if (tifc != table->interfaces.end()) {
-        std::string tname = tifc->second.name;
-        //if (traceConnect)
-            printf("[%s:%d] '%s' found '%s' targetbase %s\n", __FUNCTION__, __LINE__, target.c_str(), tname.c_str(), targetBase.c_str());
-        table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, tname, isForward});
-    }
-    else {
-        printf("[%s:%d] Error: interface not found %s\n", __FUNCTION__, __LINE__, target.c_str());
+    if (!stype || !ttype || !stable || !ttable) {
+        printf("[%s:%d] Error: interface not found %s source %s\n", __FUNCTION__, __LINE__, target.c_str(), source.c_str());
         for (auto item: table->interfaces)
             printf("        Available: [%s] = %s\n", item.first.c_str(), item.second.name.c_str());
     }
+    if (traceConnect) {
+        printf("[%s:%d] target '%s' found '%s' index %d type %p\n", __FUNCTION__, __LINE__, target.c_str(), ttname.c_str(), tindex, ttype);
+        if (ttype) ttype->dump();
+        printf("[%s:%d] source '%s' found '%s' index %d type %p\n", __FUNCTION__, __LINE__, source.c_str(), stname.c_str(), sindex, stype);
+        if (stype) stype->dump();
+    }
+    table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, resultName, isForward});
+    if (ttype != stype)
+        resultTable->replaceType[resultIndex] = resultType;
 }
 
 std::map<std::string, const StructType *> structNameMap;

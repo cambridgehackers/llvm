@@ -54,6 +54,14 @@ typedef struct {
     std::string vecCount;
 } FieldNameInfo;
 
+class ClassMethodTable;
+typedef struct {
+    int               index;
+    ClassMethodTable *table;
+    std::string       name;
+    const StructType *type;
+} InterfaceTableInfo;
+
 typedef struct {
     std::string name;
     Function *func;
@@ -76,7 +84,7 @@ public:
     const StructType                  *STy;
     const StructType                  *remapSTy;
     std::map<int, FieldNameInfo>      fieldName;
-    std::map<std::string, FieldNameInfo> interfaces;
+    std::map<std::string, InterfaceTableInfo> interfaces;
     std::list<ClassMethodInfo>        methods;
     std::map<int, const Type *>       replaceType;
     std::map<int, std::string>        replaceCount;
