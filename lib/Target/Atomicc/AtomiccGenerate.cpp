@@ -177,9 +177,11 @@ static std::string legacygetStructName(const StructType *STy)
         while (*p) {
             if (startswith(temp, *p)) {
                 temp = temp.substr(strlen(*p));
+                int ind = temp.find("(struct ");    // shows up in class definition of 'Printf' in atomicc.h
+                if (ind > 0)
+                    temp = temp.substr(0, ind+1) + temp.substr(ind + 8);
                 if (temp.find(" ") != std::string::npos)
                     return CBEMangle(temp);
-                int ind;
                 while ((ind = temp.find(PERIOD)) != -1)
                     temp = temp.substr(0, ind) + "_OC_" + temp.substr(ind+1);
                 return temp + sub;
