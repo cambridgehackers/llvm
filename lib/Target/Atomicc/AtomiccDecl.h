@@ -143,3 +143,4 @@ std::string baseMethodName(std::string pname);
 
 bool endswith(std::string str, std::string suffix);
 bool startswith(std::string str, std::string suffix);
+void myReplaceAllUsesWith(Value *Old, Value *New);

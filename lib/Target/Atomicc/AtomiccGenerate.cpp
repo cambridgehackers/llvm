@@ -279,9 +279,9 @@ static void classConnectInterface(ClassMethodTable *table, std::string target, s
             printf("        Available: [%s] = %s\n", item.first.c_str(), item.second.name.c_str());
     }
     if (traceConnect) {
-        printf("[%s:%d] target '%s' found '%s' index %d type %p\n", __FUNCTION__, __LINE__, target.c_str(), ttname.c_str(), tindex, ttype);
+        printf("[%s:%d] target '%s' found '%s' index %d type %p\n", __FUNCTION__, __LINE__, target.c_str(), ttname.c_str(), tindex, (void *)ttype);
         if (ttype) ttype->dump();
-        printf("[%s:%d] source '%s' found '%s' index %d type %p\n", __FUNCTION__, __LINE__, source.c_str(), stname.c_str(), sindex, stype);
+        printf("[%s:%d] source '%s' found '%s' index %d type %p\n", __FUNCTION__, __LINE__, source.c_str(), stname.c_str(), sindex, (void *)stype);
         if (stype) stype->dump();
     }
     table->interfaceConnect.push_back(GenInterfaceConnectType{target, source, resultName, isForward});
@@ -1534,6 +1534,44 @@ static std::string processMethod(std::string methodName, Function *func,
     /* Gather data for top level instructions in each basic block. */
     std::string retGuard, valsep;
     for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
+        std::string cond = getCondStr(getCondSpelling(&*BI));
+        if (cond == "")
+        for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE; IIb++) {
+            Instruction *II = &*IIb;
+            if (II->getOpcode() == Instruction::Store) {
+                int useCount = 0, innerCount = 0;
+                bool foundDest = false;
+                StoreInst *SI = cast<StoreInst>(II);
+                Instruction *value = dyn_cast<Instruction>(SI->getOperand(0));
+                Instruction *dest = dyn_cast<Instruction>(SI->getPointerOperand());
+                Instruction *operand = dest;
+                if (auto castinst = dyn_cast<CastInst>(operand))
+                    operand = dyn_cast<Instruction>(castinst->getOperand(0));
+                Instruction *retIns = nullptr, *retArg = nullptr;
+                if (operand->getOpcode() == Instruction::Alloca)
+                    for (Use &UU : operand->uses()) {
+                        useCount++;
+                        Instruction *User = cast<Instruction>(UU.getUser());
+                        if (User == dest)
+                            foundDest = true;
+                        else if (User->getOpcode() == Instruction::Load)
+                            for (Use &UUinner : User->uses()) {
+                                innerCount++;
+                                retIns = cast<Instruction>(UUinner.getUser());
+                            }
+                    }
+                if (foundDest && useCount == 2 && innerCount == 1 && retIns->getOpcode() == Instruction::Ret) {
+                    retArg = cast<Instruction>(retIns->getOperand(0));
+                    myReplaceAllUsesWith(retArg, value);
+                    SI->eraseFromParent();
+                    retArg->eraseFromParent();
+                    recursiveDelete(dest);
+                    break;
+                }
+            }
+        }
+    }
+    for (auto BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
         std::string tempCond = getCondStr(getCondSpelling(&*BI));
         bool thisPHI = false;
         for (auto IIb = BI->begin(), IE = BI->end(); IIb != IE; IIb++) {
@@ -1656,22 +1694,12 @@ static std::string processMethod(std::string methodName, Function *func,
     return retGuard;
 }
 
-static std::map<std::string, bool> sourceFileFlag;
-static void addSourceFile(std::string filename)
-{
-    if (endswith(filename, ".cpp") || endswith(filename, ".c++"))
-        sourceFileFlag[filename.substr(0, filename.length()-4)] = true;
-}
-static bool checkImportFilename(std::string filename)
-{
-    if (endswith(filename, ".cpp") || endswith(filename, ".c++"))
-        return false;
-    if (endswith(filename, ".h"))
-        return !sourceFileFlag[filename.substr(0, filename.length()-2)];
-    if (endswith(filename, ".hpp"))
-        return !sourceFileFlag[filename.substr(0, filename.length()-4)];
-    return true;
-}
+//static std::map<std::string, bool> sourceFileFlag;
+//static void addSourceFile(std::string filename)
+//{
+    //if (endswith(filename, ".cpp") || endswith(filename, ".c++"))
+        //sourceFileFlag[filename.substr(0, filename.length()-4)] = true;
+//}
 
 static std::map<std::string, bool> classDone;
 static bool checkSpecial(std::string tname)
@@ -1790,8 +1818,6 @@ table->STy->dump();
     }
 }
 #endif
-    //if (checkImportFilename(table->sourceFilename))
-        //header += "/Import";
     fprintf(OStr, "%s %s %s {\n", header.c_str(), table->name.c_str(), interfaceName.c_str());
     fprintf(OStr, "    FILE %s\n", table->sourceFilename.c_str());
     for (auto item: table->softwareName)
@@ -1878,8 +1904,8 @@ table->STy->dump();
         for (auto AI = func->arg_begin(), AE = func->arg_end(); AI != AE; AI++) {
             std::string name = AI->getName();
             if (name != "" && name != "this" && AI->getType()->isAggregateType()) {
-printf("[%s:%d] TEMPPPPPPPPPPPPPPP %s\n", __FUNCTION__, __LINE__, name.c_str());
-AI->getType()->dump();
+//printf("[%s:%d] TEMPPPPPPPPPPPPPPP %s\n", __FUNCTION__, __LINE__, name.c_str());
+//AI->getType()->dump();
                 paramTemp[name] = true;
             }
         }
@@ -1894,12 +1920,12 @@ AI->getType()->dump();
                     name = name.substr(0, name.length()-5);
                     auto pinfo = paramTemp.find(name);
                     if (pinfo != paramTemp.end()) {
-printf("[%s:%d] nameeeeeeeee %s\n", __FUNCTION__, __LINE__, name.c_str());
-                        for (Use &UU : IIb->uses()) {
-                            Instruction *User = cast<Instruction>(UU.getUser());
-printf("[%s:%d]USE\n", __FUNCTION__, __LINE__);
-User->dump();
-                        }
+//printf("[%s:%d] nameeeeeeeee %s\n", __FUNCTION__, __LINE__, name.c_str());
+                        ///for (Use &UU : IIb->uses()) {
+                            ///Instruction *User = cast<Instruction>(UU.getUser());
+//printf("[%s:%d]USE\n", __FUNCTION__, __LINE__);
+//User->dump();
+                        ///}
                         II->setName(TEMP_NAME + name);
                     }
                 }
@@ -1951,7 +1977,7 @@ void generateIR(std::string OutputDir)
         if (strncmp(sname.c_str(), "class.std::", 11) // don't generate anything for std classes
          && strncmp(sname.c_str(), "struct.std::", 12))
             structAlpha[sortName] = current.first;
-        addSourceFile(current.second->sourceFilename);
+        //addSourceFile(current.second->sourceFilename);
     }
     FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
     for (auto item : structAlpha)

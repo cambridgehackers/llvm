@@ -97,7 +97,7 @@ static int validateAddress(int arg, void *p)
  * Local version of 'ReplaceAllUsesWith'(RAUW) that allows changing the
  * datatype as part of the replcement.
  */
-static void myReplaceAllUsesWith(Value *Old, Value *New)
+void myReplaceAllUsesWith(Value *Old, Value *New)
 {
   //assert(New->getType() == Old->getType() && "replaceAllUses of value with new value of different type!");
   // Notify all ValueHandles (if present) that Old value is going away.
