@@ -527,8 +527,13 @@ static int64_t getGEPOffset(VectorType **LastIndexIsVector, gep_type_iterator I,
 
 void appendNameComponent(std::string &cbuffer, std::string &fname)
 {
-    if (cbuffer[cbuffer.length()-1] == DOLLAR[0])
-        cbuffer = cbuffer.substr(0,cbuffer.length()-1);
+//printf("%s: '%s' fname '%s'\n", __FUNCTION__, cbuffer.c_str(), fname.c_str());
+    if (cbuffer[cbuffer.length()-1] == DOLLAR[0]) {
+        if (fname[0] == PERIOD[0])
+            fname = fname.substr(1);
+        else
+            cbuffer = cbuffer.substr(0,cbuffer.length()-1);
+    }
     if (cbuffer[cbuffer.length()-1] == ']' && fname[0] == DOLLAR[0]) {
         int level = 0;
         int ind = cbuffer.length()-2;
@@ -606,8 +611,12 @@ int traceindex = 0;
                 fname = DOLLAR;
             else if (cbuffer != "") {
 //printf("[%s:%d] cbuffer %s fname %s processinginterface %d nextint %d isver %d basename %s offset %d\n", __FUNCTION__, __LINE__, cbuffer.c_str(), fname.c_str(), processingInterface, nextIsInterface, isVerilog, table->name.c_str(), (int)foffset);
-                if (!processingInterface)
-                    fname = DOLLAR + fname;
+                if (!processingInterface) {
+                    if (cbuffer[0] == LOCAL_VARIABLE_PREFIX[0])
+                        fname = PERIOD + fname;
+                    else
+                        fname = DOLLAR + fname;
+                }
                 else if (!isVerilog) {     // optimization for verilog port references
                     if (nextIsInterface)
                         fname = DOLLAR + fname;
@@ -622,7 +631,6 @@ int traceindex = 0;
                 if (fname != "" && fname.substr(0,1) == DOLLAR)
                     fname = fname.substr(1);
             }
-//printf("[%s:%d]DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD '%s' fname '%s'\n", __FUNCTION__, __LINE__, cbuffer.c_str(), fname.c_str());
             appendNameComponent(cbuffer, fname);
             processingInterface = isInterface(STy);
         }
