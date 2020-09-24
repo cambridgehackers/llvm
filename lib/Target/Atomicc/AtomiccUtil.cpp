@@ -113,7 +113,7 @@ std::string CBEMangle(const std::string &S)
 {
     std::string Result;
     for (unsigned i = 0, e = S.size(); i != e; ++i)
-        if (isalnum(S[i]) || S[i] == '_' || S[i] == '$')
+        if (isalnum(S[i]) || S[i] == '$')
             Result += S[i];
         else {
             Result += '_';

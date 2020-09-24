@@ -289,6 +289,21 @@ static void classConnectInterface(ClassMethodTable *table, std::string target, s
         resultTable->replaceType[resultIndex] = resultType;
 }
 
+static std::string CBEUnmangle(std::string S)
+{
+    std::string Result;
+    for (unsigned i = 0, e = S.size(); i != e; ++i)
+        if (S[i] == '_') {
+            i++;
+            char ch = S[i++] - 'A';
+            ch |= (S[i++] - 'A') << 4;
+            Result += ch;
+        }
+        else
+            Result += S[i];
+    return Result;
+}
+
 std::map<std::string, const StructType *> structNameMap;
 ClassMethodTable *getClass(const StructType *STy)
 {
@@ -358,7 +373,7 @@ ClassMethodTable *getClass(const StructType *STy)
                 std::string params, templateOptions, vecCount;
                 int lt = ret.find('<');
                 if (lt >= 0) {
-                    params = ret.substr(lt);
+                    params = CBEUnmangle(ret.substr(lt+1));
                     ret = ret.substr(0, lt);
                     idx = ret.find(':');
                 }
