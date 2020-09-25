@@ -32,7 +32,7 @@ static int trace_call;//=1;
 static int trace_gep;//=1;
 static int trace_operand;//=1;
 static int trace_blockCond;//=1;
-static int traceConnect=1;
+static int traceConnect;//=1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
 static std::string globalMethodName;
@@ -1757,7 +1757,7 @@ element->dump();
         std::list<std::string> mlines, malines;
         std::string methodName = FI.name;
         const Function *func = FI.func;
-printf("[%s:%d]method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), func);
+printf("[%s:%d]method %s func %p\n", __FUNCTION__, __LINE__, methodName.c_str(), (void *)func);
 func->dump();
     }
 }
@@ -2003,7 +2003,13 @@ void generateIR(std::string OutputDir)
         //addSourceFile(current.second->sourceFilename);
     }
     FILE *OStrIR = fopen((OutputDir + ".generated.IR").c_str(), "w");
+#define NamePipeIn32  "5PipeIn(width=32)"
+#define NamePipeOut32  "5PipeOut(width=32)"
+    bool hasPipeIn32 = structAlpha.find(NamePipeIn32) != structAlpha.end();
+    bool hasPipeOut32 = structAlpha.find(NamePipeOut32) != structAlpha.end();
     for (auto item : structAlpha)
+        if ((!startswith(item.first, "5PipeIn(") || !hasPipeIn32 || item.first == NamePipeIn32)
+         && (!startswith(item.first, "5PipeOut(") || !hasPipeOut32 || item.first == NamePipeOut32))
         processClass(getClass(item.second), OStrIR);
     fclose(OStrIR);
 }
