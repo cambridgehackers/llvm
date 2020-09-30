@@ -31,7 +31,7 @@ static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
 static int trace_operand;//=1;
-static int trace_blockCond;//=1;
+static int trace_blockCond=1;
 static int traceConnect;//=1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
@@ -862,7 +862,6 @@ static std::string getCondStr(std::string block)
     std::string thisName = block;
     bool hasRecursion = false;
     if (condStr.find(thisName) == condStr.end()) {
-        int ind = 0;
         std::list<std::string> alternatives;
         for (auto info: blockCondition[block]) {
         for (auto local: info.second) {
@@ -897,7 +896,6 @@ static std::string getCondStr(std::string block)
             condPrefix += mycond;
             if (condPrefix != "")
                 alternatives.push_back(condPrefix);
-            ind++;
         }
         }
         std::string cond, sep;
@@ -922,6 +920,7 @@ static void processBlockConditions(const Function *currentFunction, std::list<st
     value2index[""] = valueIndex;     // index 0 -> null string
     index2value[valueIndex++] = "";
     inProcess = true;
+    std::map<std::string, std::string> hasDefault;
     for (auto BBI = currentFunction->begin(), BBE = currentFunction->end(); BBI != BBE; BBI++) {
         auto setCondition = [&](const BasicBlock *bb, bool invert, std::string val, const BasicBlock *from) -> void {
             // each element in list is a valid path to get to the target BasicBlock.
@@ -972,9 +971,43 @@ static void processBlockConditions(const Function *currentFunction, std::list<st
                         sep = " | ";
                         //}
                 }
-                if (BasicBlock *defaultBB = SI->getDefaultDest())
+                if (BasicBlock *defaultBB = SI->getDefaultDest()) {
+                    hasDefault[getCondSpelling(defaultBB)] = getCondSpelling(&*BBI);
                     setCondition(defaultBB, false, "((" + defaultCond + ") ^ 1)", &*BBI);
+                }
                 break;
+                }
+            }
+        }
+    }
+    // update defaultCondition
+    for (auto &item: blockCondition) {
+        std::map<std::string, bool> replaced;
+        for (auto &rules: item.second) {
+            auto defaultSource = hasDefault.find(rules.first);
+            if (defaultSource != hasDefault.end()) {
+                replaced[defaultSource->second] = true;
+            }
+        }
+        if (replaced.size()) {
+#define ALIAS_SUFFIX "__ALIAS"
+            for (auto &rules: item.second) {
+                if (!endswith(rules.first, ALIAS_SUFFIX)) {
+                    std::string newName = rules.first + ALIAS_SUFFIX;
+                    for (auto rulesi: blockCondition[rules.first]) {
+                        if (blockCondition[rules.first].size())
+                            newName = rulesi.first;
+                        else
+                        for (auto &info: rulesi.second) {
+                            if(replaced[rulesi.first]) {
+                                info.invert = 0;
+                                info.cond = 0;
+                            }
+                            blockCondition[newName][rulesi.first].push_back(info);
+                        }
+                    }
+                    blockCondition[item.first][newName] = rules.second;
+                    rules.second.clear();
                 }
             }
         }
@@ -982,9 +1015,9 @@ static void processBlockConditions(const Function *currentFunction, std::list<st
     bool changed = true;
     while (changed) {
         changed = false;
-    for (auto item = blockCondition.begin(), itemEnd = blockCondition.end(); item != itemEnd; item++) {
-        auto prev = item->second;
-        item->second.clear();
+    for (auto &item : blockCondition) {
+        auto prev = item.second;
+        item.second.clear();
         for (auto rules: prev) {
             std::string block = rules.first;
             if (block != "") {
@@ -1010,7 +1043,7 @@ static void processBlockConditions(const Function *currentFunction, std::list<st
                 auto front = rules.second.front();
                 auto back = rules.second.back();
                 if (front.cond == back.cond && (front.invert != back.invert)) {
-                     item->second[block].push_back({0, 0});
+                     item.second[block].push_back({0, 0});
                      changed = true;
                      continue;
                 }
@@ -1019,11 +1052,11 @@ static void processBlockConditions(const Function *currentFunction, std::list<st
                 if (info.cond == 0) { // value is ""
                     for (auto sub: blockCondition[block])
                     for (auto vitem: sub.second)
-                        item->second[sub.first].push_back(vitem);
+                        item.second[sub.first].push_back(vitem);
                     changed = true;
                 }
                 else
-                    item->second[block].push_back(info);
+                    item.second[block].push_back(info);
             }
         }
     }
