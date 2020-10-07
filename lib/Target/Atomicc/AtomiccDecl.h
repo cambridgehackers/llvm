@@ -95,7 +95,9 @@ public:
     std::list<GenInterfaceConnectType>   interfaceConnect;
     std::list<GenUnionItem>              unionList;
     std::map<std::string, std::string> priority; // indexed by rulename, result is 'high'/etc
+    unsigned                          isTrace;
     bool                              isVerilog;
+    bool                              isPrintf;
     std::string                       sourceFilename;
     ClassMethodTable() {}
 };

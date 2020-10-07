@@ -20,10 +20,12 @@ using namespace llvm;
 #include "AtomiccDecl.h"
 
 #define BOGUS_FORCE_DECLARATION_FIELD "$UNUSED$FIELD$FORCE$ALLOC$"
-#define BOGUS_VERILOG "$UNUSED$FIELD$VERILOG$"
-#define CONNECT_PREFIX "___CONNECT__"
-#define TEMP_NAME      "temp" DOLLAR
-#define LOCAL_VARIABLE_PREFIX "_"
+#define BOGUS_VERILOG                 "$UNUSED$FIELD$VERILOG$"
+#define BOGUS_TRACE                   "$UNUSED$FIELD$TRACE$"
+#define BOGUS_PRINTF                  "$UNUSED$FIELD$PRINTF$"
+#define CONNECT_PREFIX                "___CONNECT__"
+#define TEMP_NAME                     "temp" DOLLAR
+#define LOCAL_VARIABLE_PREFIX         "_"
 
 static std::map<const Function *, bool> actionFunction;
 static std::map<const Function *, std::string> methodTemplateOptions;
@@ -31,7 +33,7 @@ static int trace_function;//=1;
 static int trace_call;//=1;
 static int trace_gep;//=1;
 static int trace_operand;//=1;
-static int trace_blockCond=1;
+static int trace_blockCond;//=1;
 static int traceConnect;//=1;
 static std::map<const StructType *,ClassMethodTable *> classCreate;
 static unsigned NextTypeID;
@@ -315,6 +317,8 @@ ClassMethodTable *getClass(const StructType *STy)
         table->remapSTy = nullptr;
         table->name = legacygetStructName(STy);
         table->isVerilog = false;
+        table->isPrintf = false;
+        table->isTrace = 0;
         structNameMap[STy->getName().str()] = STy;
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
@@ -392,6 +396,12 @@ ClassMethodTable *getClass(const StructType *STy)
                 table->fieldName[fieldSub++] = FieldNameInfo{name, options, params, templateOptions, vecCount};
                 if (startswith(name, BOGUS_VERILOG))
                     table->isVerilog = true;
+                if (startswith(name, BOGUS_TRACE)) {
+                    std::string val = name.substr(strlen(BOGUS_TRACE));
+                    table->isTrace = atol(val.c_str());
+                }
+                if (startswith(name, BOGUS_PRINTF))
+                    table->isPrintf = true;
             }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
@@ -1513,6 +1523,7 @@ static void processField(ClassMethodTable *table, FILE *OStr, bool inInterface)
 //printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_str(), name.c_str());
         }
         if (endswith(fldName, BOGUS_FORCE_DECLARATION_FIELD) || startswith(fldName, CONNECT_PREFIX)
+         || startswith(fldName, BOGUS_TRACE) || startswith(fldName, BOGUS_PRINTF)
          || startswith(fldName, BOGUS_VERILOG))
             continue;
         if (isInterface(element))
@@ -1866,6 +1877,10 @@ printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_s
                 header += "/Verilog";
         }
     }
+    if (table->isPrintf)
+        header += "/Printf";
+    if (table->isTrace)
+        header += "/Trace=" + utostr(table->isTrace);
     if (!isInterface(table->STy))
     if (!table->STy->getName().startswith("struct."))
     if (interfaceName == "") {
