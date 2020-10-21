@@ -1771,7 +1771,7 @@ static std::string processMethod(std::string methodName, Function *func,
 static std::map<std::string, bool> classDone;
 static bool checkSpecial(std::string tname)
 {
-    return startswith(tname, "PipeIn(") || startswith(tname, "PipeOut(") || startswith(tname, "PipeInB(");
+    return startswith(tname, "PipeIn(") || startswith(tname, "PipeOut(") || startswith(tname, "PipeInLast(") || startswith(tname, "PipeInLength(");
 }
 
 static void processClass(ClassMethodTable *table, FILE *OStr)
