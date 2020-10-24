@@ -23,6 +23,7 @@ using namespace llvm;
 #define BOGUS_VERILOG                 "$UNUSED$FIELD$VERILOG$"
 #define BOGUS_TRACE                   "$UNUSED$FIELD$TRACE$"
 #define BOGUS_PRINTF                  "$UNUSED$FIELD$PRINTF$"
+#define BOGUS_TOP_MODULE              "$UNUSED$FIELD$TOPMODULE$"
 #define CONNECT_PREFIX                "___CONNECT__"
 #define TEMP_NAME                     "temp" DOLLAR
 #define LOCAL_VARIABLE_PREFIX         "_"
@@ -318,6 +319,7 @@ ClassMethodTable *getClass(const StructType *STy)
         table->name = legacygetStructName(STy);
         table->isVerilog = false;
         table->isPrintf = false;
+        table->isTopModule = false;
         table->isTrace = 0;
         structNameMap[STy->getName().str()] = STy;
         int len = STy->structFieldMap.length();
@@ -402,6 +404,8 @@ ClassMethodTable *getClass(const StructType *STy)
                 }
                 if (startswith(name, BOGUS_PRINTF))
                     table->isPrintf = true;
+                if (startswith(name, BOGUS_TOP_MODULE))
+                    table->isTopModule = true;
             }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
@@ -1524,7 +1528,7 @@ static void processField(ClassMethodTable *table, FILE *OStr, bool inInterface)
         }
         if (endswith(fldName, BOGUS_FORCE_DECLARATION_FIELD) || startswith(fldName, CONNECT_PREFIX)
          || startswith(fldName, BOGUS_TRACE) || startswith(fldName, BOGUS_PRINTF)
-         || startswith(fldName, BOGUS_VERILOG))
+         || startswith(fldName, BOGUS_TOP_MODULE) || startswith(fldName, BOGUS_VERILOG))
             continue;
         if (isInterface(element))
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
@@ -1879,6 +1883,8 @@ printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_s
     }
     if (table->isPrintf)
         header += "/Printf";
+    if (table->isTopModule)
+        header += "/Top";
     if (table->isTrace)
         header += "/Trace=" + utostr(table->isTrace);
     if (!isInterface(table->STy))

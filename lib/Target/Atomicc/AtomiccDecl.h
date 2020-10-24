@@ -98,6 +98,7 @@ public:
     unsigned                          isTrace;
     bool                              isVerilog;
     bool                              isPrintf;
+    bool                              isTopModule;
     std::string                       sourceFilename;
     ClassMethodTable() {}
 };
