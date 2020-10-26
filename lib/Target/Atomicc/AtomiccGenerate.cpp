@@ -1473,6 +1473,11 @@ static void processField(ClassMethodTable *table, FILE *OStr, bool inInterface)
             continue;
         }
         std::string temp;
+        if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
+            assert(vecCount == "" && "both vecCount and array count are not allowed");
+            vecCount = utostr(ATy->getNumElements());
+            element = ATy->getElementType();
+        }
         if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
             temp += "/Ptr";
             auto Ty = PTy->getElementType();
@@ -1480,11 +1485,6 @@ static void processField(ClassMethodTable *table, FILE *OStr, bool inInterface)
                 element = Ty;
             else if (const ArrayType *STy = dyn_cast<ArrayType>(Ty))
                 element = Ty;
-        }
-        if (const ArrayType *ATy = dyn_cast<ArrayType>(element)) {
-            assert(vecCount == "" && "both vecCount and array count are not allowed");
-            vecCount = utostr(ATy->getNumElements());
-            element = ATy->getElementType();
         }
         if (vecCount != "" && arrayDim != "") {
 //printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(), arrayDim.c_str());
