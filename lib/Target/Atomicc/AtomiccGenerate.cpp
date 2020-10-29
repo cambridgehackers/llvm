@@ -1478,6 +1478,10 @@ static void processField(ClassMethodTable *table, FILE *OStr, bool inInterface)
             vecCount = utostr(ATy->getNumElements());
             element = ATy->getElementType();
         }
+        if (vecCount != "" && arrayDim != "") {
+//printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(), arrayDim.c_str());
+            vecCount = arrayDim;
+        }
         if (const PointerType *PTy = dyn_cast<PointerType>(element)) {
             temp += "/Ptr";
             auto Ty = PTy->getElementType();
@@ -1485,10 +1489,6 @@ static void processField(ClassMethodTable *table, FILE *OStr, bool inInterface)
                 element = Ty;
             else if (const ArrayType *STy = dyn_cast<ArrayType>(Ty))
                 element = Ty;
-        }
-        if (vecCount != "" && arrayDim != "") {
-//printf("[%s:%d] vecCount %s array %s\n", __FUNCTION__, __LINE__, vecCount.c_str(), arrayDim.c_str());
-            vecCount = arrayDim;
         }
         if (fitem.options != "")
             temp += "/" + fitem.options;
