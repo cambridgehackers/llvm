@@ -24,6 +24,7 @@ using namespace llvm;
 #define BOGUS_TRACE                   "$UNUSED$FIELD$TRACE$"
 #define BOGUS_PRINTF                  "$UNUSED$FIELD$PRINTF$"
 #define BOGUS_TOP_MODULE              "$UNUSED$FIELD$TOPMODULE$"
+#define BOGUS_OVERRIDE                "$UNUSED$FIELD$OVERRIDE$"
 #define CONNECT_PREFIX                "___CONNECT__"
 #define TEMP_NAME                     "temp" DOLLAR
 #define LOCAL_VARIABLE_PREFIX         "_"
@@ -406,6 +407,11 @@ ClassMethodTable *getClass(const StructType *STy)
                     table->isPrintf = true;
                 if (startswith(name, BOGUS_TOP_MODULE))
                     table->isTopModule = true;
+                if (startswith(name, BOGUS_OVERRIDE)) {
+                    std::string over = CBEUnmangle(name.substr(strlen(BOGUS_OVERRIDE)));
+                    int ind = over.find(" , ");
+                    table->overtable[over.substr(0, ind)] = over.substr(ind+3);
+                }
             }
             else if (processSequence == 2)
                 table->softwareName.push_back(ret);
@@ -1528,7 +1534,8 @@ static void processField(ClassMethodTable *table, FILE *OStr, bool inInterface)
         }
         if (endswith(fldName, BOGUS_FORCE_DECLARATION_FIELD) || startswith(fldName, CONNECT_PREFIX)
          || startswith(fldName, BOGUS_TRACE) || startswith(fldName, BOGUS_PRINTF)
-         || startswith(fldName, BOGUS_TOP_MODULE) || startswith(fldName, BOGUS_VERILOG))
+         || startswith(fldName, BOGUS_TOP_MODULE) || startswith(fldName, BOGUS_VERILOG)
+         || startswith(fldName, BOGUS_OVERRIDE))
             continue;
         if (isInterface(element))
             fprintf(OStr, "    INTERFACE%s %s %s\n", temp.c_str(), elementName.c_str(), fldName.c_str());
@@ -1909,6 +1916,8 @@ table->STy->dump();
         fprintf(OStr, "    FIELD Bit(%ld) DATA\n", (long)sizeType(table->STy));
     else
         processField(table, OStr, inInterface);
+    for (auto item: table->overtable)
+        fprintf(OStr, "    OVERRIDE %s %s\n", item.first.c_str(), item.second.c_str());
     for (auto FI : table->methods) {
         std::list<std::string> mlines, malines;
         std::string methodName = FI.name;

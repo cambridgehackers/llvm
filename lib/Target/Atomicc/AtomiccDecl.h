@@ -100,6 +100,7 @@ public:
     bool                              isPrintf;
     bool                              isTopModule;
     std::string                       sourceFilename;
+    std::map<std::string, std::string> overtable;
     ClassMethodTable() {}
 };
 
