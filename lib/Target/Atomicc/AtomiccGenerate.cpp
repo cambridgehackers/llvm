@@ -321,7 +321,7 @@ ClassMethodTable *getClass(const StructType *STy)
         table->isVerilog = false;
         table->isPrintf = false;
         table->isTopModule = false;
-        table->isTrace = 0;
+        table->isTrace = "";
         structNameMap[STy->getName().str()] = STy;
         int len = STy->structFieldMap.length();
         int subs = 0, last_subs = 0;
@@ -401,7 +401,8 @@ ClassMethodTable *getClass(const StructType *STy)
                     table->isVerilog = true;
                 if (startswith(name, BOGUS_TRACE)) {
                     std::string val = name.substr(strlen(BOGUS_TRACE));
-                    table->isTrace = atol(val.c_str());
+                    int ind = val.find("_");
+                    table->isTrace = val.substr(0, ind) + ":" + val.substr(ind+1);
                 }
                 if (startswith(name, BOGUS_PRINTF))
                     table->isPrintf = true;
@@ -1892,8 +1893,8 @@ printf("[%s:%d]NEWNAME was %s new %s\n", __FUNCTION__, __LINE__, elementName.c_s
         header += "/Printf";
     if (table->isTopModule)
         header += "/Top";
-    if (table->isTrace)
-        header += "/Trace=" + utostr(table->isTrace);
+    if (table->isTrace != "")
+        header += "/Trace=" + table->isTrace;
     if (!isInterface(table->STy))
     if (!table->STy->getName().startswith("struct."))
     if (interfaceName == "") {
