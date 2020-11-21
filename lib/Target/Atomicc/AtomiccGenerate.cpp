@@ -654,7 +654,7 @@ int traceindex = 0;
                         fname = DOLLAR + fname;
                 }
                 else if (!isVerilog) {     // optimization for verilog port references
-                    if (nextIsInterface)
+                    if (nextIsInterface || fitem.options == "inout")  // inout ports are not put into interface definitions
                         fname = DOLLAR + fname;
                     else
                         fname = PERIOD + fname;
