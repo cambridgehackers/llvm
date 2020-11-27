@@ -126,7 +126,7 @@ std::string CBEMangle(const std::string &S)
 
 std::string baseMethodName(std::string pname)
 {
-    if (endswith(pname, "__ENA") || endswith(pname, "__RDY"))
+    if (endswith(pname, "__ENA") || endswith(pname, "__RDY") || endswith(pname, "__ACK"))
         pname = pname.substr(0, pname.length()-5);
     return pname;
 }

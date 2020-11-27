@@ -29,7 +29,7 @@ using namespace llvm;
 #define TEMP_NAME                     "temp" DOLLAR
 #define LOCAL_VARIABLE_PREFIX         "_"
 
-static std::map<const Function *, bool> actionFunction;
+static std::map<const Function *, bool> actionFunction, asyncFunction;
 static std::map<const Function *, std::string> methodTemplateOptions;
 static int trace_function;//=1;
 static int trace_call;//=1;
@@ -438,9 +438,12 @@ printf("[%s:%d] REMAPAPAPAPAPAPA %s new %p\n", __FUNCTION__, __LINE__, ret.c_str
                 std::string fname = ret.substr(0, idx);
                 std::string mName = ret.substr(idx+1);
                 std::string templateOptions, localOptions;
+                int async = mName.find(":async");
                 int action = mName.find(":action");
                 if (action > 0)
                     mName = mName.substr(0, action);
+                else if (async > 0)  // if both ':action' and ':crossclock' are present, ':action' is first
+                    mName = mName.substr(0, async);
                 int ind = mName.find("#");
                 if (ind > 0) {
                     templateOptions = mName.substr(ind+1);
@@ -451,6 +454,8 @@ printf("[%s:%d] REMAPAPAPAPAPAPA %s new %p\n", __FUNCTION__, __LINE__, ret.c_str
                     pushWork(table, func, mName);
                     if (action > 0)
                         actionFunction[func] = true;
+                    if (async > 0)
+                        asyncFunction[func] = true;
                 }
                 else
                     printf("[%s:%d]FFFFFFFFFFFFF table %s mname %s fname %s map %p\n", __FUNCTION__, __LINE__, table->name.c_str(), mName.c_str(), fname.c_str(), (void *)functionMap[fname]);
@@ -1737,7 +1742,12 @@ static std::string processMethod(std::string methodName, Function *func,
                     }
                     break;
                 }
-                std::string temp = (isActionMethod(fcall) ? "/Action " : " ") + tempCond;
+                std::string temp;
+                if (isActionMethod(fcall))
+                    temp += "/Action";
+                if (asyncFunction[fcall])
+                    temp += "/Async";
+                temp += " " + tempCond;
                 mlines.push_back("CALL" + temp + ":" + printCall(II, true));
                 break;
                 }
@@ -2035,6 +2045,8 @@ table->STy->dump();
             options += "/Rule";                  //HACK for __rule declarations HACK HACK HACK
         if (isActionMethod(func))
             options += "/Action";
+        if (asyncFunction[func])
+            options += "/Async";
         fprintf(OStr, "    METHOD%s %s\n", options.c_str(), headerLine.c_str());
         for (auto line: malines)
              fprintf(OStr, "        %s\n", line.c_str());
