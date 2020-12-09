@@ -997,9 +997,11 @@ static void processBlockConditions(const Function *currentFunction, std::list<st
                         sep = " | ";
                         //}
                 }
+                if (defaultCond != "")
+                    defaultCond = "((" + defaultCond + ") ^ 1)";
                 if (BasicBlock *defaultBB = SI->getDefaultDest()) {
                     hasDefault[getCondSpelling(defaultBB)] = getCondSpelling(&*BBI);
-                    setCondition(defaultBB, false, "((" + defaultCond + ") ^ 1)", &*BBI);
+                    setCondition(defaultBB, false, defaultCond, &*BBI);
                 }
                 break;
                 }
