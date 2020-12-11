@@ -1586,6 +1586,26 @@ static bool hasShared(ClassMethodTable *table, const Value *operand)
     }
     return checkShared(table, dest);
 }
+
+static std::string checkClock(ClassMethodTable *table, std::string name)
+{
+    for (auto finfo: table->fieldName)
+        if (name == finfo.second.name)
+        if (startswith(finfo.second.options, "Clock="))
+            return finfo.second.options;
+    return "";
+}
+static std::string hasClock(ClassMethodTable *table, const Value *operand)
+{
+    std::string dest = printOperand(operand);
+    if (auto ins = dyn_cast<Instruction>(operand))
+    for (unsigned i = 0; i < ins->getNumOperands(); i++) {
+        std::string clockName = checkClock(table, printOperand(ins->getOperand(i)));
+        if (clockName != "")
+            return clockName;
+    }
+    return checkClock(table, dest);
+}
 static std::string processMethod(std::string methodName, Function *func,
            std::list<std::string> &mlines, std::list<std::string> &malines, std::string localOptions)
 {
@@ -1676,17 +1696,20 @@ static std::string processMethod(std::string methodName, Function *func,
                 findAlloca(dyn_cast<Instruction>(SI->getOperand(0)));
                 findAlloca(dyn_cast<Instruction>(SI->getPointerOperand()));
                 std::string dest = printOperand(SI->getPointerOperand());
-                std::string alloc = "STORE ";
+                std::string alloc = "STORE";
+                std::string clockName = hasClock(table, SI->getPointerOperand());
                 bool isInter = false;
                 if (auto IG = dyn_cast<GetElementPtrInst>(SI->getPointerOperand()))
                     isInter = isInterface(IG->getType()) || isInterface(IG->getSourceElementType());
-                if (isInter || hasShared(table, SI->getPointerOperand()) || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand())) {
+                if (clockName != "")
+                    alloc += "/" + clockName;
+                else if (isInter || hasShared(table, SI->getPointerOperand()) || dest == "__defaultClock" || dest == "__defaultnReset" || isAlloca(SI->getPointerOperand())) {
                     alloc = "LET " + typeName(cast<PointerType>(
-                      SI->getPointerOperand()->getType())->getElementType()) + " ";
+                      SI->getPointerOperand()->getType())->getElementType());
                     if (dest == value)  // when 'alloca' item matches parameter name
                         break;
                 }
-                mlines.push_back(alloc + localCond + ":" + dest + " = " + value);
+                mlines.push_back(alloc + " " + localCond + ":" + dest + " = " + value);
                 break;
                 }
             case Instruction::Ret:
